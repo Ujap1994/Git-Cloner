@@ -7,6 +7,7 @@ const { VOLUME_MARKER, destinationHint } = require('./destinations.cjs');
 const { readJson, writeJson } = require('./store.cjs');
 const { validateConfig } = require('./config.cjs');
 const execute = promisify(execFile);
+const {repositoryDestination}=require('./provider-spec.cjs');
 function targets(config) { return config.sources.flatMap(source => [{ sourceId: source.id, targetId: `${source.id}:primary`, ...source },...source.additionalDestinations.map(target => ({...target,sourceId:source.id,targetId:`${source.id}:${target.id}`}))]); }
 async function markerAt(destination) {
   try { const root = await fs.lstat(destination); if (!root.isDirectory() || root.isSymbolicLink()) return null; const file = path.join(destination,VOLUME_MARKER), info = await fs.lstat(file); if (!info.isFile() || info.isSymbolicLink() || info.size > 4096) return null; const marker = await readJson(file,null); return marker?.schemaVersion === 1 && /^[a-f\d-]{36}$/.test(marker.id) ? marker.id : null; } catch (_error) { return null; }
@@ -61,10 +62,10 @@ function rewriteLocations(config, state, moves) {
     }
   }
   function moveResult(record) {
-    const matching = moves.filter(m => (!record.targetId || record.targetId === m.targetId) && (!record.sourceId || record.sourceId === m.sourceId) && record.destination === path.join(m.recordFrom ?? m.from,...record.fullName.split('/')));
+    const matching = moves.filter(m => (!record.targetId || record.targetId === m.targetId) && (!record.sourceId || record.sourceId === m.sourceId) && record.destination === repositoryDestination({...record,destination:m.recordFrom??m.from},record.fullName));
     const move = matching.find(m => config.sources.find(s => s.id === m.sourceId)?.value.toLowerCase() === record.fullName.toLowerCase()) ?? matching[0];
     if (!move) return record;
-    const destination = path.join(move.to,...record.fullName.split('/')), id = createHash('sha256').update(`${record.fullName.toLowerCase()}\0${path.resolve(destination)}`).digest('hex').slice(0,24);
+    const destination = repositoryDestination({...record,destination:move.to},record.fullName), id = createHash('sha256').update(`${record.fullName.toLowerCase()}\0${path.resolve(destination)}`).digest('hex').slice(0,24);
     if (record.id) idChanges.set(record.id,id);
     return {...record,destination,id,sourceId:record.sourceId ?? move.sourceId,targetId:record.targetId ?? move.targetId};
   }
@@ -75,12 +76,13 @@ function rewriteLocations(config, state, moves) {
   if (nextState.queue) {
     for (const job of nextState.queue.jobs) {
       const move = moves.find(m => m.targetId === job.targetId && m.volumeId === job.source.volumeId && path.resolve(job.source.destination) === m.from);
-      if (move) { const before = createHash('sha256').update(`${job.repository.full_name.toLowerCase()}\0${path.resolve(job.source.destination,...job.repository.full_name.split('/'))}`).digest('hex').slice(0,24); job.source.destination = move.to; job.source.volumeHint = move.volumeHint; const after = createHash('sha256').update(`${job.repository.full_name.toLowerCase()}\0${path.resolve(move.to,...job.repository.full_name.split('/'))}`).digest('hex').slice(0,24); idChanges.set(before,after); }
+      if (move) { const before = createHash('sha256').update(`${job.repository.full_name.toLowerCase()}\0${repositoryDestination(job.source,job.repository.full_name)}`).digest('hex').slice(0,24); job.source.destination = move.to; job.source.volumeHint = move.volumeHint; const after = createHash('sha256').update(`${job.repository.full_name.toLowerCase()}\0${repositoryDestination(job.source,job.repository.full_name)}`).digest('hex').slice(0,24); idChanges.set(before,after); }
     }
     nextState.queue.results = nextState.queue.results.map(moveResult);
     nextState.queue.completed = nextState.queue.completed.map(id => idChanges.get(id) ?? id);
+    if(nextState.queue.blockedSpaces)nextState.queue.blockedSpaces=Object.fromEntries(Object.entries(nextState.queue.blockedSpaces).map(([id,item])=>{const move=moves.find(m=>item.root===m.from||item.root===m.recordFrom);return[idChanges.get(id)??id,{...item,...(move?{root:move.to}:{})}];}));
   }
-  return { config: nextConfig, state: nextState };
+  return { config: nextConfig, state: nextState,idChanges:Object.fromEntries(idChanges) };
 }
 async function persistRelocations(directory, config, state, moves) {
   const file = path.join(directory,'pending-relocations.json');

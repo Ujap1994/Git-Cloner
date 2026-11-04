@@ -7,7 +7,7 @@ const { readJson, writeJson } = require('./core/store.cjs');
 const { SecretVault } = require('./core/vault.cjs');
 const { GitHubClient } = require('./core/github.cjs');
 const { Git } = require('./core/git.cjs');
-const { BackupService, verifyBackup } = require('./core/backup.cjs');
+const { BackupService, verifyBackup, backupFingerprint } = require('./core/backup.cjs');
 const { restoreBackup } = require('./core/restore.cjs');
 const { acquireLease } = require('./core/lease.cjs');
 const { prepareDestination } = require('./core/destinations.cjs');
@@ -22,6 +22,12 @@ const { dashboard } = require('./core/metrics.cjs');
 const { RestoreBrowser } = require('./core/selective-restore.cjs');
 const { ChangesPreview } = require('./core/changes.cjs');
 const { rememberHints, findRelocations, persistRelocations, recoverRelocations } = require('./core/relocation.cjs');
+const {HostedClient}=require('./core/hosted-client.cjs');
+const {providerSpec,providerKey,parseHostedSource}=require('./core/provider-spec.cjs');
+const {queryHistory,exportHistory,historyDetails}=require('./core/history.cjs');
+const {spaceReady}=require('./core/space-wait.cjs');
+const {rotationInventory,rotatePasswords,recoverRotations}=require('./core/key-rotation.cjs');
+const {inspectRecommendations}=require('./core/recommendations.cjs');
 
 class Runtime extends EventEmitter {
   constructor({ directory, safeStorage, version, fetchImpl = fetch, updateFetch, applyOS = async () => {}, notifyUpdate = () => {}, notifyBackup = () => {}, notificationsAvailable = () => true, now = () => new Date(), mountedRoots, environmentState = async () => ({ onBattery: null }), gitFactory = options => new Git(options) }) {
@@ -39,6 +45,17 @@ class Runtime extends EventEmitter {
     if (!this.gitClients.has(id)) this.gitClients.set(id, this.gitFactory({ token: this.vault.tokens[id] || '' }));
     return this.gitClients.get(id);
   }
+  sourceClient(source={}){
+    const spec=providerSpec(source),id=source.accountId??'default';
+    if(spec.provider==='github'&&(id==='default'||this.config.accounts.some(a=>a.id===id&&providerKey(a)==='github:https://github.com')))return this.client(id);
+    const account=this.config.accounts.find(a=>a.id===id),token=account&&providerKey(account)===providerKey(spec)?this.vault.tokens[id]||'':'';
+    const key=`${providerKey(spec)}:${id}`;if(!this.clients.has(key))this.clients.set(key,spec.provider==='github'?new GitHubClient({token,fetchImpl:this.fetchImpl}):new HostedClient({...spec,token,username:account?.username||'',fetchImpl:this.fetchImpl}));return this.clients.get(key);
+  }
+  sourceGit(source={}){
+    const spec=providerSpec(source),id=source.accountId??'default';if(spec.provider==='github'&&(id==='default'||this.config.accounts.some(a=>a.id===id&&providerKey(a)==='github:https://github.com')))return this.gitFor(id);
+    const account=this.config.accounts.find(a=>a.id===id),token=account&&providerKey(account)===providerKey(spec)?this.vault.tokens[id]||'':'';
+    const key=`${providerKey(spec)}:${id}`;if(!this.gitClients.has(key))this.gitClients.set(key,this.gitFactory({token,server:spec.server,username:spec.provider==='gitlab'?'oauth2':account?.username||'token'}));return this.gitClients.get(key);
+  }
   async init() {
     await fs.mkdir(this.directory, { recursive: true });
     this.config = validateConfig(await readJson(path.join(this.directory, 'settings.json'), defaults()));
@@ -48,6 +65,7 @@ class Runtime extends EventEmitter {
     try { this.gitVersion = await this.git.version(); } catch (error) { this.gitVersion = null; this.notice = error.message; }
     let state = await readJson(path.join(this.directory, 'state.json'), {});
     const recovered = await recoverRelocations(this.directory,this.config,state); this.config = validateConfig(recovered.config); state = recovered.state;
+    for(const [old,id]of Object.entries(recovered.idChanges??{}))if(this.vault.archiveBindings[old]){this.vault.archiveBindings[id]=this.vault.archiveBindings[old];await this.vault.persistKeyState();}
     if (await rememberHints(this.config)) await writeJson(path.join(this.directory,'settings.json'),this.config);
     const externalHistory = await readJson(path.join(this.directory, 'history.json'), null);
     if (externalHistory) state.history = externalHistory;
@@ -55,16 +73,18 @@ class Runtime extends EventEmitter {
       state.queue.config = validateConfig(state.queue.config);
       if (!Array.isArray(state.queue.jobs) || state.queue.jobs.length > 100000 || !Array.isArray(state.queue.completed) || !Array.isArray(state.queue.results)) throw new Error('Die gespeicherte Warteschlange ist beschädigt.');
       state.queue.pauseReason ||= 'restart';
-      for (const job of state.queue.jobs) { job.source = validateConfig({ ...state.queue.config, sources: [job.source] }).sources[0]; require('./core/config.cjs').parseSource(job.repository.full_name,'repository'); }
+      for (const job of state.queue.jobs) { job.source = validateConfig({ ...state.queue.config, sources: [job.source] }).sources[0]; parseHostedSource(job.repository.full_name,'repository',job.source); }
     }
     const records = {};
     for (const record of Object.values(state.repositories ?? {})) {
       const id = record.id || createHash('sha256').update(`${record.fullName.toLowerCase()}\0${path.resolve(record.destination)}`).digest('hex').slice(0, 24);
       records[id] = { ...record, id };
     }
+    state.repositories=records;
+    if(Object.values(records).some(r=>r.rekeyPending)){const release=await acquireLease(this.directory);try{await recoverRotations(state,this.vault,value=>this.persistState(value));}finally{await release();}}
     this.backup = new BackupService({
       state: { ...state, repositories: records }, git: this.git,
-      github: source => this.client(source.accountId), getGit: source => this.gitFor(source.accountId),
+      github: source => this.sourceClient(source), getGit: source => this.sourceGit(source),
       getPassphrase: async () => this.vault.archivePassword, acquireLock: () => acquireLease(this.directory),
       saveState: value => this.persistState(value), gate: execution => this.checkRules(execution)
     });
@@ -105,11 +125,14 @@ class Runtime extends EventEmitter {
       encryptionReady: Boolean(this.vault.archivePassword), encryptionRemembered: this.vault.rememberPassword, device: this.device,
       queue: this.backup.state.queue ? { id: this.backup.state.queue.id, total: this.backup.state.queue.jobs.length, unresolved: Boolean(this.backup.state.queue.unresolved), completed: this.backup.state.queue.completed.length, pauseReason: this.backup.state.queue.pauseReason, message: this.backup.state.queue.message, elapsedMs: this.backup.state.queue.elapsedMs, receivedBytes: this.backup.state.queue.receivedBytes } : null,
       metrics: this.metricsSnapshot, environment: this.environment, driveRecovery: this.driveRecovery ?? null,
+      rotation:this.rotation??null,
       dataRevision: this.dataRevision, configRevision: this.configRevision
     };
   }
   async run(options = {}) {
     if (this.operation || this.saving) return { busy: true };
+    if(!this.backup.busy&&Object.values(this.backup.state.repositories).some(record=>record.rekeyPending))await this.withOperation('recovering-archives',async()=>{});
+    if(options.resume&&this.backup.state.queue?.pauseReason==='space'&&!await spaceReady(this.backup.state.queue))return{paused:true,reason:'space'};
     if (!this.backup.busy && this.config.autoRelocate) await this.locateDrives({automatic:true});
     const config = structuredClone(this.config);
     config.backup.encryptionKeyId = this.vault.encryptionKeyId;
@@ -133,13 +156,21 @@ class Runtime extends EventEmitter {
     return restriction(execution,this.environment);
   }
   async policyTick() {
-    try { if (Date.now() - this.lastDisksAt >= 60000) await this.refreshDisks(); if (this.changes.current?.expiresAt <= Date.now()) await this.closeChanges(); if (this.config.autoRelocate && !this.busy() && !this.saving && Date.now() - (this.lastLocationCheck ?? 0) >= 60000) await this.locateDrives({automatic:true}); await this.updates.notifyAvailable(); const q = this.backup.state.queue; if (q && !this.busy() && !['user','restart','error'].includes(q.pauseReason) && !await this.checkRules(this.config.execution)) await this.resume(); this.changed(); }
+    try { if (Date.now() - this.lastDisksAt >= 60000) await this.refreshDisks(); if (this.changes.current?.expiresAt <= Date.now()) await this.closeChanges(); if (this.config.autoRelocate && !this.busy() && !this.saving && Date.now() - (this.lastLocationCheck ?? 0) >= 60000) await this.locateDrives({automatic:true}); await this.updates.notifyAvailable(); const q = this.backup.state.queue; if (q && !this.busy() && !['user','restart','error'].includes(q.pauseReason) && !await this.checkRules(this.config.execution)&&(q.pauseReason!=='space'||await spaceReady(q))) await this.resume(); this.changed(); }
     catch (error) { this.notice = error.message; this.changed(); }
   }
   pause() { return this.backup.pause(); }
   resume() { return this.run({ resume: true }); }
   discard() { return this.backup.discard(); }
-  preview(input) { return this.withOperation('previewing',() => previewConfig(input,source => this.client(source.accountId).withTransfer(null,input.execution?.retries ?? 2))); }
+  preview(input) { return this.withOperation('previewing',() => previewConfig(input,source => this.sourceClient(source).withTransfer(null,input.execution?.retries ?? 2))); }
+  historyQuery(options){return queryHistory(this.backup.state.history,options);}
+  historyDetails(options){return historyDetails(this.backup.state.history,options);}
+  historyExport(options){return exportHistory(this.backup.state.history,options);}
+  rotationInventory(options){return this.withOperation('checking-archives',()=>rotationInventory(this.backup.state.repositories,this.vault,options));}
+  rotatePasswords(options){if(this.config.systemSchedule&&!options.remember)throw new Error('Für die unabhängige Zeitplanung muss das Archivpasswort im sicheren Schlüsselspeicher hinterlegt sein.');if(this.backup.state.queue)throw new Error('Bitte zuerst den pausierten Durchlauf fortsetzen oder verwerfen.');this.rotationStop=false;return this.withOperation('rotating-password',async()=>{this.rotation={completed:0,total:options.ids?.length??0,status:'rotating'};try{const result=await rotatePasswords({...options,state:this.backup.state,vault:this.vault,git:this.git,save:value=>this.persistState(value),fingerprintFor:(record,marker,oldKey,newKey)=>{const source=this.config.sources.find(s=>s.id===record.sourceId);if(!source)return null;const options=effectiveBackup(this.config,source);return marker.fingerprint===backupFingerprint({...options,encryptionKeyId:oldKey})?backupFingerprint({...options,encryptionKeyId:newKey}):null;},onProgress:progress=>{this.rotation=progress;this.changed();},shouldStop:()=>this.rotationStop});this.dataRevision++;this.rotation={...result,status:'complete'};return result;}catch(error){this.rotation={status:'error',message:error.message};throw error;}finally{this.changed();}});}
+  stopRotation(){this.rotationStop=true;return{requested:true};}
+  recommendations({sourceId,repository}){if(this.busy()||this.saving)throw new Error('Bitte den laufenden Vorgang abwarten.');const controller=new AbortController();this.recommendationController=controller;return this.withOperation('inspecting-options',async()=>{try{const source=this.config.sources.find(s=>s.id===sourceId);if(!source)throw new Error('Quelle nicht gefunden.');return await inspectRecommendations({source,repository:repository||source.value,client:this.sourceClient(source),git:this.sourceGit(source),signal:controller.signal});}finally{if(this.recommendationController===controller)this.recommendationController=null;}});}
+  cancelRecommendations(){this.recommendationController?.abort();return true;}
   async locateDrives({automatic = false} = {}) {
     if (this.busy() || this.saving) return {busy:true};
     return this.withOperation('locating-drives',async () => {
@@ -147,6 +178,7 @@ class Runtime extends EventEmitter {
       const result = await findRelocations(this.config,{...(this.mountedRoots ? {roots:this.mountedRoots} : {}),includeDisabled:!automatic});
       if (result.moves.length) {
         const updated = await persistRelocations(this.directory,this.config,this.backup.state,result.moves);
+        for(const [old,id]of Object.entries(updated.idChanges??{}))if(this.vault.archiveBindings[old])this.vault.archiveBindings[id]=this.vault.archiveBindings[old];await this.vault.persistKeyState();
         this.config = validateConfig(updated.config); this.backup.state = updated.state; this.configRevision++; this.dataRevision++; await this.refreshDisks();
       }
       if (result.moves.length || result.issues.length || !automatic) this.driveRecovery = {moved:result.moves.length,ambiguous:result.issues.length,checkedAt:new Date().toISOString()};
@@ -161,7 +193,8 @@ class Runtime extends EventEmitter {
       release = await acquireLease(this.directory);
       this.changesLease = release;
       const record = this.record(id), source = this.config.sources.find(s => s.id === record.sourceId);
-      const result = await this.changes.open({record,git:this.gitFor(source?.accountId),github:this.client(source?.accountId),passphrase:passphrase || this.vault.archivePassword});
+      const origin=source??record;
+      const result = await this.changes.open({record,git:this.sourceGit(origin),github:this.sourceClient(origin),passphrase:passphrase || this.vault.passwordFor(record)});
       this.changesTimer = setInterval(() => { if (this.changes.current?.expiresAt <= Date.now()) void this.closeChanges().catch(error => {this.notice=error.message;this.changed();}); },15000); this.changesTimer.unref?.();
       return result;
     } catch (error) { const owned = this.changesLease; this.changesLease = null; if (owned) await owned(); else if (release && this.operation === 'previewing-changes') await release(); this.operation = null; this.changed(); throw error; }
@@ -191,6 +224,7 @@ class Runtime extends EventEmitter {
         for (const target of source.additionalDestinations ?? []) { const previous = old?.additionalDestinations.find(t => t.id === target.id); if (!previous || previous.destination !== target.destination) { delete target.volumeId; delete target.volumeHint; } else if (previous.volumeHint) target.volumeHint = previous.volumeHint; }
       }
       const next = validateConfig(candidate);
+      for(const account of next.accounts){const old=this.config.accounts.find(a=>a.id===account.id);if(old&&this.vault.tokens[account.id]&&providerKey(old)!==providerKey(account))throw new Error('Vor einem Serverwechsel die gespeicherten Zugangsdaten entfernen.');}
       if (this.backup.state.queue) {
         const content = config => JSON.stringify({ sources: config.sources, backup: config.backup });
         if (content(next) !== content(this.config)) throw new Error('Bitte zuerst den pausierten Durchlauf fortsetzen oder verwerfen, bevor Quellen oder Sicherungsumfang geändert werden.');
@@ -221,18 +255,27 @@ class Runtime extends EventEmitter {
   async setToken(id, token) {
     if (this.busy()) throw new Error('Bitte den laufenden Vorgang abwarten.');
     if (!['default', ...this.config.accounts.map(a => a.id)].includes(id)) throw new Error('Konto nicht gefunden.');
-    await this.vault.setToken(id, token); this.clients.delete(id); this.gitClients.delete(id);
+    await this.vault.setToken(id, token); this.clients.clear(); this.gitClients.clear();
     if (id === 'default') this.updates.github = this.client();
     this.changed();
     return { configured: Boolean(this.vault.tokens[id]) };
   }
   async setPassword(password, remember) {
-    if (this.busy()) throw new Error('Bitte den laufenden Vorgang abwarten.');
-    await this.vault.setPassword(password, remember); this.changed(); return { ready: true };
+    return this.withOperation('unlocking-archives',async()=>{
+      if(this.config.systemSchedule&&!remember)throw new Error('Für die unabhängige Zeitplanung muss das Archivpasswort im sicheren Schlüsselspeicher hinterlegt sein.');
+      for(const record of Object.values(this.backup.state.repositories)){
+        if(!record.encrypted||(record.encryptionKeyId||this.vault.archiveBindings[record.id]||this.vault.legacyKeyId||this.vault.encryptionKeyId)!==this.vault.encryptionKeyId)continue;
+        const file=path.join(record.destination,'backup.gcb');let info;try{info=await fs.lstat(file);}catch(error){if(error.code==='ENOENT')continue;throw error;}
+        if(!info.isFile()||info.isSymbolicLink())throw new Error('Unsicherer Archivpfad.');
+        await require('./core/archives.cjs').authenticateArchive(file,password);break;
+      }
+      await this.vault.setPassword(password,remember);this.changed();return{ready:true};
+    });
   }
   async beginLogin(accountId) {
     if (!this.vault.available()) throw new Error('Die Anmeldung benötigt einen sicheren Schlüsselspeicher.');
     if (!['default', ...this.config.accounts.map(a => a.id)].includes(accountId)) throw new Error('Konto nicht gefunden.');
+    if(providerSpec(this.config.accounts.find(a=>a.id===accountId)??{}).provider!=='github')throw new Error('Für GitLab und Forgejo ein passendes Lesetoken speichern.');
     if (!this.config.oauthClientId) throw new Error('Bitte zuerst die Client-ID einer GitHub-OAuth-App mit aktiviertem Device Flow eintragen. Alternativ ein Personal Access Token verwenden.');
     if (this.device?.status === 'pending') throw new Error('Eine Anmeldung läuft bereits.');
     this.device = { status: 'pending', accountId }; this.changed();
@@ -241,18 +284,18 @@ class Runtime extends EventEmitter {
       .catch(error => { this.device = { status: 'error', message: error.message, accountId }; this.changed(); });
     return { started: true };
   }
-  record(id) { const record = this.backup.state.repositories[id]; if (!record) throw new Error('Sicherung nicht gefunden.'); return record; }
+  record(id) { const record = this.backup.state.repositories[id]; if (!record) throw new Error('Sicherung nicht gefunden.');if(record.rekeyPending)throw new Error('Der Passwortwechsel ist noch nicht abgeschlossen. Das Sicherungslaufwerk verbinden und den Assistenten erneut öffnen.');return record; }
   async withOperation(name, fn) {
     if (this.busy() || this.saving) throw new Error('Bitte den laufenden Vorgang abwarten.');
     this.operation = name; this.changed(); let release;
-    try { release = await acquireLease(this.directory); return await fn(); }
+    try { release = await acquireLease(this.directory);if(this.backup&&Object.values(this.backup.state.repositories).some(r=>r.rekeyPending))await recoverRotations(this.backup.state,this.vault,value=>this.persistState(value));return await fn(); }
     finally { if (release) await release(); this.operation = null; this.changed(); }
   }
   verify(id, passphrase) {
     return this.withOperation('verifying', async () => {
       const record = this.record(id);
       try {
-        const result = await verifyBackup(record, this.git, passphrase || this.vault.archivePassword);
+        const result = await verifyBackup(record, this.git, passphrase || this.vault.passwordFor(record));
         Object.assign(record, result, { verificationStatus: 'ok' });
         await this.persistState(this.backup.state); this.dataRevision++;
         return result;
@@ -260,9 +303,9 @@ class Runtime extends EventEmitter {
     });
   }
   restore({ recordId, archive, parent, name, passphrase }) {
-    return this.withOperation('restoring', () => restoreBackup({ record: recordId ? this.record(recordId) : null, archive, parent, name, passphrase: passphrase || this.vault.archivePassword, git: this.git }));
+    return this.withOperation('restoring', () => restoreBackup({ record: recordId ? this.record(recordId) : null, archive, parent, name, passphrase: passphrase || this.vault.passwordFor(recordId?this.record(recordId):null), git: this.git }));
   }
-  browseOpen({ recordId, archive, passphrase, content = 'repository' }) { return this.withOperation('browsing',() => this.browser.open({ record: recordId ? this.record(recordId) : null, archive, content, passphrase: passphrase || this.vault.archivePassword })); }
+  browseOpen({ recordId, archive, passphrase, content = 'repository' }) { return this.withOperation('browsing',() => this.browser.open({ record: recordId ? this.record(recordId) : null, archive, content, passphrase: passphrase || this.vault.passwordFor(recordId?this.record(recordId):null) })); }
   browseList(options) { return this.browser.list(options); }
   restoreSelection(options) { return this.withOperation('restoring',() => this.browser.restore(options)); }
 }

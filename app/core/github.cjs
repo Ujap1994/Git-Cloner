@@ -40,9 +40,9 @@ class GitHubClient {
     }
     return structuredClone(data);
   }
-  async repository(value) {
+  async repository(value, options) {
     const name = parseSource(value, 'repository');
-    return this.request(`/repos/${name}`);
+    return this.request(`/repos/${name}`,options);
   }
   async repositories(owner) {
     parseSource(owner, 'owner');

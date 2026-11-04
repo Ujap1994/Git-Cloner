@@ -4,7 +4,7 @@ const { createHash } = require('node:crypto');
 const runFile = promisify(execFile);
 
 class Git {
-  constructor({ token = '', exec = runFile, proxy = '' } = {}) { Object.assign(this, { token, exec, proxy }); }
+  constructor({ token = '', exec = runFile, proxy = '', server = 'https://github.com', username = 'x-access-token' } = {}) { Object.assign(this, { token, exec, proxy, server, username }); }
   withTransport(proxy) { const scoped = Object.create(this); scoped.proxy = proxy; return scoped; }
   async run(args, options = {}) {
     const { rawOutput = false, ...executionOptions } = options;
@@ -14,8 +14,8 @@ class Git {
     if (this.proxy) { config.push('-c', `http.proxy=${this.proxy}`); env.NO_PROXY = ''; env.no_proxy = ''; }
     if (this.token) {
       env.GIT_CONFIG_COUNT = '1';
-      env.GIT_CONFIG_KEY_0 = 'http.https://github.com/.extraheader';
-      env.GIT_CONFIG_VALUE_0 = `Authorization: Basic ${Buffer.from(`x-access-token:${this.token}`).toString('base64')}`;
+      env.GIT_CONFIG_KEY_0 = `http.${this.server}/.extraheader`;
+      env.GIT_CONFIG_VALUE_0 = `Authorization: Basic ${Buffer.from(`${this.username}:${this.token}`).toString('base64')}`;
       config.push('-c', 'credential.helper=');
     }
     try {
@@ -25,6 +25,9 @@ class Git {
       if (error.code === 'ENOENT') throw new Error('Git ist nicht installiert oder nicht im PATH. Bitte Git installieren und die App neu starten.');
       // Avoid exposing credentials or remote-controlled messages in error output.
       const failure = new Error(error.killed ? 'Git-Vorgang hat das Zeitlimit überschritten.' : 'Git-Vorgang fehlgeschlagen. Netzwerk, freien Speicher und Zugriffsrechte prüfen.');
+      if(/No space left|disk full|not enough space|ENOSPC/i.test(error.stderr||'')){failure.code='ENOSPC';failure.helpCode='space';failure.diskPath=args.includes('-C')?args[args.indexOf('-C')+1]:args.includes('clone')?args.at(-1):null;}
+      else if(/authentication failed|access denied|HTTP 40[13]|returned error: 40[13]|could not read Username/i.test(error.stderr||''))failure.helpCode='authentication';
+      else if(/Permission denied|read.only file system/i.test(error.stderr||''))failure.helpCode='permissions';
       failure.retryable = Boolean(error.killed || /could not resolve|couldn.t connect|failed to connect|connection.*(?:reset|timed out)|operation timed out|recv failure|send failure|remote end hung|HTTP (?:429|5\d\d)|returned error: (?:429|5\d\d)|TLS.*terminated|network is unreachable/i.test(error.stderr || ''));
       throw failure;
     }
@@ -61,7 +64,8 @@ class Git {
     if (!mirror) await this.run(['-C', directory, 'lfs', 'fsck']);
   }
   submodules(directory) {
-    return this.run(['-c', 'url.https://github.com/.insteadOf=git@github.com:', '-c', 'url.https://github.com/.insteadOf=ssh://git@github.com/', '-c', 'url.https://github.com/.insteadOf=git://github.com/', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-C', directory, 'submodule', 'update', '--init', '--recursive', '--checkout']);
+    const host=new URL(this.server).hostname;
+    return this.run(['-c', `url.${this.server}/.insteadOf=git@${host}:`, '-c', `url.${this.server}/.insteadOf=ssh://git@${host}/`, '-c', `url.${this.server}/.insteadOf=git://${host}/`, '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-C', directory, 'submodule', 'update', '--init', '--recursive', '--checkout']);
   }
 }
 

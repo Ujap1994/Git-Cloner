@@ -1,4 +1,5 @@
 const path = require('node:path');
+const { providerSpec, parseHostedSource, providerKey } = require('./provider-spec.cjs');
 
 const DEFAULT_CONFIG = {
   schemaVersion: 1,
@@ -49,8 +50,8 @@ function validateConfig(input) {
     if (!source || !['owner', 'repository'].includes(source.kind)) throw new Error('Ungültiger Quellentyp.');
     if (typeof source.id !== 'string' || !/^[a-z\d-]{1,64}$/i.test(source.id) || ids.has(source.id)) throw new Error('Ungültige oder doppelte Quellen-ID.');
     ids.add(source.id);
-    const value = parseSource(source.value, source.kind);
-    const key = `${source.kind}:${value.toLowerCase()}`;
+    const spec = providerSpec(source), value = parseHostedSource(source.value, source.kind,spec);
+    const key = `${providerKey(spec)}:${source.kind}:${value.toLowerCase()}`;
     if (names.has(key)) throw new Error('Diese Quelle ist bereits eingetragen.');
     names.add(key);
     if (typeof source.destination !== 'string' || !path.isAbsolute(source.destination) || source.destination.includes('\0')) throw new Error('Bitte einen absoluten Zielordner auswählen.');
@@ -62,7 +63,7 @@ function validateConfig(input) {
     const additionalDestinations = (source.additionalDestinations ?? []).map(validateTarget);
     if (additionalDestinations.length > 9) throw new Error('Maximal zehn Ziele pro Quelle.');
     const volumeHint = validateVolumeHint(source.volumeHint, source.destination);
-    return { id: source.id, kind: source.kind, value, destination: path.resolve(source.destination), enabled: source.enabled, ...(source.volumeId ? { volumeId: source.volumeId } : {}), ...(volumeHint ? { volumeHint } : {}), accountId, filters, additionalDestinations, backup: source.backup == null ? null : validateBackup(source.backup), schedule: source.schedule == null ? null : validateSchedule(source.schedule) };
+    return { id: source.id, kind: source.kind, value, ...(spec.provider!=='github'?spec:{}), destination: path.resolve(source.destination), enabled: source.enabled, ...(source.volumeId ? { volumeId: source.volumeId } : {}), ...(volumeHint ? { volumeHint } : {}), accountId, filters, additionalDestinations, backup: source.backup == null ? null : validateBackup(source.backup), schedule: source.schedule == null ? null : validateSchedule(source.schedule) };
   });
   const result = { schemaVersion: 1, sources, schedule: validateSchedule(input.schedule) };
   for (const key of ['launchAtLogin', 'closeToTray', 'notifications', 'checkUpdates']) {
@@ -80,9 +81,13 @@ function validateConfig(input) {
   result.accounts = accounts.map(account => {
     if (!account || typeof account.id !== 'string' || !/^[a-z\d-]{1,64}$/i.test(account.id) || accountIds.has(account.id) || typeof account.label !== 'string' || !account.label.trim() || account.label.length > 80) throw new Error('Ungültiges oder doppeltes Konto.');
     accountIds.add(account.id);
-    return { id: account.id, label: account.label.trim() };
+    const spec=providerSpec(account);
+    if(account.username!==undefined&&(typeof account.username!=='string'||!/^[a-z\d_.@+-]{1,100}$/i.test(account.username)))throw new Error('Ungültiger Git-Benutzername.');
+    if(spec.provider==='forgejo'&&!account.username)throw new Error('Für Forgejo-Zugangsdaten den eigenen Benutzernamen angeben.');
+    return { id: account.id, label: account.label.trim(), ...(spec.provider!=='github'?spec:{}), ...(account.username?{username:account.username}:{}) };
   });
   if (sources.some(source => !accountIds.has(source.accountId))) throw new Error('Ein zugewiesenes GitHub-Konto fehlt.');
+  for(const source of sources)if(source.accountId!=='default'&&providerKey(result.accounts.find(a=>a.id===source.accountId))!==providerKey(source))throw new Error('Zugangsdaten und Quelle müssen denselben Anbieter und Server verwenden.');
   const appearance = { ...DEFAULT_CONFIG.appearance, ...input.appearance };
   if (!['de', 'en'].includes(appearance.language) || !['system', 'light', 'dark'].includes(appearance.theme) || ![1, 1.15, 1.3].includes(appearance.fontScale) || typeof appearance.highContrast !== 'boolean') throw new Error('Ungültige Darstellung.');
   result.appearance = { language: appearance.language, theme: appearance.theme, fontScale: appearance.fontScale, highContrast: appearance.highContrast };

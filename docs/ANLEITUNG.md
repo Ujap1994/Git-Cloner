@@ -362,3 +362,77 @@ Diese Regeln gelten für manuelle und automatische Läufe. Status und Verlauf bl
 Für eine Ruhezeit **Ruhezeit aktivieren** einschalten und beispielsweise `22:00` bis `07:00` eintragen. Es gilt die lokale Uhrzeit; Zeiträume über Mitternacht werden unterstützt. Währenddessen erscheinen keine Systemmeldungen. Sicherungsmeldungen werden nicht nachträglich gesammelt. Ein noch nicht gemeldeter neuer Versionshinweis kann nach Ende der Ruhezeit erscheinen, während die App aktiv ist. Betriebssystemberechtigungen und dessen eigene Fokus-/Nicht-stören-Einstellungen gelten zusätzlich.
 
 ![Ausgerichtete Benachrichtigungs- und Ruhezeiteinstellungen](screenshots/notification-rules.png)
+
+## 22. GitLab und Forgejo als Quellen
+
+Unter **Quellen → Quelle hinzufügen** den **Anbieter** wählen. GitHub verwendet `https://github.com`. Bei GitLab beispielsweise `https://gitlab.example.org`, bei Forgejo `https://git.example.org` eintragen. Unterstützt werden HTTPS-Server, auch mit einem festen Installations-Unterpfad. Zugangsdaten, Abfrageparameter und Fragmente gehören nicht in die Serveradresse.
+
+Unter **Art der Quelle** auswählen, ob ein ganzes Konto beziehungsweise eine Organisation/Gruppe oder ein einzelnes Repository gemeint ist. Bei GitLab-Untergruppen ausdrücklich **Konto / Organisation / Gruppe** wählen: `beispiel-gruppe/untergruppe` ist eine Gruppe, `beispiel-gruppe/untergruppe/projekt` ein Repository. Die Gruppensicherung schließt Untergruppen ein und lässt extern geteilte Projekte aus. Bei Forgejo sind Konten/Organisationen und `konto/projekt` möglich. Eine Quelle pro Zeile; der gewählte Anbieter und Server gelten für diese Zeilen.
+
+![Anbieter-, Server- und Quellenauswahl](screenshots/provider-source.png)
+
+Für private Quellen unter **Einstellungen → Konten** ein Konto mit demselben Anbieter und exakt demselben Server anlegen. Bei Forgejo den eigenen Benutzernamen zusätzlich angeben. Ein passendes Lesetoken speichern und in der Quelle unter **Weitere Ziele, Konto und Filter → Zugangsdaten verwenden** auswählen. GitLab benötigt passende Rechte für API und Repository-Lesen, beispielsweise `read_api` und `read_repository`. Bei Forgejo hängen die nötigen Leserechte von den gewählten Repository-, Issue-, Organisations- und Kontofunktionen ab. Tokens werden nur mit einem verfügbaren sicheren OS-Schlüsselspeicher gespeichert. **Öffentlich · ohne Token** verwendet für andere Anbieter kein GitHub-Standardtoken.
+
+Ein Konto bleibt an seinen Server gebunden. Vor einer Änderung dieser Zuordnung gespeicherte Zugangsdaten entfernen; die App gibt Tokens nicht an andere Server oder externe Asset-Weiterleitungen weiter. Die GitHub-Geräteanmeldung gilt weiterhin nur für GitHub. Für GitLab/Forgejo wird ein passendes Token verwendet.
+
+GitHub behält die Ablage `Ziel/Konto/Repository`. Andere Anbieter erhalten davor einen stabilen Ordner aus Anbieter, Server und kurzer Serverkennung. So überschreibt etwa `beispiel-konto/projekt` auf zwei verschiedenen Servern keine andere Sicherung. Der Probelauf zeigt den vollständigen Zielpfad. Snapshots, Mirrors, LFS, HTTPS-Submodule, Verschlüsselung und Wiederherstellung funktionieren auch für diese Quellen.
+
+GitLab-Metadaten umfassen Issues und Notizen, Merge Requests mit Notizen und Datei-Diffs, Releases/Dateien und Wiki. Forgejo exportiert Issues/Kommentare, Pull Requests/Reviews/Dateien, Releases/Dateien und Wiki. API-Berechtigungen und vom Server begrenzte Daten, etwa gekürzte Merge-Request-Diffs, bleiben zu beachten. GitLab besitzt nicht dieselbe Vorabversionsmarkierung wie GitHub: Kommende Releases und als SemVer-Vorabversion erkennbare Tags werden bei der Dateiauswahl ausgelassen. Automatische Quellcodearchive werden auch hier nicht zusätzlich geladen.
+
+Die App verwendet GitLab API v4 und Forgejo API v1. Forgejo 17.0.1 wird zusätzlich mit einem echten privaten HTTPS-Testserver geprüft. GitLab wird über kontrollierte API-Szenarien und öffentliche echte API-Aufrufe geprüft; eine private GitLab-Installation mit eigener SSO-/Proxy-Konfiguration benötigt ihre üblichen Serverfreigaben. Diese Unterstützung ist kein vollständiger Export aller CI-, Paketregistry- oder Administrationsdaten eines Git-Servers.
+
+## 23. Verlauf suchen und gezielt exportieren
+
+**Verlauf** in der Seitenleiste öffnen. Nach Repository suchen, **Ergebnis** auf alle Prüfungen, Fehler oder Änderungen stellen und optional **Von einschließlich** sowie **Bis einschließlich** eintragen. Die Datumsgrenzen verwenden die lokale Uhrzeit. Suche und Details bleiben seitenweise begrenzt, damit große Verläufe die Oberfläche nicht blockieren.
+
+![Gefilterter Verlauf](screenshots/history-search.png)
+
+Über **Details** die Ergebnisse eines Laufs öffnen; eine Repository-Suche wird dort übernommen. Bei Fehlern lässt sich direkt die passende **Fehlerhilfe** öffnen. Kästchen auswählen und **Gefilterte Läufe exportieren** verwenden: Mit Auswahl werden diese Läufe exportiert, ohne Auswahl alle passenden gespeicherten Läufe. Im Detaildialog exportiert **Diesen Lauf anonym exportieren** den vollständigen gespeicherten Lauf.
+
+Der Export ersetzt Repository-Namen durch neutrale Kennungen und entfernt persönliche Pfade, rohe Fehlermeldungen und Zugangsdaten. Er enthält die gespeicherten Ergebnisse, keine Sicherungsdateien. Aufbewahrt werden die letzten 100 abgeschlossenen Läufe und höchstens 500 Detailergebnisse pro Lauf; eine Kürzung wird ausgewiesen. Nicht aufbewahrte Details können später nicht über die Suche rekonstruiert werden.
+
+## 24. Bei wenig Speicher automatisch warten
+
+Reicht der freie Platz einschließlich Reserve nicht, wechselt die Warteschlange auf **Wartet auf freien Speicher · automatische Fortsetzung**. Der bisherige erfolgreiche Sicherungsstand bleibt erhalten. Fertige Ziele bleiben als fertig gespeichert; die betroffene Aufgabe wird nicht als erfolgreich abgeschlossen markiert.
+
+![Wartende Sicherung bei Speicherplatzmangel](screenshots/space-wait.png)
+
+Platz außerhalb vorhandener Sicherungen freigeben und das richtige Laufwerk verbunden lassen. Bei laufender App wird ungefähr alle 30 Sekunden geprüft, ob die gespeicherte Platzanforderung erfüllt ist. Während des Wartens werden dafür keine Git- oder Repository-API-Abfragen wiederholt. Danach setzt die Warteschlange automatisch fort. **Fortsetzen** kann eine Prüfung unmittelbar anstoßen. Fehlt weiterhin Platz, bleibt die Warteschlange erhalten.
+
+Bei geschlossener App erfolgt die nächste Prüfung durch einen eingerichteten nativen Worker-Termin oder beim erneuten Öffnen und Fortsetzen. Ein ausgeschalteter oder schlafender Rechner wird nicht geweckt. Eine bewusst von dir pausierte Warteschlange wird nicht automatisch weitergeführt. Bei geändertem Laufwerkspfad kann die bestehende Laufwerkswiedererkennung auch die wartende Aufgabe zuordnen.
+
+Die App löscht keine anderen Backups, um Platz zu schaffen. Zum Ändern des Sicherungsumfangs oder der Reserve bei einer festgehaltenen Warteschlange diese bewusst verwerfen und danach die Optionen ändern; bereits vorhandene Sicherungsdateien bleiben erhalten. Ein neuer Lauf überspringt weiterhin unveränderte erfolgreiche Stände.
+
+## 25. Passende Hilfe zu Fehlern
+
+In der Übersicht oder in Verlaufsdetails **Fehlerhilfe** wählen. Auch eine Fehlermeldung als Toast bietet diesen Einstieg. Die Hilfe schlägt zur Fehlerart passende Schritte vor: Token und Leserechte, Netzwerk/VPN/Proxy, API-Wartezeiten, Laufwerkszuordnung, Schreibschutz, freier Platz, Git/LFS oder Archivpasswörter.
+
+![Konkrete Hilfe bei Dateizugriffsproblemen](screenshots/error-help.png)
+
+Die Hilfe ändert keine Systemeinstellungen und entfernt keine Daten. Für einen Fehlerbericht kann ein anonymisiertes Diagnoseprotokoll exportiert werden. Originale bei Integritäts- oder Passwortfehlern behalten; zunächst an einem neuen Ausgabeort wiederherstellen.
+
+## 26. Archivpasswort kontrolliert wechseln
+
+Unter **Einstellungen → Sicherung → Passwortwechsel-Assistent** die verschlüsselten Sicherungen öffnen. Die Liste zeigt pro Seite bis zu 100 Archive, ihre Erreichbarkeit und die bekannte Passwortzuordnung. Erreichbare Archive auswählen; bis zu 1000 Archive lassen sich in einem Durchlauf umstellen. Nicht ausgewählte oder fehlende Laufwerke behalten zunächst ihr bisheriges Passwort.
+
+![Passwortwechsel mit anonymisiertem Testarchiv](screenshots/password-rotation.png)
+
+Das **bisherige Passwort** bei Bedarf eingeben, ein **neues Passwort** mit mindestens zwölf Zeichen wählen und darunter **bestätigen**. Sind passende ältere Passwörter bereits sicher gespeichert, kann die bisherige Eingabe leer bleiben. Die App authentifiziert ein ausgewähltes Archiv, bevor sie das neue aktive Passwort übernimmt.
+
+**Passwörter im sicheren OS-Schlüsselspeicher merken** ist optional und übernimmt die bisherige Merken-Einstellung. Bei aktivierter unabhängiger verschlüsselter Zeitplanung ist das Merken erforderlich. Gespeicherte ältere benötigte Passwörter bleiben für noch nicht umgestellte Archive verfügbar. Ohne Merken müssen nach einem Neustart benötigte alte und neue Passwörter wieder eingegeben werden; die Verwaltungsdatei enthält dabei nur Kennungen, keine Passwörter.
+
+**Ausgewählte Archive umstellen** entschlüsselt und prüft jedes Archiv in einem privaten temporären Ordner, erstellt den neuen verschlüsselten Stand und tauscht ihn anschließend aus. Der Inhalt und seine Git-Historie werden dabei erhalten. Die Wiederanlaufsdaten enthalten keine Passwörter. Wird ein Austausch unterbrochen, wird er nach dem nächsten Start beziehungsweise vor einer weiteren Archivoperation aus dem gespeicherten Zustand abgeschlossen oder auf das intakte alte Archiv zurückgeführt. Fehlt das Laufwerk, bleibt dieser Zustand erhalten.
+
+Über **Nach aktuellem Archiv stoppen** zwischen zwei Archiven anhalten. Ein bereits laufendes Archiv wird fertiggestellt. Der Ergebnisbereich zeigt erfolgreiche, fehlgeschlagene und noch mit älterer Zuordnung verbliebene Archive. Nach erneutem Verbinden einer Platte den Assistenten wieder öffnen; bekannte alte Schlüssel oder das zugehörige bisherige Passwort ermöglichen die Umstellung. Ältere externe GCB-Kopien, die nicht zur verwalteten Auswahl gehören, werden nicht automatisch verändert.
+
+Der Vorgang braucht zusätzlich Platz für den bisherigen und neuen verschlüsselten Stand sowie für authentifizierte und entpackte temporäre Daten. Temporäre Klartextdaten werden regulär entfernt; nach einem harten Prozessabbruch können OS-Temp-Dateien zurückbleiben. Ein vergessenes Passwort kann nicht wiederhergestellt werden; es gibt kein forensisch sicheres Löschen. Das einfache **Archivpasswort setzen/entsperren** prüft bei erreichbaren bestehenden Archiven das passende Passwort; für einen tatsächlichen Wechsel den Assistenten verwenden.
+
+## 27. LFS und Submodule vorschlagen lassen
+
+Unter **Quellen** bei einer gespeicherten Quelle **Umfang empfehlen** öffnen. Bei einer Konten-/Gruppenquelle ein Repository innerhalb dieser Quelle angeben. **Umfang prüfen** liest den Git-Dateibaum und kleine `.gitattributes`-Dateien. Es wird kein Projekt geklont und kein Projektcode ausgeführt.
+
+![LFS-Empfehlung vor dem bewussten Übernehmen](screenshots/content-recommendations.png)
+
+Die App erkennt LFS-Attributregeln und Submodul-Verweise, zeigt die gefundenen Pfade und prüft bei LFS auch die lokale Verfügbarkeit von Git LFS. Unvollständige oder begrenzte API-Ergebnisse werden ausgewiesen; fehlende Hinweise sind dann kein Beweis dafür, dass das Projekt keine solchen Inhalte besitzt.
+
+Die Kästchen prüfen und erst **Auswahl für diese Quelle übernehmen** wählen. Dadurch werden eigene Sicherungsoptionen für diese Quelle verwendet; die globalen Einstellungen bleiben erhalten. Bei einer ganzen Konto-/Gruppenquelle gilt die Auswahl für alle ihre Repositories. Submodule benötigen den Modus Arbeitskopie und erreichbare HTTPS-Ziele; bei einem Mirror bleibt diese Empfehlung deaktiviert, bis der Modus bewusst geändert wurde. Git LFS gegebenenfalls separat installieren. Schließen ohne Übernehmen ändert keine Optionen.

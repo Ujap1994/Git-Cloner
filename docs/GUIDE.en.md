@@ -157,3 +157,45 @@ Release downloads are checked against declared sizes and available GitHub SHA256
 **Moved drives:** enable automatic path reassignment under Schedule or search connected drives from Sources. The saved folder marker and relative path identify known destinations. Only unique matches are applied; copied markers require manual selection. Current records and paused queues are updated without repeating completed work. No replacement directory is created at a missing old path. Folder markers are not physical hardware serial numbers.
 
 **Notifications:** Settings → Notifications offers all completed checks, errors only, changes and errors, or no backup notices. Version notices have a separate setting. Daily quiet hours can span midnight. Backup notices are not queued; a pending version notice can appear after quiet hours while the app is active. In-app status remains available. Skipped versions stay hidden until a higher official version is released.
+
+## New in 3.2: GitLab and Forgejo
+
+In **Sources → Add source**, choose GitHub, GitLab or Forgejo and the matching HTTPS server. No repositories are preconfigured. GitLab supports subgroup paths: explicitly select **Account / organization / group** for `example-group/subgroup`; use **Individual repository** for `example-group/subgroup/project`. Group discovery includes subgroups and excludes externally shared projects. Forgejo accepts accounts/organizations and `owner/project`.
+
+![Provider and server settings](screenshots/provider-source.png)
+
+For private sources, add an account under **Settings → Accounts** with the same provider and exact server, then assign it to the source. Forgejo also needs your username. GitLab tokens need suitable API/repository read access; Forgejo scopes depend on selected data. Tokens require a secure OS key store. **Public · no token** never borrows the default GitHub token for another provider. Device sign-in remains specific to GitHub. Other providers receive a stable server-specific parent folder, preventing identical repository names on different hosts from colliding.
+
+Snapshots, mirrors, LFS, HTTPS submodules, encryption and restoration apply to all three providers. GitLab metadata includes issues/notes, merge requests/notes/diffs, releases/assets and wiki. Forgejo includes issues/comments, pull requests/reviews/files, releases/assets and wiki. Server permissions and API truncation still apply. This is not an export of every CI, registry or administration resource. Forgejo 17.0.1 is tested with a real private HTTPS service; GitLab uses controlled API scenarios and real public API checks. Private SSO/proxy installations need their normal server permissions.
+
+## Search and export history
+
+Open **History**, search repositories, filter errors/changes and choose inclusive dates in local time. **Details** retains the repository search and pages through results. Select runs and export them anonymously; without a selection, export all matching saved runs. An individual export includes the complete retained run. Repository names become neutral IDs; private paths, credentials and raw errors are removed. Retention remains 100 completed runs and at most 500 detail results per run; truncation is displayed.
+
+![History search](screenshots/history-search.png)
+
+## Wait for space and troubleshoot
+
+A full drive pauses the persistent queue, retaining successful backups and completed jobs. While the app runs, free space is checked about every 30 seconds without repeating Git/API requests. Once every blocked destination meets its saved requirement, the queue resumes. With the app closed, a configured native worker or a later app start performs the next check; sleeping computers are not woken. A deliberate user pause remains manual. No existing backups are deleted to create space.
+
+![Waiting for space](screenshots/space-wait.png)
+
+**Troubleshoot** in the overview, history details or an error toast provides targeted steps for credentials, network, API limits, drive identity, permissions, space, Git/LFS and archive passwords. It changes no system settings. A redacted diagnostic export can accompany an issue report.
+
+![Contextual troubleshooting](screenshots/error-help.png)
+
+## Change archive passwords
+
+Under **Settings → Backup → Password change assistant**, select available encrypted backups. The inventory pages through 100 archives; up to 1000 can be changed per run. Enter an old password if needed, a new password of at least 12 characters and its confirmation. Known saved keys may make the old field unnecessary. The app authenticates an archive before adopting the new active password.
+
+![Password change assistant](screenshots/password-rotation.png)
+
+Remembering passwords is optional and retains older required keys in the secure OS key store. Without remembering, old/new passwords must be re-entered after restart; the management file stores identifiers only. Each archive is decrypted privately, verified, re-encrypted and then exchanged. A persisted transaction can complete or recover an interrupted swap. Missing/unselected drives keep their previous passwords. **Stop after current archive** finishes the active archive and stops between items. External GCB copies outside the managed selection are unchanged.
+
+The process requires space for old/new ciphertext and authenticated/extracted temporary data. Regular cleanup removes temporary plaintext; a hard termination can leave OS temporary files. Lost passwords cannot be recovered, and deletion is not forensic erasure. The ordinary unlock action authenticates an available archive rather than silently changing its password; use the assistant for a change.
+
+## Recommend LFS and submodule options
+
+Use **Recommend content** for a saved source. For an account/group, enter one repository belonging to it. The app reads Git trees and small attribute files without cloning or executing project code. It reports LFS rules, submodule links and local Git LFS availability. Incomplete inspections cannot establish absence. Review the checkboxes, then explicitly **Apply selection to this source**. Global options stay unchanged. Group choices affect all repositories in that source; submodules require snapshot mode. Closing without applying changes nothing.
+
+![Content recommendations](screenshots/content-recommendations.png)

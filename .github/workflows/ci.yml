@@ -13,6 +13,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  forgejo-service:
+    name: Private Forgejo over HTTPS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Download pinned and checksummed test server
+        run: |
+          curl --fail --location --retry 3 https://codeberg.org/forgejo/forgejo/releases/download/v17.0.1/forgejo-17.0.1-linux-amd64 --output /tmp/git-cloner-forgejo
+          echo '51a8cdf4a1252e79f4b3855d7a7891af6c6635105420768c460e2f0690385d6f  /tmp/git-cloner-forgejo' | sha256sum --check
+          chmod 700 /tmp/git-cloner-forgejo
+      - name: Private repositories, metadata and release downloads through real HTTPS
+        run: npm run test:forgejo
+        env:
+          FORGEJO_BIN: /tmp/git-cloner-forgejo
+
   superseded-releases:
     name: Stop superseded release builds
     if: github.event_name == 'push'

@@ -5,6 +5,7 @@ const os = require('node:os');
 const { randomBytes, scrypt, createCipheriv, createDecipheriv } = require('node:crypto');
 const { promisify } = require('node:util');
 const { pipeline } = require('node:stream/promises');
+const {Writable}=require('node:stream');
 const tar = require('tar');
 const derive = promisify(scrypt);
 const MAGIC = Buffer.from('GCLONER2');
@@ -94,4 +95,15 @@ async function decryptArchive(file, directory, passphrase) {
   } catch (error) { if (owned) await fs.rm(directory, { recursive: true, force: true }); throw error; }
   finally { key?.fill(0); await handle?.close(); await fs.rm(temp, { recursive: true, force: true }); }
 }
-module.exports = { encryptArchive, decryptArchive, password };
+async function authenticateArchive(file,passphrase){
+  password(passphrase);let handle,key;
+  try{
+    handle=await fs.open(file,'r');const base=Buffer.alloc(12);await handle.read(base,0,12,0);if(!base.subarray(0,8).equals(MAGIC))throw new Error('Unbekanntes Archivformat.');
+    const length=base.readUInt32BE(8);if(length<50||length>1024)throw new Error('Ungültiger Archivkopf.');const header=Buffer.alloc(length);await handle.read(header,0,length,12);const data=JSON.parse(header.toString()),salt=Buffer.from(data.salt??'','base64'),iv=Buffer.from(data.iv??'','base64'),size=(await handle.stat()).size;
+    if(data.version!==1||data.cipher!=='aes-256-gcm'||data.kdf!=='scrypt-32768-8-1'||salt.length!==32||iv.length!==12||size<12+length+17)throw new Error('Ungültiger Archivkopf.');
+    const tag=Buffer.alloc(16);await handle.read(tag,0,16,size-16);key=await keyFor(passphrase,salt);const decipher=createDecipheriv('aes-256-gcm',key,iv);decipher.setAAD(Buffer.concat([base,header]));decipher.setAuthTag(tag);
+    try{await pipeline(createReadStream(file,{start:12+length,end:size-17}),decipher,new Writable({write(_chunk,_encoding,done){done();}}));}catch(_error){throw new Error('Falsches Passwort oder beschädigtes Archiv.');}
+    return true;
+  }finally{key?.fill(0);await handle?.close();}
+}
+module.exports = { encryptArchive, decryptArchive, password, authenticateArchive };

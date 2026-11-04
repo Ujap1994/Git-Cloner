@@ -1,9 +1,9 @@
 <p align="center"><img src="build/icon.png" width="80" alt="Git Cloner"></p>
-<h1 align="center">Git Cloner 3.1</h1>
+<h1 align="center">Git Cloner 3.2</h1>
 <p align="center">Deine Repositories. Auf deinem Laufwerk. Nach deinem Zeitplan.</p>
 <p align="center"><a href="https://github.com/Ujap1994/Git-Cloner/actions/workflows/ci.yml"><img src="https://github.com/Ujap1994/Git-Cloner/actions/workflows/ci.yml/badge.svg" alt="CI"></a> <a href="https://github.com/Ujap1994/Git-Cloner/releases">Downloads</a> · <a href="docs/ANLEITUNG.md">Anonymisierte Anleitung</a> · <a href="docs/GUIDE.en.md">English guide</a></p>
 
-Git Cloner ist eine Electron-Desktop-App für macOS, Windows und Linux. Sie sichert ganze GitHub-Konten und Organisationen oder ausgewählte Repositories auf eigenen Laufwerken. **Beim ersten Start sind keine Konten oder Repositories eingetragen.** Die Oberfläche konzentriert sich auf Sicherungsstatus, nächste Prüfung und wichtige Meldungen; erweiterte Funktionen bleiben in eigenen Einstellungsbereichen.
+Git Cloner ist eine Electron-Desktop-App für macOS, Windows und Linux. Sie sichert GitHub-Konten, GitLab-Gruppen und Forgejo-Konten oder ausgewählte Repositories auf eigenen Laufwerken. **Beim ersten Start sind keine Konten oder Repositories eingetragen.** Die Oberfläche konzentriert sich auf Sicherungsstatus, nächste Prüfung und wichtige Meldungen; erweiterte Funktionen bleiben in eigenen Einstellungsbereichen.
 
 > [!IMPORTANT]
 > **Open Source – Nutzung ohne Gewähr.** Dieses Projekt wird unter der [MIT-Lizenz](LICENSE) bereitgestellt. Trotz sorgfältiger Entwicklung und Tests kann es Fehler enthalten; Sicherungen können unvollständig sein oder fehlschlagen, und Datenverluste lassen sich nicht ausschließen. Es gibt keine Garantie für Fehlerfreiheit oder Eignung für einen bestimmten Zweck. Teste Sicherung und Wiederherstellung zunächst mit unkritischen Daten und bewahre zusätzliche, unabhängige Backups auf. Gewährleistung und Haftung richten sich nach der Lizenz und dem geltenden Recht. Fehlerberichte und Verbesserungsvorschläge sind über [GitHub Issues](https://github.com/Ujap1994/Git-Cloner/issues) willkommen.
@@ -14,10 +14,10 @@ Git Cloner ist eine Electron-Desktop-App für macOS, Windows und Linux. Sie sich
 
 | Bereich | Verhalten |
 | --- | --- |
-| Quellen | Mehrere Konten und Repositories zeilenweise eintragen; eigene Zugangsdaten und bis zu zehn Speicherorte je Quelle. |
+| Quellen | GitHub, GitLab und Forgejo: mehrere Konten und Repositories zeilenweise eintragen; eigene Zugangsdaten und bis zu zehn Speicherorte je Quelle. |
 | Filter | Forks und archivierte Repositories einschließen oder ausschließen; Namensmuster mit `*` und `?` verwenden. |
 | Git | Schnelle flache Arbeitskopie des aktuellen Standardbranches oder vollständiger Mirror mit allen Branches und Tags. Optional echte LFS-Dateien und rekursive Submodule. |
-| Metadaten | Optional Issues samt Kommentaren, Pull Requests samt Reviews und Dateiänderungen, Releases samt Dateien und Wiki-Mirrors exportieren. |
+| Metadaten | Optional Issues und Kommentare, Pull-/Merge-Requests mit den verfügbaren Review-/Kommentar- und Dateiänderungsdaten, Releases samt Dateien und Wiki-Mirrors exportieren. Anbieterabhängige Details stehen in der Anleitung. |
 | Schutz | Laufwerkskennung, Schutz fremder Ordner, Speicherreserve und Austausch erst nach erfolgreicher Prüfung. Ein erfolgreicher Stand je Ziel. |
 | Integrität | Git-Objekte und SHA256-Dateimanifeste prüfen, standardmäßig wöchentlich; beschädigte verwaltete Sicherungen beim nächsten Prüflauf neu erstellen. |
 | Verschlüsselung | Optional passwortgeschützte AES-256-GCM-Archive mit scrypt-Schlüsselableitung; Passwort auf Wunsch im OS-Schlüsselspeicher merken. |
@@ -27,7 +27,26 @@ Git Cloner ist eine Electron-Desktop-App für macOS, Windows und Linux. Sie sich
 | Komfort | Suche, Statusfilter, paginierte Listen, Import/Export der Einstellungen ohne Geheimnisse und anonymisierte Diagnoseprotokolle. |
 | Darstellung | Deutsch und Englisch, Hell-/Dunkelmodus oder Systemeinstellung sowie drei Schriftgrößen, hohen Kontrast und Tastenkürzel mit ausgerichteten Eingabefeldern. |
 
-## Neu in Version 3.1
+## Neu in Version 3.2
+
+Alle sechs zuletzt beauftragten Erweiterungen sind umgesetzt:
+
+| Erweiterung | Verhalten |
+| --- | --- |
+| Verlauf durchsuchen | Nach Repository, lokalem Zeitraum und Fehlern/Änderungen filtern, Details seitenweise öffnen und gewählte Läufe anonymisiert exportieren. |
+| Konkrete Fehlerhilfe | Passende nächste Schritte für Zugriffsrechte, Netzwerk, API-Limits, Laufwerke, Speicherplatz, Git und Archivpasswörter direkt aus einer Fehlermeldung öffnen. |
+| Auf Speicher warten | Volle Datenträger pausieren die Warteschlange dauerhaft. Bei ausreichend freiem Platz automatisch fortsetzen und bereits abgeschlossene Ziele überspringen. Vorhandene Backups bleiben erhalten. |
+| Passwortwechsel-Assistent | Gewählte verschlüsselte Archive geprüft neu verschlüsseln, zwischen Archiven stoppen und unterbrochene Austausche wieder aufnehmen. Ältere benötigte Passwörter auf Wunsch im OS-Schlüsselspeicher behalten. |
+| GitLab und Forgejo | GitLab API v4 einschließlich Untergruppen und Forgejo API v1 als Quellen. Server und Zugangsdaten bleiben getrennt; identische Repository-Namen verschiedener Server erhalten getrennte Ablagen. |
+| LFS-/Submodul-Empfehlungen | Git-Dateibäume und kleine Attributdateien prüfen, Hinweise anzeigen und Optionen erst nach deiner Auswahl für diese Quelle übernehmen. |
+
+![Verlaufssuche mit anonymisierten Beispielen](docs/screenshots/history-search.png)
+
+![Anbieter und Server einer anonymisierten Quelle](docs/screenshots/provider-source.png)
+
+Die [anonymisierte Anleitung ab Abschnitt 22](docs/ANLEITUNG.md#22-gitlab-und-forgejo-als-quellen) erläutert diese Abläufe einschließlich Passwortwechsel und Speicherpausen. Der erste Start bleibt ohne Quellen. Die Versionsüberwachung vergleicht weiterhin ausschließlich mit den offiziellen GitHub-Releases dieses Projekts und erlaubt das dauerhafte Überspringen einer Version.
+
+## Weiterhin enthalten: Version 3.1
 
 | Erweiterung | Verhalten |
 | --- | --- |
@@ -56,7 +75,7 @@ Weitere Bilder und Schritt-für-Schritt-Erklärungen: [Eigene Prüfzeiten, Relea
 | Einzeldateien wiederherstellen | Dateien und Ordner aus Snapshots, verschlüsselten Archiven oder dem HEAD eines Mirrors auswählen und einzeln verifizieren. |
 | Eigene Quellenoptionen | Mirror/Snapshot, LFS, Submodule, Metadaten, Integrität und Verschlüsselung je Quelle wählen oder die globalen Optionen übernehmen. |
 | Intelligente Warteschlange | Standardmäßig zwei kleine Repositories parallel, maximal vier konfigurierbar und höchstens zwei je erkanntem Datenträger. Große oder aufwendige Sicherungen laufen exklusiv. |
-| Netzwerkfehler wiederholen | Zunehmende Wartezeiten und begrenzte Wiederholungen; keine Wiederholung permanenter Berechtigungs- oder Speicherfehler. |
+| Netzwerkfehler wiederholen | Zunehmende Wartezeiten und begrenzte Wiederholungen; keine Wiederholung permanenter Berechtigungsfehler; Speicherknappheit wartet gezielt auf ausreichenden Platz. |
 | Ressourcenregeln | Gemeinsames Download-Limit, optional nur am Netzteil und nur in exakt benannten WLANs sichern. |
 | Dashboard | Laufzeit, geschätzte Restzeit, gemessene Downloads, Datenumfang, freier Speicher und Hinweise auf überfällige Sicherungen. |
 | Bedienung | Hoher Kontrast, Tastenkürzel, Überspringlink, Statusansagen und Tastaturnavigation in Einstellungsreitern. |
@@ -157,6 +176,7 @@ Unter Linux benötigen GUI-Tests eine grafische Sitzung, beispielsweise `xvfb-ru
 | Befehl | Ergebnis |
 | --- | --- |
 | `npm run check` | ESLint sowie Logik-, Sicherheits-, Katalog- und echte Git-Integrationstests |
+| `npm run test:forgejo` | Privaten lokalen Forgejo-Server über echtes HTTPS prüfen; benötigt eine separat geprüfte Testserver-Binärdatei in `FORGEJO_BIN` (nur für Entwicklung/CI) |
 | `npm run test:e2e` | Echte Electron-Oberfläche, Versionsignorierung über Neustarts, Layout, Tastatur, Einrichtung, Probelauf, Pause über Neustarts und vollständige/selektive verschlüsselte Wiederherstellung |
 | `npm run test:coverage` | Node-Abdeckungsbericht |
 | `npm run screenshots` | Alle anonymisierten App-Screenshots aus den Screenshot- und neuen GUI-Abläufen |

@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Git Cloner
-Comment=Geplante GitHub-Sicherungen auf deinem Laufwerk
+Comment=Geplante Git-Sicherungen auf deinem Laufwerk
 Exec=git-cloner
 Icon=io.github.Ujap1994.GitCloner
 Terminal=false

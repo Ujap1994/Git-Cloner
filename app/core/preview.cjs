@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
-const path = require('node:path');
 const { resolveJobs } = require('./backup.cjs');
 const { validateConfig, effectiveBackup } = require('./config.cjs');
+const { repositoryDestination,repositoryIdentity } = require('./provider-spec.cjs');
 async function spaceAt(destination) {
   try {
     const info = await fs.stat(destination); if (!info.isDirectory()) throw new Error('Kein Ordner.');
@@ -14,7 +14,7 @@ async function previewConfig(input, github) {
   const disks = await Promise.all([...new Set(jobs.map(job => job.source.destination))].map(spaceAt));
   const targets = jobs.map(job => {
     const options = effectiveBackup(config,job.source), estimatedBytes = Math.max(0,job.repository.size || 0) * 1024;
-    return { fullName: job.repository.full_name, sourceId: job.sourceId, targetId: job.targetId, destination: path.join(job.source.destination,...job.repository.full_name.split('/')), root: job.source.destination, mode: options.mode, encrypted: options.encryption, estimatedBytes };
+    return { fullName: job.repository.full_name, sourceId: job.sourceId, targetId: job.targetId, destination: repositoryDestination(job.source,job.repository.full_name), identity:repositoryIdentity(job.source,job.repository.full_name), root: job.source.destination, mode: options.mode, encrypted: options.encryption, estimatedBytes };
   });
   for (const disk of disks) {
     const matching = targets.filter(t => t.root === disk.destination);
@@ -27,6 +27,6 @@ async function previewConfig(input, github) {
     const needed = siblings.reduce((sum,d) => sum + d.estimatedBytes,0) + Math.max(...siblings.map(d => d.reserveBytes));
     disk.enoughSpace = disk.freeBytes >= needed;
   }
-  return { checkedAt: new Date().toISOString(), readOnly: true, repositoryCount: new Set(targets.map(t => t.fullName.toLowerCase())).size, targetCount: targets.length, excludedCount: excluded.length, estimatedBytes: targets.reduce((sum,t) => sum + t.estimatedBytes,0), targets, excluded, errors, disks };
+  return { checkedAt: new Date().toISOString(), readOnly: true, repositoryCount: new Set(targets.map(t => t.identity)).size, targetCount: targets.length, excludedCount: excluded.length, estimatedBytes: targets.reduce((sum,t) => sum + t.estimatedBytes,0), targets, excluded, errors, disks };
 }
 module.exports = { previewConfig, spaceAt };

@@ -2,7 +2,7 @@ const { randomUUID, createHash } = require('node:crypto');
 const { TextDecoder } = require('node:util');
 const { createTwoFilesPatch } = require('diff');
 const { managed } = require('./backup.cjs');
-const { parseSource } = require('./config.cjs');
+const { parseHostedSource,cloneURL } = require('./provider-spec.cjs');
 const MAX_TEXT = 256 * 1024;
 function localTree(output) {
   return output.split('\0').filter(Boolean).map(line => {
@@ -37,19 +37,19 @@ class ChangesPreview {
   }
   async prepare({ record, git, github, passphrase, controller }) {
     const signal = controller.signal;
-    const fullName = parseSource(record.fullName,'repository');
+    const fullName = parseHostedSource(record.fullName,'repository',record);
     let source = record.destination, marker = await managed(source,fullName), browserId;
     try {
       if (marker.encrypted) { const opened = await this.browser.open({record,passphrase}); browserId = opened.id; const session = this.browser.session(browserId); source = session.source; marker = session.marker; session.expiresAt = Infinity; }
       signal.throwIfAborted();
-      const oldHead = marker.commit, newHead = await git.remoteHead(`https://github.com/${fullName}.git`,{signal,timeout:30000});
+      const oldHead = marker.commit, newHead = await git.remoteHead(cloneURL(record,fullName),{signal,timeout:30000});
       if (!newHead) throw new Error('Das GitHub-Repository enthält noch keinen Commit.');
       let files = [];
       if (oldHead !== newHead) {
         const before = localTree(await git.run(['-C',source,'ls-tree','-r','-l','-z',oldHead],{signal,timeout:30000,rawOutput:true,maxBuffer:16 * 1048576}));
-        const commit = await github.request(`/repos/${fullName}/git/commits/${newHead}`,{signal});
-        if (!/^[a-f\d]{40,64}$/.test(commit.tree?.sha ?? '')) throw new Error('GitHub hat keine gültige Dateiliste geliefert.');
-        const tree = await github.request(`/repos/${fullName}/git/trees/${commit.tree.sha}?recursive=1`,{signal});
+        let tree;
+        if(github.tree)tree=await github.tree(fullName,newHead,{signal});
+        else{const commit=await github.request(`/repos/${fullName}/git/commits/${newHead}`,{signal});if(!/^[a-f\d]{40,64}$/.test(commit.tree?.sha??''))throw new Error('Der Git-Server hat keine gültige Dateiliste geliefert.');tree=await github.request(`/repos/${fullName}/git/trees/${commit.tree.sha}?recursive=1`,{signal});}
         if (tree.truncated || !Array.isArray(tree.tree)) throw new Error('Die GitHub-Dateiliste ist für eine vollständige Vorschau zu groß. Die Sicherung kann weiterhin ausgeführt werden.');
         files = compareTrees(before,tree.tree);
       }
@@ -74,11 +74,12 @@ class ChangesPreview {
     finally { this.readers.delete(promise); }
   }
   async readFile(session,entry) {
+    if(entry.after?.type==='blob'&&entry.after.size==null&&session.github.blobInfo){const info=await session.github.blobInfo(session.fullName,entry.path,session.newHead,{signal:session.controller.signal});if(info){if(info.sha!==entry.after.sha)throw new Error('Die Git-Prüfsumme der Vorschau stimmt nicht.');entry.after={...entry.after,size:info.size};}}
     if ([entry.before,entry.after].some(e => e && (e.type !== 'blob' || e.size == null || e.size > MAX_TEXT))) return { path: entry.path, kind: 'unavailable', message: 'Für große Dateien und Submodule wird nur die Dateiliste angezeigt.' };
     let old = '', fresh = '';
     if (entry.before) old = checkedBlob(Buffer.from(await session.git.run(['-C',session.source,'cat-file','blob',entry.before.sha],{signal:session.controller.signal,timeout:10000,rawOutput:true,encoding:'buffer',maxBuffer:MAX_TEXT + 1})),entry.before);
     if (entry.after) {
-      const blob = await session.github.request(`/repos/${session.fullName}/git/blobs/${entry.after.sha}`,{signal:session.controller.signal});
+      const blob = session.github.blob?await session.github.blob(session.fullName,entry.after.sha,{signal:session.controller.signal}):await session.github.request(`/repos/${session.fullName}/git/blobs/${entry.after.sha}`,{signal:session.controller.signal});
       if (blob.encoding !== 'base64' || typeof blob.content !== 'string' || blob.content.length > 2 * MAX_TEXT) throw new Error('Die GitHub-Datei kann nicht als Textvorschau geladen werden.');
       fresh = checkedBlob(Buffer.from(blob.content,'base64'),entry.after);
     }

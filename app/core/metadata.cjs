@@ -6,6 +6,7 @@ const { controlDirectory } = require('./integrity.cjs');
 const { selectReleaseAssets } = require('./release-assets.cjs');
 
 async function metadataPlan(repository, options, github, git, { releaseScope = 'all', platform = process.platform } = {}) {
+  if(github?.provider&&github.provider!=='github')return require('./hosted-metadata.cjs').hostedMetadataPlan(repository,options,github,git,{releaseScope,platform});
   const base = `/repos/${repository.full_name}`;
   const data = {};
   if (options.issues) data.issues = (await github.collection(`${base}/issues?state=all&sort=updated&direction=desc`)).filter(issue => !issue.pull_request);

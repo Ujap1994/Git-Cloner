@@ -1,8 +1,28 @@
 # Tatsächlich ausgeführte Prüfungen
 
-Stand: 4. November 2026, Git Cloner **3.1.0**. Prüfungen mit GitHub-Antworten aus Test-Fixtures und tatsächliche Plattformläufe werden getrennt ausgewiesen.
+Stand: 4. November 2026, Git Cloner **3.2.0**. Prüfungen mit GitHub-Antworten aus Test-Fixtures und tatsächliche Plattformläufe werden getrennt ausgewiesen.
 
-## Lokale Prüfung von Version 3.1
+## Lokale Prüfung von Version 3.2
+
+| Prüfung | Tatsächliches Ergebnis |
+| --- | --- |
+| Node 24, `npm run check` | ESLint und **174 Kern-/Integrationstests erfolgreich**, keine übersprungenen Tests. |
+| Node 22.23.4 | Dieselben **174 Tests erfolgreich**, keine übersprungenen Tests. |
+| Echte Electron-Oberfläche auf Linux/Xvfb | **36 Tests erfolgreich**, einschließlich der sieben zusätzlichen Bedienabläufe für Version 3.2. |
+| Echte private Forgejo-Installation | **Forgejo 17.0.1 über HTTPS erfolgreich geprüft**: privater Snapshot/Mirror, Branches, eigene Repository-Liste, Issues/Kommentare, Pull Requests, Wiki, authentifizierter Release-Download und LFS-Empfehlung. Lokales Testzertifikat wird nur dem Testprozess hinzugefügt; TLS-Prüfung bleibt aktiv. |
+| Echte öffentliche GitLab-API | Projekt-Normalisierung, Dateigröße/Blob-ID über HEAD und Blob-Abruf erfolgreich geprüft. Keine privaten GitLab-Zugangsdaten oder Installation vorausgesetzt. |
+| Produktionsabhängigkeiten | `npm audit --omit=dev`: **keine gemeldeten Schwachstellen** zum Prüfzeitpunkt. |
+| Gepackte Linux-x64-App | `build:dir` und echter Start erfolgreich: Version 3.2.0, Preload, leere Quellen, Verlauf, Leistungsregeln, OS-Erkennung, Release-Filter und Meldungseinstellungen geprüft. Alle 49 Anwendungsdateien entsprechen dem gepackten ASAR. Die Release-Pipeline baut ihre Pakete aus dem zugehörigen geprüften Quellcommit. |
+
+Die neuen Prüfungen verwenden echte lokale Git-Repositories und tatsächlich verschlüsselte Archive. Sie prüfen getrennte Anbieterpfade, HTTPS-/Token-Bindungen, Pagination einschließlich Forgejo-Git-Dateibäumen, private Asset-Weiterleitungen ohne Tokenweitergabe und die Ablehnung von HTML-Anmeldeseiten. GitLab-/Forgejo-Metadaten und Diff-Ansichten werden zusätzlich mit kontrollierten API-Antworten geprüft.
+
+Speicherprüfungen simulieren ENOSPC, öffnen das gespeicherte Profil erneut, unterlassen bei fehlendem Platz weitere API-Aufrufe und verifizieren, dass fertige Ziele beim Fortsetzen nicht erneut laufen. Andere ausführbare Aufgaben werden vor der Wartephase abgeschlossen. Passwortprüfungen decken echte verschlüsselte Mirrors, falsche Passwörter, unterbrochene Austausche, fremde temporäre Dateien, Schreibfehler, bewusstes Stoppen und ältere Schlüssel über einen erneuten Vault-Start ab. Eine beim Programmstart fehlende Platte kann später wieder verbunden werden; der nächste Lauf schließt dann einen unterbrochenen Passwortaustausch vor der Sicherung ab, auch bei deaktivierter Laufwerksneuzuordnung. Die gewöhnliche Passwortentsperrung authentifiziert ein verfügbares Archiv, bevor ein Passwort übernommen wird.
+
+Die GUI-Prüfungen kontrollieren die Anbieter-/Serverauswahl, Forgejo-Kontozuordnung, Verlaufssuche/Fehlerhilfe, sichtbare Speicherpausen, tatsächlichen Passwortwechsel mit anschließender Wiederherstellung sowie das bewusste Übernehmen von LFS-Empfehlungen. Benachbarte Felder werden auf gleiche Position/Höhe geprüft; Englisch, Dunkelmodus und große Schrift bleiben ohne horizontalen Seitenüberlauf verwendbar.
+
+Der zusätzliche CI-Servicejob lädt ausschließlich die fest gepinnte Forgejo-Testversion und prüft den eingebetteten SHA256-Wert vor dem Start. Er setzt keine Forgejo-Installation beim Benutzer voraus. Aktuelle tatsächliche Plattform- und Release-Ergebnisse sind unter den unten verlinkten Actions-Läufen sichtbar.
+
+## Frühere lokale Prüfung von Version 3.1
 
 | Umgebung / Prüfung | Tatsächliches Ergebnis |
 | --- | --- |

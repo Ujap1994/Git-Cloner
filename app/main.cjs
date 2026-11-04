@@ -133,7 +133,7 @@ async function start() {
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', event => event.preventDefault());
   mainWindow.webContents.on('will-attach-webview', event => event.preventDefault());
-  mainWindow.on('close', event => { if (!quitting && tray && (runtime.config.closeToTray || runtime.busy())) { event.preventDefault(); mainWindow.hide(); } });
+  mainWindow.on('close', event => { if(!quitting&&runtime.busy()&&!tray){event.preventDefault();return;}if (!quitting && tray && (runtime.config.closeToTray || runtime.busy())) { event.preventDefault(); mainWindow.hide(); } });
   handle('state:get', state);
   handle('config:save', async input => { await runtime.saveConfig(input); return state(); });
   handle('directory:choose', async () => { const result = await dialog.showOpenDialog(mainWindow, { title: text('Vorhandenen Ordner wählen', 'Choose an existing folder'), properties: ['openDirectory', 'createDirectory'] }); return result.canceled ? null : result.filePaths[0]; });
@@ -152,6 +152,15 @@ async function start() {
   handle('changes:file', options => runtime.changes.file(options));
   handle('changes:close', () => runtime.closeChanges());
   handle('drives:locate', () => runtime.locateDrives());
+  handle('history:list',options=>runtime.historyQuery(options));
+  handle('history:details',options=>runtime.historyDetails(options));
+  handle('history:export',async options=>{const document=runtime.historyExport(options);const result=await dialog.showSaveDialog(mainWindow,{defaultPath:'git-cloner-history-redacted.json',filters:[{name:'JSON',extensions:['json']}]});if(result.canceled)return null;await writeJson(result.filePath,document);return{saved:true,runs:document.runs.length};});
+  handle('errors:help',error=>require('./core/error-help.cjs').errorHelp(error));
+  handle('rotation:inventory',options=>runtime.rotationInventory(options));
+  handle('rotation:run',options=>runtime.rotatePasswords(options));
+  handle('rotation:stop',()=>runtime.stopRotation());
+  handle('source:recommend',options=>runtime.recommendations(options));
+  handle('source:recommend-cancel',()=>runtime.cancelRecommendations());
   handle('updates:ignore', () => runtime.ignoreUpdate());
   handle('updates:reset', () => runtime.resetUpdate());
   handle('token:save', (token, accountId = 'default') => runtime.setToken(accountId, token));

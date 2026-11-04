@@ -55,17 +55,17 @@ Die vier zuletzt vorgeschlagenen Funktionen sind umgesetzt. Dazu kommen Release-
 
 Siehe die [anonymisierte Anleitung](ANLEITUNG.md#17-eigene-prüfzeiten-je-quelle), [Release-Hinweise](RELEASE-NOTES.md) und [ausgeführten Prüfungen](VALIDIERUNG.md).
 
-## Weitere mögliche Features
+## Erledigte Erweiterungen in Version 3.2
 
-Diese Ideen sind noch nicht umgesetzt. Sie behalten jeweils einen erfolgreichen Stand pro Repository und Ziel bei und benötigen keine automatische Update-Installation.
+Alle sechs zuletzt vorgeschlagenen Erweiterungen sind umgesetzt. Sie behalten jeweils einen erfolgreichen Stand pro Repository und Ziel bei und benötigen keine automatische Update-Installation. Die anonymisierte Anleitung beschreibt die Bedienung ab Abschnitt 22; die Validierung führt tatsächliche Tests und ihre Grenzen auf.
 
-| Priorität | Idee | Nutzen |
+| Punkt | Funktion | Umsetzung |
 | --- | --- | --- |
-| 1 | Verlauf durchsuchen | Nach Repository, Zeitraum oder Fehler filtern und einzelne Läufe anonym exportieren. |
-| 2 | Konkrete Fehlerhilfe | Zu Netzwerk-, Berechtigungs-, Speicher- und Git-Problemen passende nächste Schritte anbieten. |
-| 3 | Auf freien Speicher warten | Platzmangel als gezielt fortsetzbaren Zustand behandeln, ohne bestehende Backups zu löschen. |
-| 4 | Passwortwechsel-Assistent | Noch mit dem alten Passwort geschützte Archive erkennen und eine kontrollierte Umstellung begleiten. |
-| 5 | GitLab und Forgejo | Weitere Anbieter als optionale Backup-Quellen integrieren; das Projekt selbst bleibt auf GitHub. |
-| 6 | Umfang automatisch vorschlagen | Vorhandene LFS-Dateien und Submodule erkennen und passende Optionen erklären, ohne sie ungefragt zu aktivieren. |
+| 1 | Verlauf durchsuchen | Repository-Suche, lokaler Zeitraum, Fehler-/Änderungsfilter, paginierte Details und Auswahl ganzer Läufe für anonymisierte Exporte. |
+| 2 | Konkrete Fehlerhilfe | Kontextbezogene Schritte direkt aus Übersicht, Verlaufsdetails und Fehlermeldungen; keine automatischen Änderungen an Systemeinstellungen. |
+| 3 | Auf freien Speicher warten | Persistente Wartezustände, Fortsetzen bei ausreichendem Platz, kein Löschen vorhandener Backups und kein erneutes Bearbeiten fertiger Ziele. Unabhängige noch ausführbare Aufgaben werden zunächst fertiggestellt. |
+| 4 | Passwortwechsel-Assistent | Erreichbare Archive auswählen, authentifizieren, prüfen und einzeln neu verschlüsseln. Wiederanlauf nach unterbrochenem Austausch, Stoppen zwischen Archiven und optionales Merken älterer benötigter Schlüssel. |
+| 5 | GitLab und Forgejo | GitLab API v4 mit Untergruppen, Forgejo API v1, getrennte Server-/Token-Zuordnung, getrennte Ablage identischer Namen, Metadaten und private Release-Dateien. Das Entwicklungsprojekt bleibt auf GitHub. |
+| 6 | Umfang vorschlagen | Git-Dateibäume und kleine Attributdateien auswerten; LFS/Submodule und Grenzen anzeigen. Aktivierung nur nach bewusster Auswahl für diese Quelle. |
 
 Eine historische Ordnerrotation bleibt außerhalb des aktuellen Verhaltens. Ein Mirror enthält seine Git-Historie innerhalb eines einzigen Stands.

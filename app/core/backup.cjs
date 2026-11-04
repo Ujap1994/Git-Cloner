@@ -4,7 +4,9 @@ const path = require('node:path');
 const os = require('node:os');
 const { createHash } = require('node:crypto');
 const { EventEmitter } = require('node:events');
-const { defaults, parseSource, effectiveBackup } = require('./config.cjs');
+const { defaults, effectiveBackup } = require('./config.cjs');
+const { providerSpec,parseHostedSource,repositoryParts,repositoryDestination,repositoryIdentity,providerKey,cloneURL } = require('./provider-spec.cjs');
+const { errorCode } = require('./error-help.cjs');
 const { retry } = require('./retry.cjs');
 const { createTransport } = require('./transport.cjs');
 const { readJson, writeJson } = require('./store.cjs');
@@ -65,20 +67,22 @@ async function verifyBackup(record, git, passphrase) {
     return await verifyDirectory(payload, git, marker.mode);
   } finally { await fs.rm(temporary, { recursive: true, force: true }); }
 }
+function backupFingerprint(opts){return createHash('sha256').update(JSON.stringify({mode:opts.mode,lfs:opts.lfs,submodules:opts.submodules,encrypted:opts.encryption,metadata:opts.metadata,...(opts.metadata.releases?{releaseScope:opts.releaseScope,releasePlatform:opts.releaseScope==='system'?process.platform:null}:{}),keyId:opts.encryption?opts.encryptionKeyId:null})).digest('hex');}
 async function syncRepository({ source, repository, git, github, options = defaults().backup, plan, passphrase, onProgress = () => {} }) {
-  const fullName = parseSource(repository.full_name, 'repository'), [owner, name] = fullName.split('/');
+  const fullName = parseHostedSource(repository.full_name, 'repository',source), parts=repositoryParts(source,fullName), name=parts.at(-1),parents=parts.slice(0,-1),spec=providerSpec(source);
   const opts = { ...defaults().backup, ...options, metadata: { ...defaults().backup.metadata, ...options.metadata } };
   let root = await verifyDestination(source);
-  const parent = await safeDirectory(root, [owner], true);
+  const parent = await safeDirectory(root, parents, true);
   const { target, staging, previous, markerFile } = await recover(parent, name, fullName);
   const current = await exists(target) ? await managed(target, fullName) : null;
-  const url = `https://github.com/${fullName}.git`;
+  if(current&&spec.provider!=='github'&&(current.provider!==spec.provider||current.server!==spec.server))throw new Error('Eine fremde Anbieter-Sicherung wird nicht überschrieben.');
+  const url = cloneURL(source,fullName);
   onProgress({ fullName, status: 'checking' });
   const revision = await git.revision(url, opts.mode === 'mirror');
   if (!revision) return { fullName, destination: target, status: 'empty', message: 'Leeres Repository ohne Commit.', checkedAt: new Date().toISOString() };
   plan ??= await metadataPlan(repository, opts.metadata, github, git, { releaseScope: opts.releaseScope });
   if (current?.wikiRevision && plan.warning) throw new Error('Das Wiki konnte nicht aktualisiert werden. Die vorhandene Sicherung bleibt erhalten.');
-  const fingerprint = createHash('sha256').update(JSON.stringify({ mode: opts.mode, lfs: opts.lfs, submodules: opts.submodules, encrypted: opts.encryption, metadata: opts.metadata, ...(opts.metadata.releases ? { releaseScope: opts.releaseScope, releasePlatform: opts.releaseScope === 'system' ? process.platform : null } : {}), keyId: opts.encryption ? opts.encryptionKeyId : null })).digest('hex');
+  const fingerprint = backupFingerprint(opts);
   let repair = false;
   if (current && current.fingerprint === fingerprint && current.revision === revision && current.metadataDigest === plan.digest) {
     try {
@@ -102,7 +106,7 @@ async function syncRepository({ source, repository, git, github, options = defau
     if (opts.encryption) {
       if (!passphrase) throw new Error('Bitte zuerst das Archivpasswort in den Einstellungen entsperren.');
       temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'git-cloner-encrypt-')); await fs.chmod(temporary, 0o700);
-      await checkSpace(temporary, estimatedBytes, opts.reserveMB);
+      try{await checkSpace(temporary, estimatedBytes, opts.reserveMB);}catch(error){if(error.space)error.space.root=os.tmpdir();throw error;}
       payload = path.join(temporary, 'payload'); await fs.mkdir(staging, { mode: 0o700 });
     }
     onProgress({ fullName, status: 'cloning' });
@@ -122,13 +126,13 @@ async function syncRepository({ source, repository, git, github, options = defau
     const commit = await git.head(payload);
     if (!/^[a-f\d]{40,64}$/.test(commit)) throw new Error('Der neue Stand enthält keinen gültigen Commit.');
     const verification = await writeManifest(payload, opts.mode);
-    const marker = { schemaVersion: 1, fullName, commit, revision, mode: opts.mode, encrypted: opts.encryption, fingerprint, metadataDigest: plan.digest, wikiRevision: plan.wikiRevision ?? null, releaseInfo: plan.releaseInfo ?? null, ...verification, updatedAt: new Date().toISOString() };
+    const marker = { schemaVersion: 1, fullName, ...(spec.provider!=='github'?spec:{}), commit, revision, mode: opts.mode, encrypted: opts.encryption, ...(opts.encryptionKeyId?{encryptionKeyId:opts.encryptionKeyId}:{}), fingerprint, metadataDigest: plan.digest, wikiRevision: plan.wikiRevision ?? null, releaseInfo: plan.releaseInfo ?? null, ...verification, updatedAt: new Date().toISOString() };
     await writeJson(path.join(controlDirectory(payload, opts.mode), MARKER), { ...marker, encrypted: false });
     if (opts.encryption) {
       onProgress({ fullName, status: 'encrypting' }); await encryptArchive(payload, path.join(staging, 'backup.gcb'), passphrase);
       marker.archiveHash = await hashFile(path.join(staging, 'backup.gcb')); await writeJson(path.join(staging, MARKER), marker);
     }
-    root = await verifyDestination(source); await safeDirectory(root, [owner]);
+    root = await verifyDestination(source); await safeDirectory(root, parents);
     if (current) { await managed(target, fullName); await fs.rename(target, previous); }
     try { await fs.rename(staging, target); }
     catch (error) { if (current && !await exists(target)) await fs.rename(previous, target); throw error; }
@@ -140,7 +144,7 @@ async function syncRepository({ source, repository, git, github, options = defau
   }
 }
 async function resolveJobs(sources, github, { onlyTargets = null, onlySources = null } = {}) {
-  const selected = sources.filter(s => s.enabled), overrides = new Set(selected.filter(s => s.kind === 'repository').map(s => s.value.toLowerCase()));
+  const selected = sources.filter(s => s.enabled), overrides = new Set(selected.filter(s => s.kind === 'repository').map(s => repositoryIdentity(s,s.value)));
   const jobs = [], errors = [], excluded = [], paths = new Set(), reserved = new Set();
   for (const source of selected) {
     if (onlySources && !onlySources.includes(source.id)) continue;
@@ -148,12 +152,12 @@ async function resolveJobs(sources, github, { onlyTargets = null, onlySources = 
       const client = typeof github === 'function' ? github(source) : github;
       const repos = source.kind === 'owner' ? await client.repositories(source.value) : [await client.repository(source.value)];
       for (const repository of repos) {
-        const fullName = parseSource(repository.full_name, 'repository');
-        if ((source.kind === 'owner' && overrides.has(fullName.toLowerCase())) || !includesRepository(repository, source.filters)) { excluded.push({ fullName, sourceId: source.id, reason: source.kind === 'owner' && overrides.has(fullName.toLowerCase()) ? 'override' : 'filter' }); continue; }
+        const fullName = parseHostedSource(repository.full_name, 'repository',source);
+        if ((source.kind === 'owner' && overrides.has(repositoryIdentity(source,fullName))) || !includesRepository(repository, source.filters)) { excluded.push({ fullName, sourceId: source.id, reason: source.kind === 'owner' && overrides.has(repositoryIdentity(source,fullName)) ? 'override' : 'filter' }); continue; }
         for (const target of [{ id: 'primary', destination: source.destination, volumeId: source.volumeId, volumeHint: source.volumeHint }, ...(source.additionalDestinations ?? [])]) {
           const targetId = `${source.id}:${target.id}`;
           if (onlyTargets && !onlyTargets.includes(targetId)) continue;
-          const destination = path.resolve(target.destination, ...fullName.split('/')).toLowerCase();
+          const destination = repositoryDestination({...source,destination:target.destination},fullName).toLowerCase();
           if (paths.has(destination)) throw new Error('Mehrere Repositories verwenden denselben Zielordner.');
           const parent = path.dirname(destination), name = path.basename(destination);
           const internals = [`.${name}.git-cloner-stage`,`.${name}.git-cloner-previous`,`.${name}.git-cloner-stage.json`].map(n => path.join(parent,n));
@@ -167,12 +171,12 @@ async function resolveJobs(sources, github, { onlyTargets = null, onlySources = 
       }
     } catch (error) {
       if (/verschachtelt|denselben|Reservierte|Zu viele Sicherungsziele/.test(error.message)) throw error;
-      errors.push({ fullName: source.value, sourceId: source.id, status: 'error', message: error.message });
+      errors.push({ fullName: source.value, sourceId: source.id, status: 'error', message: error.message, helpCode:errorCode(error) });
     }
   }
   return { jobs, errors, excluded };
 }
-function jobId(job) { return createHash('sha256').update(`${job.repository.full_name.toLowerCase()}\0${path.resolve(job.source.destination, ...job.repository.full_name.split('/'))}`).digest('hex').slice(0, 24); }
+function jobId(job) { return createHash('sha256').update(`${job.repository.full_name.toLowerCase()}\0${repositoryDestination(job.source,job.repository.full_name)}`).digest('hex').slice(0, 24); }
 function serialJob(job) { const serial = { ...job }; delete serial.github; return serial; }
 function heavy(job, config) {
   const options = effectiveBackup(config, job.source);
@@ -220,7 +224,7 @@ class BackupService extends EventEmitter {
       // Execution rules may be relaxed while paused; backup content remains fixed.
       q.config.execution = structuredClone(config.execution || defaults().execution);
       if (config.backup?.encryptionKeyId) q.config.backup.encryptionKeyId = config.backup.encryptionKeyId;
-      q.pauseReason = null;
+      q.pauseReason = null; delete q.message;
       if (q.unresolved) {
         const blocked = this.pauseReason || await this.gate(q.config.execution);
         if (blocked) { this.pauseReason = blocked; q.pauseReason = blocked; return { paused: true, reason: blocked }; }
@@ -231,6 +235,7 @@ class BackupService extends EventEmitter {
       await this.saveState(this.state);
       const completedIds = new Set(q.completed), pending = q.jobs.filter(job => !completedIds.has(jobId(job))), active = runningTasks, volumes = new Map(), plans = new Map();
       const volumeKeys = new Map(await Promise.all([...new Set(pending.map(job => job.source.destination))].map(async destination => { try { return [destination,`device:${(await fs.stat(destination)).dev}`]; } catch (_error) { return [destination,`path:${path.resolve(destination)}`]; } })));
+      const failedForSpace=new Set();
       let exclusive = false, lastSaved = Date.now(), lastEmission = 0;
       if (pending.length) this.transport = await this.transportFactory({ bandwidthKBps: q.config.execution.bandwidthKBps, onBytes: () => { if (Date.now() - lastEmission > 500) { lastEmission = Date.now(); this.updateProgress(); } } });
       const perform = async job => {
@@ -245,24 +250,36 @@ class BackupService extends EventEmitter {
         update({ status: 'checking' });
         let result;
         try {
+          if(prior?.rekeyPending)throw new Error('Der Passwortwechsel ist noch nicht abgeschlossen. Das Sicherungslaufwerk verbinden und den Assistenten erneut öffnen.');
           result = await retry(async () => {
-            const key = `${job.source.accountId}:${job.repository.full_name}:${JSON.stringify(options.metadata)}:${options.releaseScope}`;
+            const key = `${providerKey(job.source)}:${job.source.accountId}:${job.repository.full_name}:${JSON.stringify(options.metadata)}:${options.releaseScope}`;
             if (!plans.has(key)) plans.set(key, metadataPlan(job.repository, options.metadata, github, git, { releaseScope: options.releaseScope }).catch(error => { plans.delete(key); throw error; }));
             return this.sync({ ...job, github, git, options, plan: await plans.get(key), passphrase: options.encryption ? await this.getPassphrase() : '', onProgress: update });
           }, { ...this.retryOptions, retries: q.config.execution.retries, onRetry: event => update({ status: 'retrying', attempt: event.attempt, retryAt: new Date(Date.now() + event.delay).toISOString() }) });
-        } catch (error) { result = { fullName: job.repository.full_name, destination: path.join(job.source.destination, ...job.repository.full_name.split('/')), status: 'error', message: error.message, checkedAt: new Date().toISOString() }; }
-        result = { ...result, id, sourceId: job.sourceId, targetId: job.targetId, durationMs: Date.now() - started };
+        } catch (error) {
+          if(error.code==='ENOSPC'){
+            const root=error.space?.root||(error.diskPath&&path.resolve(error.diskPath).startsWith(path.resolve(os.tmpdir())+path.sep)&&options.encryption?os.tmpdir():job.source.destination);
+            let available=0;try{const stat=await fs.statfs(root,{bigint:true});available=Number(stat.bavail*stat.bsize);}catch(_error){/* Remain paused when a disk disappears. */}
+            const required=error.space?.requiredBytes??String(Math.ceil(Math.max((job.repository.size??0)*2048+options.reserveMB*1048576,available+options.reserveMB*1048576)));
+            q.blockedSpaces={...q.blockedSpaces,[id]:{root,requiredBytes:required,availableBytes:String(available)}};failedForSpace.add(id);q.pauseReason='space';q.message='Warte auf genügend freien Speicher. Bestehende Sicherungen bleiben erhalten.';
+            const previous=this.state.repositories[id]??{};this.state.repositories[id]={...previous,id,fullName:job.repository.full_name,destination:repositoryDestination(job.source,job.repository.full_name),sourceId:job.sourceId,targetId:job.targetId,...(providerSpec(job.source).provider!=='github'?providerSpec(job.source):{}),status:'waiting',helpCode:'space',message:q.message};pending.push(job);this.activeJobs.delete(id);this.emit('data');this.updateProgress();return;
+          }
+          result={fullName:job.repository.full_name,destination:repositoryDestination(job.source,job.repository.full_name),status:'error',message:error.message,helpCode:errorCode(error),checkedAt:new Date().toISOString()};
+        }
+        if(q.blockedSpaces)delete q.blockedSpaces[id];
+        const spec=providerSpec(job.source);
+        result = { ...result, ...(spec.provider!=='github'?spec:{}),...(options.encryptionKeyId&&result.encrypted?{encryptionKeyId:options.encryptionKeyId}:{}), id, sourceId: job.sourceId, targetId: job.targetId, accountId:job.source.accountId, durationMs: Date.now() - started };
         q.results.push(result); q.completed.push(id); completedIds.add(id);
         const legacy = this.state.repositories[result.fullName];
         const previous = this.state.repositories[id] || (legacy?.destination === result.destination ? legacy : {}) || {};
         if (legacy?.destination === result.destination) delete this.state.repositories[result.fullName];
-        this.state.repositories[id] = { ...previous, message: undefined, warning: undefined, ...result };
+        this.state.repositories[id] = { ...previous, message: undefined, warning: undefined, helpCode:undefined, ...result };
         this.activeJobs.delete(id); this.emit('data'); this.updateProgress();
       };
       while (pending.length || active.size) {
         if (!this.pauseReason) this.pauseReason = await this.gate(q.config.execution);
         while (!this.pauseReason && !exclusive && active.size < q.config.execution.concurrency && pending.length) {
-          const index = pending.findIndex(job => (volumes.get(volumeKeys.get(job.source.destination)) || 0) < 2 && (!heavy(job, q.config) || active.size === 0));
+          const index = pending.findIndex(job => !failedForSpace.has(jobId(job)) && (volumes.get(volumeKeys.get(job.source.destination)) || 0) < 2 && (!heavy(job, q.config) || active.size === 0));
           if (index < 0) break;
           const job = pending.splice(index,1)[0], volume = volumeKeys.get(job.source.destination), isHeavy = heavy(job,q.config);
           volumes.set(volume,(volumes.get(volume) || 0) + 1); if (isHeavy) exclusive = true;
@@ -274,7 +291,7 @@ class BackupService extends EventEmitter {
         await Promise.race(active);
         if (q.completed.length % 20 === 0 || Date.now() - lastSaved > 10000) { await this.saveState(this.state); lastSaved = Date.now(); }
       }
-      if (pending.length) q.pauseReason = this.pauseReason || 'user';
+      if (pending.length) q.pauseReason = this.pauseReason || (failedForSpace.size?'space':'user');
       else {
         const errors = q.results.filter(result => result.status === 'error'), details = q.results.length > 500 ? [...errors, ...q.results.filter(r => r.status !== 'error')].slice(0,500) : q.results;
         const elapsedMs = q.elapsedMs + Date.now() - this.sessionStarted;
@@ -294,4 +311,4 @@ class BackupService extends EventEmitter {
     return this.state.queue ? { paused: true, reason: this.state.queue.pauseReason } : this.state.history[0];
   }
 }
-module.exports = { syncRepository, resolveJobs, BackupService, managed, verifyBackup, MARKER, jobId, heavy };
+module.exports = { syncRepository, resolveJobs, BackupService, managed, verifyBackup, MARKER, jobId, heavy, backupFingerprint };

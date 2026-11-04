@@ -2,17 +2,17 @@
 <component type="desktop-application">
   <id>io.github.Ujap1994.GitCloner</id>
   <name>Git Cloner</name>
-  <summary>Scheduled GitHub backups on your own drive</summary>
-  <summary xml:lang="de">Geplante GitHub-Sicherungen auf deinem Laufwerk</summary>
+  <summary>Scheduled Git backups on your own drive</summary>
+  <summary xml:lang="de">Geplante Git-Sicherungen auf deinem Laufwerk</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
   <description>
-    <p>Back up GitHub repositories and accounts to your own drives. Schedule snapshots or full mirrors, verify and restore backups, and optionally encrypt archives. Includes German and English, dark mode and configurable text sizes.</p>
-    <p xml:lang="de">Sichere GitHub-Repositories und Konten auf eigenen Laufwerken. Plane Snapshots oder vollständige Mirrors, prüfe Sicherungen und stelle sie wieder her, auf Wunsch mit verschlüsselten Archiven. Mit Deutsch und Englisch, Dunkelmodus und einstellbarer Schriftgröße.</p>
+    <p>Back up GitHub, GitLab and Forgejo repositories and accounts to your own drives. Schedule snapshots or full mirrors, verify and restore backups, and optionally encrypt archives. Includes German and English, dark mode and configurable text sizes.</p>
+    <p xml:lang="de">Sichere GitHub-, GitLab- und Forgejo-Repositories und Konten auf eigenen Laufwerken. Plane Snapshots oder vollständige Mirrors, prüfe Sicherungen und stelle sie wieder her, auf Wunsch mit verschlüsselten Archiven. Mit Deutsch und Englisch, Dunkelmodus und einstellbarer Schriftgröße.</p>
   </description>
   <launchable type="desktop-id">io.github.Ujap1994.GitCloner.desktop</launchable>
   <url type="homepage">https://github.com/Ujap1994/Git-Cloner</url>
   <developer id="io.github.Ujap1994"><name>Ujap1994</name></developer>
   <content_rating type="oars-1.1"/>
-  <releases><release version="3.1.0" date="2026-11-04"/><release version="3.0.0" date="2026-11-04"/><release version="2.0.0" date="2026-11-03"/><release version="1.0.0" date="2026-11-03"/></releases>
+  <releases><release version="3.2.0" date="2026-11-04"/><release version="3.1.0" date="2026-11-04"/><release version="3.0.0" date="2026-11-04"/><release version="2.0.0" date="2026-11-03"/><release version="1.0.0" date="2026-11-03"/></releases>
 </component>

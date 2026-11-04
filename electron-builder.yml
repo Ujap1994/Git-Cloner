@@ -46,7 +46,7 @@ linux:
   executableName: git-cloner
   syncDesktopName: true
   maintainer: Git Cloner <266295514+Ujap1994@users.noreply.github.com>
-  synopsis: Geplante GitHub-Sicherungen auf deinem Laufwerk
+  synopsis: Geplante Git-Sicherungen auf deinem Laufwerk
   target: [AppImage, deb, rpm, tar.gz]
   desktop:
     entry:

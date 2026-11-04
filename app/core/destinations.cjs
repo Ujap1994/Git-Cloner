@@ -65,7 +65,7 @@ async function checkSpace(root, estimatedBytes = 0, reserveMB = 512) {
   const stat = await fs.statfs(root, { bigint: true });
   const available = stat.bavail * stat.bsize;
   const required = BigInt(Math.max(0, Math.ceil(estimatedBytes))) + BigInt(reserveMB) * 1024n * 1024n;
-  if (available < required) throw new Error('Nicht genug freier Speicher für den neuen Stand und die eingestellte Reserve.');
+  if (available < required) { const error=new Error('Nicht genug freier Speicher für den neuen Stand und die eingestellte Reserve.');error.code='ENOSPC';error.space={root,requiredBytes:required.toString(),availableBytes:available.toString()};throw error; }
   return { availableBytes: available.toString(), requiredBytes: required.toString() };
 }
 module.exports = { prepareDestination, verifyDestination, safeDirectory, VOLUME_MARKER, existingRoot, checkSpace, destinationHint };
