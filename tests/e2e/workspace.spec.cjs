@@ -87,3 +87,16 @@ test('downloaded release files have a visible path and the folder action opens t
   const record = await f.sync(), a = await app({ config: f.config(), state: { repositories: { [record.id]: record } } }); await expect(a.page.locator('.release-location')).toHaveText('Git-Cloner-Releases/'); await expect(a.page.locator('#repository-list')).toContainText('1 Release-Dateien');
   await a.application.evaluate(({ shell }) => { shell.openPath = async value => { globalThis.openedReleasePath = value; return ''; }; }); await a.page.getByRole('button', { name: 'Release-Ordner öffnen', exact: true }).click(); await expect.poll(() => a.application.evaluate(() => globalThis.openedReleasePath)).toBe(path.join(record.destination, 'Git-Cloner-Releases')); expect(await fs.readFile(path.join(record.destination, 'Git-Cloner-Releases', 'program-macos-universal.dmg'), 'utf8')).toBe('actual fixture disk image'); await capture(a.page, 'release-location.png');
 });
+
+test('an open source dialog receives newly saved accounts without losing typed input', async () => {
+  const config = defaults(); config.checkUpdates = false; const a = await app({ config });
+  await a.application.evaluate(({ app }) => {
+    const fs = process.getBuiltinModule('node:fs/promises'), original = fs.rename, settings = app.getPath('userData') + '/settings.json';
+    fs.rename = async (from, to) => { if (to.replaceAll('\\', '/') === settings.replaceAll('\\', '/')) { globalThis.accountSavePending = true; await new Promise(resolve => { globalThis.releaseAccountSave = resolve; }); } return original(from, to); };
+    globalThis.finishAccountSave = () => { fs.rename = original; globalThis.releaseAccountSave?.(); };
+  });
+  await a.page.getByRole('button', { name: 'Einstellungen', exact: true }).click(); await a.page.getByRole('tab', { name: 'Konten', exact: true }).click(); await a.page.getByLabel('Name des GitHub-Kontos').fill('Example account'); await a.page.getByRole('button', { name: 'Konto hinzufügen', exact: true }).click(); await expect.poll(() => a.application.evaluate(() => globalThis.accountSavePending)).toBe(true);
+  await sources(a.page); await a.page.getByRole('button', { name: 'Quelle hinzufügen', exact: true }).click(); const dialog = a.page.getByRole('dialog', { name: 'Quelle hinzufügen' }); await dialog.locator('#source-values').fill('example/project'); await expect(dialog.locator('#source-account option').filter({ hasText: 'Example account' })).toHaveCount(0);
+  await a.application.evaluate(() => globalThis.finishAccountSave()); await expect(dialog.locator('#source-account option').filter({ hasText: 'Example account' })).toHaveCount(1); await expect(dialog.locator('#source-values')).toHaveValue('example/project'); await expect(dialog.locator('#source-values')).toBeFocused();
+  await dialog.getByText('Weitere Ziele, Konto und Filter', { exact: true }).click(); await dialog.locator('#source-account').selectOption({ label: 'Example account' }); expect(await dialog.locator('#source-account').inputValue()).not.toBe('default');
+});

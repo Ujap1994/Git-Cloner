@@ -8,7 +8,7 @@ Stand: 4. November 2026, Git Cloner **3.3.0**. Prüfungen mit GitHub-Antworten a
 | --- | --- |
 | Node 24, `npm run check` | ESLint und **218 Kern-/Integrationstests erfolgreich**, keine übersprungenen Tests. |
 | Node 22.23.4 | Dieselben **218 Tests erfolgreich**, keine übersprungenen Tests. |
-| Echte Electron-Oberfläche auf Linux/Xvfb | **48 Tests erfolgreich**, einschließlich zwölf neuer Abläufe für Auswahl, Gruppen/Favoriten, Bulk-Vorschau, Neustart, große Schrift und erhaltenen Tastaturfokus. |
+| Echte Electron-Oberfläche auf Linux/Xvfb | **49 Tests erfolgreich**, einschließlich dreizehn neuer Abläufe für Auswahl, Gruppen/Favoriten, Bulk-Vorschau, Neustart, große Schrift und erhaltenen Tastaturfokus. |
 | Echte private Forgejo-Installation | Forgejo 17.0.1 über HTTPS erfolgreich: zusätzlich die private, nach tatsächlicher Konto-ID begrenzte Suche des Repository-Browsers. Snapshots/Mirrors, Metadaten, Wiki und authentifizierte Release-Dateien bleiben geprüft. |
 | Echte HTTP-Unterbrechungen | Unverschlüsselte und verschlüsselte Dateiteile über eine neue Cache-Instanz fortgesetzt. Range/If-Range, ETag-Wechsel, sichere HTTP-Änderungsdaten, fehlende Kennungen, ignorierte Bereiche und vollständige Cache-Wiederverwendung geprüft. |
 | Echter öffentlicher macOS-Release | `storytold/wordcraft` v0.15.1: DMG (128.335.727 Byte), CLI-ZIP (100.320.244 Byte) und `SHA256SUMS.txt` über den Produktions-Client vollständig heruntergeladen. GitHub-Digests und offizielle SHA256SUMS stimmen. Sichtbare Ablage und GUI-Ordneraktion zusätzlich automatisiert geprüft. |
@@ -18,9 +18,11 @@ Stand: 4. November 2026, Git Cloner **3.3.0**. Prüfungen mit GitHub-Antworten a
 
 Die 44 zusätzlichen Kernprüfungen verwenden echte lokale Git-Repositories, temporäre Laufwerke, tatsächlich verschlüsselte Archive sowie einen lokalen HTTP-Server mit absichtlich unterbrochenen Übertragungen. Die Browser-API-Tests prüfen Pagination, private Quellen, Suchbegrenzungen, Anbieter-/Token-Bindungen, Abbruch veralteter Anfragen und ausdrücklich ausgewählte Repositories. Bulk-Prüfungen decken Unterschiede zwischen Quellen, veraltete Vorschauen und unveränderte Sicherungsdateien ab. Bei Vorschau und abgebrochener Auswahl werden keine Zielkennungen erzeugt.
 
-Die zwölf neuen GUI-Prüfungen kontrollieren Auswahl über Suchbegriffe und Seiten, ausdrücklich neu zu ladende Eigentümerangaben, Persistenz von Gruppen/Favoriten, vollständige Vorher-/Nachher-Übernahme und den Schutz vor veralteten Vorschauen. Benachbarte Eingabefelder werden auf gleiche Position und Höhe geprüft. Dunkelmodus und große Schrift erzeugen keinen horizontalen Seitenüberlauf; Fortschrittsmeldungen entfernen den Fokus nicht aus der Quellensuche.
+Die dreizehn neuen GUI-Prüfungen kontrollieren Auswahl über Suchbegriffe und Seiten, ausdrücklich neu zu ladende Eigentümerangaben, Persistenz von Gruppen/Favoriten, vollständige Vorher-/Nachher-Übernahme und den Schutz vor veralteten Vorschauen. Benachbarte Eingabefelder werden auf gleiche Position und Höhe geprüft. Dunkelmodus und große Schrift erzeugen keinen horizontalen Seitenüberlauf; Fortschrittsmeldungen entfernen den Fokus nicht aus der Quellensuche.
 
 Zusätzliche Prüfungen sichern URL-Bereinigung, wiederholte Sammelquellenimporte, neue Repositories und pausierte Einzelregeln ab. Release-Tests prüfen sichtbare Originalnamen, geschützte Repository-Ordner, die Migration der alten versteckten Ablage, verschlüsselte Wiederherstellung und die Ablehnung ausgetauschter Ordnerlinks. Komprimierte HTTP-Antworten werden vollständig geprüft; ihre kodierten Offsets werden nicht zum Fortsetzen dekodierter Inhalte verwendet.
+
+Eine gezielt verzögerte Kontospeicherung reproduziert den in der ersten Arch-CI gefundenen Aktualisierungsfehler. Der zusätzliche GUI-Test prüft, dass ein bereits geöffnetes Quellenformular das neue Konto erhält, ohne Text oder Tastaturfokus zu verlieren.
 
 Die macOS-Paketmatrix montiert x64, ARM64 und Universal auf Intel-Runnern. Die native ARM64-CI bleibt unverändert erforderlich. Dadurch wird eine Veröffentlichung weniger von der Kapazität zusätzlicher ARM64-Paketrunner abhängig. Tatsächliche plattformübergreifende Version-3.3-Läufe sind unter den unten verlinkten Actions sichtbar; lokale Linux-Prüfungen werden nicht als Mac-/Windows-Installationstests ausgegeben.
 

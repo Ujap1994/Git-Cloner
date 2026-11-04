@@ -1,7 +1,7 @@
 window.createGitClonerWorkspace = function ({ api, t, esc, field, button, panel, heading, icon, toggle, toast, attempt, studio, enhancements, getState, getView, getSourceDraft, mutate }) {
   const selected = new Set();
   let search = '', group = 'all', favorites = false, page = 0, signature = '';
-  let browser, browserSequence = 0, browserTimer, browserLoading = false, browserTemplate = {};
+  let browser, browserSequence = 0, browserTimer, browserLoading = false, browserTemplate = {}, accountsSignature = '';
   const picked = new Map();
   let bulkIds = [], bulkToken = null, bulkChanges = [], bulkPage = 0;
   const state = () => getState();
@@ -221,6 +221,8 @@ window.createGitClonerWorkspace = function ({ api, t, esc, field, button, panel,
   }
 
   function update() {
+    const accounts = JSON.stringify(state().accounts);
+    if (accounts !== accountsSignature) { accountsSignature = accounts; if (document.getElementById('repository-browser-dialog')?.open) syncBrowserProvider(); }
     const recovery=document.getElementById('workspace-drive-recovery'), markup=enhancements.recoveryNotice(); if(recovery&&recovery.innerHTML!==markup)recovery.innerHTML=markup;
     const next = `${state().configRevision}:${state().busy}:${Boolean(state().queue)}:${state().operation}`;
     if (next !== signature && getView() === 'sources') {

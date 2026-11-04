@@ -174,11 +174,11 @@ function renderView() { const active=document.activeElement, focusSearch=view===
 function switchView(next) { if (!Object.hasOwn(labels(),next)) return; features.leaveView(view,next);view=next; draft=structuredClone(appState.config); renderChrome(); renderView(); document.getElementById('main-content').focus({preventScroll:true}); }
 function saveConfig(config, message = t('Einstellungen gespeichert.','Settings saved.')) {
   // Apply queued edits to the latest confirmed configuration, including rapid source clicks.
-  const save = async () => { const next=typeof config==='function'?config(structuredClone(appState.config)):config; appState=await api.saveConfig(next); draft=structuredClone(appState.config); renderChrome(); renderView(); toast(message); };
+  const save = async () => { const next=typeof config==='function'?config(structuredClone(appState.config)):config; appState=await api.saveConfig(next); draft=structuredClone(appState.config); studio.update(); workspace.update(); renderChrome(); renderView(); toast(message); };
   const saved=configSaves.catch(()=>{}).then(save); configSaves=saved; return saved;
 }
 function configAction(action, message) {
-  const save = async () => { const result = await action(); appState = await api.getState(); draft = structuredClone(appState.config); renderChrome(); renderView(); if (message) toast(message); return result; };
+  const save = async () => { const result = await action(); appState = await api.getState(); draft = structuredClone(appState.config); studio.update(); workspace.update(); renderChrome(); renderView(); if (message) toast(message); return result; };
   const saved = configSaves.catch(() => {}).then(save); configSaves = saved; return saved;
 }
 function sourceValue(input) {
