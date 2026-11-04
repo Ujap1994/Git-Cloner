@@ -1,0 +1,105 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Tests · ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Git LFS (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y git-lfs
+      - name: Git LFS (macOS)
+        if: runner.os == 'macOS'
+        run: command -v git-lfs || brew install git-lfs
+      - run: npm run check
+      - name: Install Linux display dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2t64
+      - name: Electron GUI tests (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm run test:e2e
+      - name: Electron GUI tests (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: npm run test:e2e
+      - name: Verify application packaging
+        run: npm run build:dir
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-evidence-${{ matrix.os }}
+          path: |
+            playwright-report/
+            test-results/
+            docs/screenshots/
+          retention-days: 14
+
+  node22:
+    name: Node 22 compatibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: npm run check
+
+  distributions:
+    name: Linux · ${{ matrix.distribution }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distribution: Fedora
+            image: fedora:latest
+          - distribution: Linux Mint
+            image: linuxmintd/mint22-amd64:latest
+          - distribution: Arch
+            image: archlinux:latest
+          - distribution: CachyOS
+            image: cachyos/cachyos:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native libraries, Git/LFS and actual Electron GUI checks
+        env:
+          DISTRO_IMAGE: ${{ matrix.image }}
+        run: |
+          mkdir -p evidence
+          docker run --rm --shm-size=1g -e CI=true -e GIT_CLONER_CONTAINER_TEST=1 --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/src,readonly" --mount "type=bind,src=$GITHUB_WORKSPACE/evidence,dst=/evidence" "$DISTRO_IMAGE" bash /src/scripts/distro-smoke.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: distro-evidence-${{ matrix.distribution }}
+          path: evidence/
+          retention-days: 14

@@ -1,0 +1,196 @@
+name: Release
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'pull_request')
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      commit: ${{ steps.version.outputs.commit }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: npm run check
+      - id: version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          node -e 'if (!require("semver").valid(process.argv[1])) process.exit(1)' "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          fi
+
+  packages:
+    name: Build · ${{ matrix.name }}
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            command: npx electron-builder --win nsis portable --x64 --publish never
+          - name: Windows ARM64
+            os: windows-latest
+            command: npx electron-builder --win nsis portable --arm64 --publish never
+          - name: macOS x64
+            os: macos-latest
+            command: npx electron-builder --mac dmg zip --x64 --publish never
+          - name: macOS ARM64
+            os: macos-latest
+            command: npx electron-builder --mac dmg zip --arm64 --publish never
+          - name: macOS Universal
+            os: macos-latest
+            command: npx electron-builder --mac dmg zip --universal --publish never
+          - name: Linux x64
+            os: ubuntu-24.04
+            command: npx electron-builder --linux AppImage deb rpm tar.gz --x64 --publish never
+          - name: Linux ARM64
+            os: ubuntu-24.04-arm
+            command: npx electron-builder --linux AppImage deb rpm tar.gz --arm64 --publish never
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Linux packaging tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm zstd libarchive-tools
+      - run: npm ci
+      - run: ${{ matrix.command }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Arch & CachyOS package
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash scripts/package-arch.sh "$(uname -m)"
+      - name: Verify Arch package metadata
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          for package in dist/*.pkg.tar.zst; do
+            bsdtar -xOf "$package" .PKGINFO
+            bsdtar -tf "$package" | grep 'opt/git-cloner/git-cloner' > /dev/null
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.name }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*.tar.gz
+            dist/*.pkg.tar.zst
+          if-no-files-found: error
+          retention-days: 7
+
+  flatpak:
+    name: Build · Flatpak x64
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder elfutils
+      - name: Set up Flathub runtime and SDK
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08 org.electronjs.Electron2.BaseApp//25.08
+      - run: npm ci
+      - run: npx electron-builder --linux flatpak --x64 --publish never
+      - name: Verify bundled Git and Git LFS
+        shell: bash
+        run: |
+          flatpak install --user --noninteractive dist/*.flatpak
+          flatpak run --command=git io.github.Ujap1994.GitCloner --version
+          flatpak run --command=git-lfs io.github.Ujap1994.GitCloner version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-Flatpak
+          path: dist/*.flatpak
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub release
+    needs: [prepare, packages, flatpak]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          path: release-assets
+          merge-multiple: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Generate package catalog manifests from real checksums
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+        run: |
+          npm run catalogs -- --assets release-assets --output catalogs --version "$RELEASE_VERSION" --commit "$RELEASE_COMMIT"
+          zip -qr release-assets/Git-Cloner-Katalogvorlagen.zip catalogs
+      - name: Checksums and release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          gh release create "v$RELEASE_VERSION" ./* --repo "$GITHUB_REPOSITORY" --target "$RELEASE_COMMIT" --title "Git Cloner $RELEASE_VERSION" --notes-file ../docs/RELEASE-NOTES.md

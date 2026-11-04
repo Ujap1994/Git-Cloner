@@ -1,0 +1,97 @@
+appId: io.github.Ujap1994.GitCloner
+productName: Git Cloner
+copyright: Copyright © 2026 Ujap1994
+asar: true
+afterPack: scripts/after-pack.cjs
+directories:
+  output: dist
+  buildResources: build
+files:
+  - app/**/*
+  - build/icon.png
+  - build/tray.png
+  - package.json
+artifactName: Git-Cloner-${version}-${os}-${arch}.${ext}
+publish: []
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.png
+  identity: '-'
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  target:
+    - target: dmg
+      arch: [universal, arm64, x64]
+    - target: zip
+      arch: [universal, arm64, x64]
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+    - target: portable
+      arch: [x64, arm64]
+nsis:
+  artifactName: Git-Cloner-${version}-windows-${arch}-setup.${ext}
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  createDesktopShortcut: true
+portable:
+  artifactName: Git-Cloner-${version}-windows-${arch}-portable.${ext}
+linux:
+  icon: build/icon.png
+  category: Development
+  executableName: git-cloner
+  syncDesktopName: true
+  maintainer: Git Cloner <266295514+Ujap1994@users.noreply.github.com>
+  synopsis: Geplante GitHub-Sicherungen auf deinem Laufwerk
+  target: [AppImage, deb, rpm, tar.gz]
+  desktop:
+    entry:
+      StartupWMClass: git-cloner
+      Keywords: Git;GitHub;Backup;
+deb:
+  depends: [git, libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libdrm2, libgbm1, libasound2]
+rpm:
+  depends: [git, gtk3, libnotify, nss, libXScrnSaver, libXtst, xdg-utils, at-spi2-core, libdrm, mesa-libgbm, alsa-lib]
+flatpak:
+  runtime: org.freedesktop.Platform
+  runtimeVersion: '25.08'
+  sdk: org.freedesktop.Sdk
+  base: org.electronjs.Electron2.BaseApp
+  baseVersion: '25.08'
+  finishArgs:
+    - --socket=wayland
+    - --socket=fallback-x11
+    - --share=ipc
+    - --device=dri
+    - --share=network
+    - --filesystem=home
+    - --filesystem=/media
+    - --filesystem=/run/media
+    - --filesystem=/mnt
+    - --filesystem=xdg-config/autostart:create
+    - --talk-name=org.freedesktop.Notifications
+    - --talk-name=org.freedesktop.secrets
+    - --talk-name=org.kde.StatusNotifierWatcher
+  modules:
+    - name: git-lfs
+      buildsystem: simple
+      build-commands:
+        - install -Dm755 git-lfs /app/bin/git-lfs
+        - install -Dm644 README.md /app/share/doc/git-lfs/README.md
+      sources:
+        - type: archive
+          url: https://github.com/git-lfs/git-lfs/releases/download/v3.8.1/git-lfs-linux-amd64-v3.8.1.tar.gz
+          sha256: e72cf723a4a660438862282e8aecf3885fc8123e88bfcad534cf6b941a354b75
+    - name: git
+      buildsystem: simple
+      build-commands:
+        - make -j2 prefix=/app NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PERL=YesPlease NO_PYTHON=YesPlease install
+        - install -Dm644 COPYING /app/share/licenses/git/COPYING
+      sources:
+        - type: archive
+          url: https://www.kernel.org/pub/software/scm/git/git-2.56.0.tar.xz
+          sha256: 26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3

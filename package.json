@@ -1,0 +1,46 @@
+{
+  "name": "git-cloner",
+  "version": "3.0.0",
+  "description": "Geplante GitHub-Sicherungen auf deinem eigenen Laufwerk.",
+  "author": "Ujap1994",
+  "license": "MIT",
+  "private": true,
+  "main": "app/main.cjs",
+  "desktopName": "git-cloner",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ujap1994/Git-Cloner.git"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "start": "electron .",
+    "lint": "eslint .",
+    "test": "node --test tests/unit/*.test.cjs tests/integration/*.test.cjs",
+    "test:coverage": "node --experimental-test-coverage --test tests/unit/*.test.cjs tests/integration/*.test.cjs",
+    "test:e2e": "playwright test",
+    "check": "npm run lint && npm test",
+    "build": "electron-builder --publish never",
+    "build:dir": "electron-builder --dir --publish never",
+    "build:linux": "electron-builder --linux AppImage deb rpm tar.gz --x64 --publish never",
+    "build:mac": "electron-builder --mac dmg zip --universal --arm64 --x64 --publish never",
+    "build:win": "electron-builder --win nsis portable --x64 --arm64 --publish never",
+    "screenshots": "playwright test tests/e2e/screenshots.spec.cjs tests/e2e/workflows.spec.cjs",
+    "catalogs": "node scripts/catalogs.cjs"
+  },
+  "dependencies": {
+    "proper-lockfile": "^4.1.2",
+    "semver": "^7.8.6",
+    "tar": "^7.5.22"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.64.1",
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "js-yaml": "^5.5.0"
+  }
+}
