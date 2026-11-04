@@ -3,6 +3,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;'
 let appState, draft, view = 'overview', settingsTab = 'general', editingSource = null, sourceDraft, importDraft;
 let lastNavigation='', lastBanner='', lastAppearance='', lastHistory='';
 let query = '', statusFilter = 'all', pageIndex = 0, toastTimer, restoreRecord = '', restoreArchive = '', verifyRecord = null;
+let configSaves = Promise.resolve();
 const t = (de, en) => appState?.config.appearance.language === 'en' ? en : de;
 const labels = () => ({ overview: t('Übersicht','Overview'), sources: t('Quellen','Sources'), schedule: t('Zeitplan','Schedule'), restore: t('Wiederherstellen','Restore'), settings: t('Einstellungen','Settings'), docs: t('Dokumentation','Documentation') });
 const features = window.createGitClonerFeatures({api,t,esc,field,button,panel,icon,toast,attempt,getState:()=>appState,getDraft:()=>draft,saveConfig,sourceValue,switchView,openSource,sourceExtras:b=>enhancements.releaseFields(b,true),restoreInput:()=>({recordId:restoreRecord,archive:restoreArchive,passphrase:document.getElementById('restore-password')?.value||''})});
@@ -174,7 +175,11 @@ function docsView() {
 }
 function renderView() { document.getElementById('main-content').innerHTML = ({overview,sources:sourcesView,schedule:scheduleView,restore:restoreView,settings:settingsView,docs:docsView})[view]();if(view==='overview'){features.updateProgress();features.updateMetrics();} }
 function switchView(next) { if (!Object.hasOwn(labels(),next)) return; features.leaveView(view,next);view=next; draft=structuredClone(appState.config); renderChrome(); renderView(); document.getElementById('main-content').focus({preventScroll:true}); }
-async function saveConfig(config, message = t('Einstellungen gespeichert.','Settings saved.')) { appState=await api.saveConfig(config); draft=structuredClone(appState.config); renderChrome(); renderView(); toast(message); }
+function saveConfig(config, message = t('Einstellungen gespeichert.','Settings saved.')) {
+  // Apply queued edits to the latest confirmed configuration, including rapid source clicks.
+  const save = async () => { const next=typeof config==='function'?config(structuredClone(appState.config)):config; appState=await api.saveConfig(next); draft=structuredClone(appState.config); renderChrome(); renderView(); toast(message); };
+  const saved=configSaves.catch(()=>{}).then(save); configSaves=saved; return saved;
+}
 function sourceValue(input) {
   let value=input.trim().replace(/\/$/,'');
   if (/^https?:\/\//i.test(value)) { const url=new URL(value); if(url.protocol!=='https:'||url.hostname!=='github.com'||url.port||url.username||url.password||url.search||url.hash) throw new Error(t('Bitte nur GitHub-HTTPS-Adressen verwenden.','Use GitHub HTTPS URLs only.')); value=url.pathname.slice(1); }
@@ -198,7 +203,7 @@ document.addEventListener('input',event=>{
 });
 document.addEventListener('change',event=>{
   const node=event.target;
-  if(node.dataset.sourceToggle){const next=structuredClone(appState.config);next.sources.find(s=>s.id===node.dataset.sourceToggle).enabled=node.checked;void attempt(()=>saveConfig(next,t('Quelle aktualisiert.','Source updated.')));}
+  if(node.dataset.sourceToggle){const id=node.dataset.sourceToggle,enabled=node.checked;void attempt(()=>saveConfig(next=>{const source=next.sources.find(s=>s.id===id);if(source)source.enabled=enabled;return next;},t('Quelle aktualisiert.','Source updated.')));}
   else if(node.id==='checks-per-day'){
     const count=Number(node.value),[h,m]=draft.schedule.times[0].split(':').map(Number);draft.schedule.checksPerDay=count;
     draft.schedule.times=Array.from({length:count},(_,i)=>{const n=(h*60+m+Math.floor(i*1440/count))%1440;return`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;});document.getElementById('time-inputs').innerHTML=timeInputs(draft.schedule.times);
@@ -226,7 +231,7 @@ document.addEventListener('click',event=>{
   if(node.dataset.restoreReleases){restoreRecord=node.dataset.restoreReleases;restoreArchive='';features.setRestoreScope('releases');switchView('restore');return;}
   if(node.dataset.restore){restoreRecord=node.dataset.restore;restoreArchive='';switchView('restore');return;}
   if(node.dataset.verify){const record=appState.repositories.find(r=>r.id===node.dataset.verify);if(record.encrypted&&!appState.encryptionReady){passwordDialog(record.id);return;}void attempt(async()=>{await api.verifyBackup({id:record.id});toast(t('Integrität erfolgreich geprüft.','Integrity verified successfully.'));});return;}
-  if(node.dataset.removeSource){const next=structuredClone(appState.config);next.sources=next.sources.filter(s=>s.id!==node.dataset.removeSource);void attempt(()=>saveConfig(next,t('Quelle entfernt. Gesicherte Dateien bleiben erhalten.','Source removed. Existing backups are retained.')));return;}
+  if(node.dataset.removeSource){const id=node.dataset.removeSource;void attempt(()=>saveConfig(next=>{next.sources=next.sources.filter(s=>s.id!==id);return next;},t('Quelle entfernt. Gesicherte Dateien bleiben erhalten.','Source removed. Existing backups are retained.')));return;}
   if(node.dataset.chooseExtra!==undefined){void attempt(async()=>{const path=await api.chooseDirectory();if(path){sourceDraft.additionalDestinations[Number(node.dataset.chooseExtra)].destination=path;document.getElementById('extra-targets').innerHTML=targetRows();}});return;}
   if(node.dataset.removeExtra!==undefined){sourceDraft.additionalDestinations.splice(Number(node.dataset.removeExtra),1);document.getElementById('extra-targets').innerHTML=targetRows();return;}
   if(node.dataset.deviceLogin){void attempt(async()=>{await api.beginLogin(node.dataset.deviceLogin);toast(t('Anmeldung gestartet.','Sign-in started.'));});return;}

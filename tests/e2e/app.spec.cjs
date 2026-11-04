@@ -16,7 +16,7 @@ test('first launch has no default repositories and sandboxed renderer',async()=>
     expect(prefs.contextIsolation).toBe(true);expect(prefs.sandbox).toBe(true);expect(prefs.nodeIntegration).toBe(false);
   } finally {await f.close();}
 });
-test('adds multiple repositories, edits the path, toggles and removes without deleting files',async()=>{
+test('adds multiple repositories and accepts rapid toggle and remove without deleting files',async()=>{
   const f=await launch();
   const destination=await fs.mkdtemp(path.join(os.tmpdir(),'git-cloner-target-'));
   try {
@@ -28,14 +28,19 @@ test('adds multiple repositories, edits the path, toggles and removes without de
     await expect(f.page.getByRole('dialog')).not.toBeVisible();
     await expect(f.page.getByText('some-user/repo-one',{exact:true})).toBeVisible();
     await expect(f.page.getByText('other-user/repo-two',{exact:true})).toBeVisible();
-    await f.page.getByRole('checkbox',{name:'some-user/repo-one aktivieren'}).uncheck();
-    await expect(f.page.getByRole('checkbox',{name:'some-user/repo-one aktivieren'})).not.toBeChecked();
     await fs.writeFile(path.join(destination,'keep.txt'),'personal');
-    await f.page.getByRole('button',{name:'some-user/repo-one entfernen'}).click();
+    await f.page.evaluate(()=>{
+      document.querySelector('input[aria-label="some-user/repo-one aktivieren"]').click();
+      document.querySelector('button[aria-label="some-user/repo-one entfernen"]').click();
+    });
     await expect(f.page.getByText('some-user/repo-one',{exact:true})).toHaveCount(0);
     expect(await fs.readFile(path.join(destination,'keep.txt'),'utf8')).toBe('personal');
     const config=JSON.parse(await fs.readFile(path.join(f.directory,'settings.json'),'utf8'));
     expect(config.sources).toHaveLength(1);expect(config.sources[0].volumeId).toBeTruthy();
+    expect(config.sources[0].value).toBe('other-user/repo-two');expect(config.sources[0].enabled).toBe(true);
+    await f.page.reload();await f.page.getByRole('button',{name:'Quellen',exact:true}).click();
+    await expect(f.page.getByText('some-user/repo-one',{exact:true})).toHaveCount(0);
+    await expect(f.page.getByText('other-user/repo-two',{exact:true})).toBeVisible();
   } finally {await f.close();await fs.rm(destination,{recursive:true,force:true});}
 });
 test('schedule supports multiple times and persists to disk',async()=>{

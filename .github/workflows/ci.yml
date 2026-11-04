@@ -13,6 +13,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  superseded-releases:
+    name: Stop superseded release builds
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const scope = context.repo;
+            for await (const page of github.paginate.iterator(github.rest.actions.listWorkflowRuns, { ...scope, workflow_id: 'release.yml', branch: 'main', per_page: 100 })) {
+              for (const run of (Array.isArray(page.data) ? page.data : page.data.workflow_runs)) {
+                if (!['queued', 'in_progress', 'waiting'].includes(run.status) || run.head_sha === context.sha) continue;
+                try { await github.rest.actions.cancelWorkflowRun({ ...scope, run_id: run.id }); }
+                catch (error) {
+                  const { data } = await github.rest.actions.getWorkflowRun({ ...scope, run_id: run.id });
+                  if (data.status !== 'completed') throw error;
+                }
+                core.info(`Superseded release run ${run.id} stopped.`);
+              }
+            }
+
   verify:
     name: Tests · ${{ matrix.os }}
     strategy:

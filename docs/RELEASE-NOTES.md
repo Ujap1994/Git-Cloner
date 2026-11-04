@@ -8,6 +8,7 @@ Git Cloner **3.1.0** ergänzt eigene Quellenzeitpläne, eine Änderungsvorschau,
 - Release-Dateien separat auswählen und wiederherstellen, auch aus verschlüsselten Archiven und Mirrors.
 - Sichtbarer Open-Source-Hinweis mit Gewährleistungs-, Fehler- und Backup-Hinweisen in der GitHub-Übersicht.
 - Neue Kern-, Integrations- und echte Electron-GUI-Prüfungen. Die anonymisierten Anleitungen und Screenshots sind aktualisiert.
+- Schnelle aufeinanderfolgende Änderungen an Quellen werden nacheinander auf den zuletzt gespeicherten Stand angewandt. Deaktivieren und sofortiges Entfernen überschneiden sich nicht mehr.
 - Begrenzter Speicher für den GitHub-ETag-Cache, kleinere Flatpak-Git-Builds ohne Entwicklungs-Debugdaten und ein wiederholbarer Veröffentlichungsprozess, der Release-Dateien vor der offiziellen Freigabe prüft.
 
 **Versionsüberwachung:** Die App vergleicht ihre ausgeführte Version mit dem letzten offiziellen stabilen GitHub-Release und zeigt einen Hinweis. „Diese Version überspringen“ bleibt über Neustarts erhalten; erst eine höhere Version meldet sich wieder. Es gibt keine automatische Update-Installation oder erforderliche Einrichtung von Signierzertifikaten.
