@@ -141,13 +141,21 @@ jobs:
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user --noninteractive flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08 org.electronjs.Electron2.BaseApp//25.08
       - run: npm ci
-      - run: npx electron-builder --linux flatpak --x64 --publish never
+      - name: Build Flatpak with compiler output
+        env:
+          DEBUG: '@malept/flatpak-bundler'
+        run: |
+          set -o pipefail
+          npx electron-builder --linux flatpak --x64 --publish never 2>&1 | tee flatpak-build.log
       - name: Verify bundled Git and Git LFS
         shell: bash
-        run: |
-          flatpak install --user --noninteractive dist/*.flatpak
-          flatpak run --command=git io.github.Ujap1994.GitCloner --version
-          flatpak run --command=git-lfs io.github.Ujap1994.GitCloner version
+        run: bash scripts/check-flatpak.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flatpak-build-evidence
+          path: flatpak-build.log
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: packages-Flatpak

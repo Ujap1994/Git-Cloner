@@ -14,6 +14,8 @@ Stand: 4. November 2026, Git Cloner **3.0.0**. Diese Übersicht trennt ausgefüh
 | Echter GitHub-Transport | Öffentliches Repository über den gemeinsam auf 256 KiB/s begrenzten HTTPS-Tunnel geklont und mit Git-fsck geprüft. Netzwerkdaten wurden tatsächlich gemessen; TLS-Prüfung blieb aktiv. Keine Quelle wurde in der App voreingestellt. |
 | Produktionsabhängigkeiten | `npm audit --omit=dev`: zum Prüfzeitpunkt keine gemeldeten Schwachstellen. |
 | Konfiguration | Electron-Builder-, CI- und Release-YAML geparst; lokale Dokumentationslinks und Screenshots werden vor Übergabe geprüft. |
+| GitHub-CI | [Zweiter Gesamtlauf](https://github.com/Ujap1994/Git-Cloner/actions/runs/41808990622): **alle zehn Jobs erfolgreich**, einschließlich Windows x64/ARM64, macOS Intel/ARM64 und der vier Linux-Distributionen. Native GUI-Suiten: jeweils 22 Tests; Distro-Suiten: jeweils 21 Tests. Windows überspringt zwei unzutreffende Unix-/Symlink-Prüfungen ausdrücklich. |
+| GitHub-Paketbau | Im [ersten Release-Lauf](https://github.com/Ujap1994/Git-Cloner/actions/runs/41809351735) bestanden alle sieben nativen Paketjobs: Windows x64/ARM64, macOS Universal/ARM64/x64 und Linux x64/ARM64. Der separate Flatpak-Job machte eine fehlende optionale Rust-Buildabhängigkeit sichtbar; siehe unten. |
 
 Die Kernprüfungen verwenden echte lokale Git-Repositories und Git LFS. Sie prüfen Mirrors und Refs, inkrementelle Aktualisierung, Integrität, fremde Dateien, Laufwerkswechsel, Absturzerholung, Verschlüsselung, falsche Passwörter, veränderte Archive, Metadaten, Konten, Filter, ETags, Device Flow, Prozesssperren und native Zeitplanvorlagen.
 
@@ -39,6 +41,8 @@ Die Versionsüberwachung wird weiterhin über mehrere App-Neustarts geprüft: di
 Für Version 3 wurden tatsächlich **AppImage, DEB, RPM, TAR.GZ und ein Arch-/CachyOS-Pacman-Paket für Linux x64** gebaut. Die entpackte Anwendung und das AppImage über seinen eigenen Extract-and-run-Start wurden erfolgreich gestartet; Version 3.0.0, `isPackaged`, leere Quellenliste, Preload und die neuen Leistungseinstellungen wurden geprüft. TAR.GZ und Pacman-Archiv wurden vollständig gelesen, DEB-Inhalt/-Metadaten und RPM-Metadaten erfolgreich ausgewertet. Die Metadaten nennen Version 3.0.0 und die passende x64-Architektur. Ein Paketbau ersetzt keinen interaktiven Installations-/Deinstallationstest auf jedem Zielsystem.
 
 Diese lokalen Paket- und Fedora-Ergebnisse stammen vom Stand vor der abschließenden Korrektur des Überspringlinks. Der anschließende lokale Gesamtlauf mit 22 GUI-Tests und ESLint prüft auch diese Korrektur; die Release-Pipeline baut Pakete aus ihrem jeweils geprüften Commit neu.
+
+Der erste tatsächliche Flatpak-Bau kompilierte Git 2.56 bis zum Aufruf des im SDK fehlenden Cargo-Werkzeugs. Der [isolierte Paketcheck](https://github.com/Ujap1994/Git-Cloner/actions/workflows/flatpak-check.yml) protokolliert die vollständige Compilerausgabe. Die Paketkonfiguration verwendet nun Gits ausdrücklich unterstützten `NO_RUST`-Build mit den C-Implementierungen. `scripts/check-flatpak.sh` installiert das echte Paket und prüft eingebautes Git/Git LFS, einen lokalen Mirror mit Git-fsck und eine öffentliche HTTPS-Abfrage. Auch der Release-Job führt diese Prüfung aus und bewahrt das Buildprotokoll als Artefakt auf. Der jeweilige Abschlussstatus steht unter [Actions](https://github.com/Ujap1994/Git-Cloner/actions).
 
 ## Grenzen und historische Ergebnisse
 

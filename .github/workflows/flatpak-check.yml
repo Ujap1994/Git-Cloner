@@ -1,0 +1,41 @@
+name: Flatpak build check
+on:
+  push:
+    branches: [fix/flatpak-release]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flatpak:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder elfutils
+      - name: Set up Flathub runtime and SDK
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08 org.electronjs.Electron2.BaseApp//25.08
+      - run: npm ci
+      - name: Build with full Flatpak compiler output
+        env:
+          DEBUG: '@malept/flatpak-bundler'
+        run: |
+          set -o pipefail
+          npx electron-builder --linux flatpak --x64 --publish never 2>&1 | tee flatpak-build.log
+      - name: Verify bundled Git and Git LFS
+        run: bash scripts/check-flatpak.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flatpak-build-evidence
+          path: |
+            flatpak-build.log
+            dist/*.flatpak
+          retention-days: 7

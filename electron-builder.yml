@@ -89,7 +89,7 @@ flatpak:
     - name: git
       buildsystem: simple
       build-commands:
-        - make -j2 prefix=/app NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PERL=YesPlease NO_PYTHON=YesPlease install
+        - make -j2 prefix=/app NO_RUST=YesPlease NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PERL=YesPlease NO_PYTHON=YesPlease install
         - install -Dm644 COPYING /app/share/licenses/git/COPYING
       sources:
         - type: archive
