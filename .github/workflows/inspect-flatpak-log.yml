@@ -1,0 +1,17 @@
+name: Inspect Flatpak build log
+on:
+  push:
+    branches: [ci/inspect-flatpak-log]
+permissions:
+  actions: write
+  contents: read
+jobs:
+  stop-superseded-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Stop superseded diagnostic so its complete log becomes available
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: gh api --method POST "repos/$REPOSITORY/actions/runs/41810555603/cancel"
