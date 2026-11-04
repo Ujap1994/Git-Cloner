@@ -6,8 +6,8 @@ Stand: 4. November 2026, Git Cloner **3.1.0**. Prüfungen mit GitHub-Antworten a
 
 | Umgebung / Prüfung | Tatsächliches Ergebnis |
 | --- | --- |
-| Node 24.22.1, `npm run check` | ESLint und **139 Kern-/Integrationstests erfolgreich**, keine übersprungenen Tests. |
-| Node 22.23.4 | Dieselben **139 Tests erfolgreich**, keine übersprungenen Tests. |
+| Node 24.22.1, `npm run check` | ESLint und **141 Kern-/Integrationstests erfolgreich**, keine übersprungenen Tests. |
+| Node 22.23.4 | Dieselben **141 Tests erfolgreich**, keine übersprungenen Tests. |
 | Echte Electron-GUI auf Linux/Xvfb | **29 Tests erfolgreich**. Alle sechs neuen Ansichten wurden zusätzlich als echte Screenshots aufgenommen. |
 | Schnelle Quellenänderungen | Deaktivieren und Entfernen in derselben Ereignisfolge: **zwölf Wiederholungen ohne Retries erfolgreich**; bestehende Dateien und die übrige Quelle bleiben erhalten, auch nach einem Neustart der Oberfläche. |
 | Gepackte Linux-x64-App | `build:dir` und echter Start erfolgreich: Version 3.1.0, `isPackaged`, Preload, leere Quellen, Leistungsregeln, OS-Erkennung, Release-Filter und Meldungseinstellungen geprüft. Neue Module und die Diff-Abhängigkeit sind im ASAR enthalten. |
@@ -27,7 +27,7 @@ Die zusätzlichen Prüfungen für Version 3.1 umfassen:
 - Laufwerkspfadänderungen, mehrdeutige kopierte Ordnerkennungen, unterbrochene Metadatenänderungen und abgeschlossene Aufgaben in pausierten Warteschlangen.
 - Benachrichtigungsregeln bei manuellen und automatischen Läufen sowie Fortsetzen; Ruhezeitgrenzen über Mitternacht und nachgeholte Versionsmeldungen ohne doppelte Meldung.
 - Begrenzung des GitHub-ETag-Caches.
-- Veröffentlichungswiederholung nach einer unklaren HTTP-502-Antwort, identische bereits veröffentlichte Releases, Ablehnung falscher Dateihashes und Schutz eines Releases mit anderem Quellcommit.
+- Veröffentlichungswiederholung nach einer unklaren HTTP-502-Antwort, identische bereits veröffentlichte Releases, Ablehnung falscher Dateihashes, Schutz eines Releases mit anderem Quellcommit und Entwürfe, die über den Tag-Endpunkt noch nicht erreichbar sind.
 
 Die GUI-Prüfung kontrolliert leere Quellen beim ersten Start, deutsche und englische Texte, dunkle Darstellung, große Schrift ohne horizontalen Seitenüberlauf, hohen Kontrast, Tastatursteuerung und gleich hohe benachbarte Felder. Weitere Abläufe prüfen Setup, Probelauf, Pause über Neustarts, vollständige und selektive verschlüsselte Wiederherstellung sowie alle neuen Version-3.1-Ansichten.
 

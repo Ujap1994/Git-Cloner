@@ -44,6 +44,9 @@ jobs:
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [[ "$(gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null || true)" == 'false' ]]; then
             echo 'publish=false' >> "$GITHUB_OUTPUT"
+          elif [[ -f .github/release-recovery.json ]] && node -e 'const r=require("./.github/release-recovery.json");process.exit(r.version===process.argv[1]&&r.commit!==process.argv[2]?0:1)' "$version" "$(git rev-parse HEAD)"; then
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::This version is being finalized from its original verified artifact run.'
           else
             echo 'publish=true' >> "$GITHUB_OUTPUT"
           fi
@@ -192,7 +195,9 @@ jobs:
           RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
         run: |
           npm run catalogs -- --assets release-assets --output catalogs --version "$RELEASE_VERSION" --commit "$RELEASE_COMMIT"
-          zip -qr release-assets/Git-Cloner-Katalogvorlagen.zip catalogs
+          RELEASE_EPOCH="$(git show -s --format=%ct "$RELEASE_COMMIT")"
+          find catalogs -exec touch -h -d "@$RELEASE_EPOCH" {} +
+          find catalogs -type f | LC_ALL=C sort | zip -X -q release-assets/Git-Cloner-Katalogvorlagen.zip -@
       - name: Checksums and release
         shell: bash
         env:

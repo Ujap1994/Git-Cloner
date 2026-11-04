@@ -1,0 +1,75 @@
+name: Finalize verified release
+on:
+  push:
+    branches: [main]
+    paths: [.github/release-recovery.json]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finalize-verified-release
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    name: Publish existing verified packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: npm run check
+      - name: Verify source CI and successful package jobs
+        id: request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict'),{execFileSync}=require('node:child_process');
+          const request=require('./.github/release-recovery.json'),repository=process.env.GITHUB_REPOSITORY;
+          assert(Number.isSafeInteger(request.runId)&&request.runId>0&&/^[a-f\d]{40}$/.test(request.commit)&&require('semver').valid(request.version)&&!require('semver').prerelease(request.version),'Invalid recovery request.');
+          const api=endpoint=>JSON.parse(execFileSync('gh',['api',`repos/${repository}/${endpoint}`],{encoding:'utf8'}));
+          const run=api(`actions/runs/${request.runId}`);
+          assert(run.path==='.github/workflows/release.yml'&&run.event==='workflow_run'&&run.head_branch==='main'&&run.head_sha===request.commit&&run.head_repository.full_name===repository,'Artifact source is not the requested trusted main release run.');
+          const builds=api(`actions/runs/${request.runId}/jobs?per_page=100`).jobs.filter(job=>job.name.startsWith('Build · '));
+          assert(builds.length===8&&builds.every(job=>job.conclusion==='success'),'Every native and Flatpak build must have succeeded.');
+          const ci=api(`actions/runs?head_sha=${request.commit}&per_page=100`).workflow_runs;
+          assert(ci.some(value=>value.name==='CI'&&value.event==='push'&&value.head_branch==='main'&&value.conclusion==='success'),'The package source has no successful main CI run.');
+          const pkg=JSON.parse(execFileSync('git',['show',`${request.commit}:package.json`],{encoding:'utf8'}));assert.equal(pkg.version,request.version);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT,`run=${request.runId}\ncommit=${request.commit}\nversion=${request.version}\n`);
+          NODE
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.request.outputs.run }}
+          pattern: packages-*
+          path: release-assets
+          merge-multiple: true
+      - name: Generate catalogs and finish the verified draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.request.outputs.version }}
+          RELEASE_COMMIT: ${{ steps.request.outputs.commit }}
+        run: |
+          mkdir verified-source
+          git archive "$RELEASE_COMMIT" | tar -xf - -C verified-source
+          node verified-source/scripts/catalogs.cjs --assets release-assets --output catalogs --version "$RELEASE_VERSION" --commit "$RELEASE_COMMIT"
+          RELEASE_EPOCH="$(git show -s --format=%ct "$RELEASE_COMMIT")"
+          find catalogs -exec touch -h -d "@$RELEASE_EPOCH" {} +
+          find catalogs -type f | LC_ALL=C sort | zip -X -q release-assets/Git-Cloner-Katalogvorlagen.zip -@
+          (cd release-assets && sha256sum * > SHA256SUMS.txt)
+          node scripts/publish-release.cjs release-assets verified-source/docs/RELEASE-NOTES.md
