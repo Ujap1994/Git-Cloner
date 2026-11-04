@@ -30,10 +30,7 @@ jobs:
           set -o pipefail
           npx electron-builder --linux flatpak --x64 --publish never 2>&1 | tee flatpak-build.log
       - name: Verify bundled Git and Git LFS
-        run: |
-          flatpak install --user --noninteractive dist/*.flatpak
-          flatpak run --command=git io.github.Ujap1994.GitCloner --version
-          flatpak run --command=git-lfs io.github.Ujap1994.GitCloner version
+        run: bash scripts/check-flatpak.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
