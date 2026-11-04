@@ -39,7 +39,7 @@ test('English, dark mode and large text persist with aligned controls and no hor
   try{
     await f.page.getByRole('button',{name:'Einstellungen',exact:true}).click();await f.page.getByRole('tab',{name:'Darstellung',exact:true}).click();
     await f.page.getByLabel('Sprache',{exact:true}).selectOption('en');await f.page.getByRole('combobox',{name:'Darstellung',exact:true}).selectOption('dark');await f.page.getByLabel('Schriftgröße').selectOption('1.3');
-    await f.page.getByRole('button',{name:'Einstellungen speichern'}).click();
+    await f.page.getByRole('button',{name:'Einstellungen speichern'}).click();await expect(f.page.locator('#toast')).toHaveText(/^(Einstellungen gespeichert\.|Settings saved\.)$/);
     await expect(f.page.getByRole('tab',{name:'Appearance',exact:true})).toBeVisible();await expect(f.page.locator('html')).toHaveAttribute('data-theme','dark');await expect(f.page.locator('html')).toHaveAttribute('lang','en');
     const boxes=await Promise.all(['Language','Theme','Text size'].map(label=>f.page.getByLabel(label,{exact:true}).boundingBox()));
     for(const box of boxes){expect(Math.abs(box.y-boxes[0].y)).toBeLessThan(1);expect(Math.abs(box.height-boxes[0].height)).toBeLessThan(1);}
@@ -68,7 +68,7 @@ test('backup settings expose advanced options while keeping the landing page sim
   try{
     await f.page.getByRole('button',{name:'Einstellungen',exact:true}).click();await f.page.getByRole('tab',{name:'Sicherung',exact:true}).click();
     await f.page.getByLabel('Git-Modus').selectOption('mirror');await expect(f.page.getByRole('checkbox',{name:'Submodule aktivieren'})).toBeDisabled();
-    await f.page.getByRole('checkbox',{name:'Git LFS aktivieren'}).check();await f.page.getByLabel('Integrität automatisch prüfen').selectOption('manual');await f.page.getByRole('button',{name:'Einstellungen speichern'}).click();
+    await f.page.getByRole('checkbox',{name:'Git LFS aktivieren'}).check();await f.page.getByLabel('Integrität automatisch prüfen').selectOption('manual');await f.page.getByRole('button',{name:'Einstellungen speichern'}).click();await expect(f.page.locator('#toast')).toHaveText(/^(Einstellungen gespeichert\.|Settings saved\.)$/);
     const state=await f.page.evaluate(()=>window.gitCloner.getState());expect(state.config.backup.mode).toBe('mirror');expect(state.config.backup.lfs).toBe(true);expect(state.config.backup.integrity).toBe('manual');
     await f.page.getByRole('button',{name:'Übersicht',exact:true}).click();await expect(f.page.getByRole('heading',{name:'Alles an einem sicheren Ort.'})).toBeVisible();await expect(f.page.getByLabel('Git-Modus')).toHaveCount(0);
   }finally{await f.close();}

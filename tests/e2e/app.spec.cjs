@@ -85,7 +85,7 @@ test('settings and built-in documentation are available',async()=>{
     await f.page.getByRole('button',{name:'Einstellungen',exact:true}).click();
     await expect(f.page.getByRole('heading',{name:'Version & Updates'})).toBeVisible();
     await f.page.getByRole('checkbox',{name:'Benachrichtigungen aktivieren'}).uncheck();
-    await f.page.getByRole('button',{name:'Einstellungen speichern'}).click();
+    await f.page.getByRole('button',{name:'Einstellungen speichern'}).click();await expect(f.page.locator('#toast')).toHaveText(/^(Einstellungen gespeichert\.|Settings saved\.)$/);
     await expect(f.page.getByRole('checkbox',{name:'Benachrichtigungen aktivieren'})).not.toBeChecked();
     await f.page.getByRole('button',{name:'Dokumentation',exact:true}).click();
     await expect(f.page.getByRole('heading',{name:'In drei Schritten zur Sicherung'})).toBeVisible();
