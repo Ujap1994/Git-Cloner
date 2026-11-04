@@ -2,17 +2,18 @@ const { parseSource } = require('./config.cjs');
 const { retry } = require('./retry.cjs');
 
 class GitHubClient {
-  constructor({ token = '', fetchImpl = fetch, retryOptions = {} } = {}) { Object.assign(this, { token, fetchImpl, retryOptions }); this.cache = new Map(); }
+  constructor({ token = '', fetchImpl = fetch, retryOptions = {}, cacheLimit = 16 * 1048576 } = {}) { Object.assign(this, { token, fetchImpl, retryOptions, cacheLimit }); this.cache = new Map(); this.cacheStats = {bytes:0}; }
   withTransfer(transfer, retries = 2) { const client = Object.create(this); client.transfer = transfer; client.retryOptions = { ...this.retryOptions, retries }; return client; }
-  async request(endpoint, { allow404 = false } = {}) {
-    return retry(() => this.requestOnce(endpoint, { allow404 }), this.retryOptions);
+  async request(endpoint, { allow404 = false, signal } = {}) {
+    return retry(() => this.requestOnce(endpoint, { allow404, signal }), this.retryOptions);
   }
-  async requestOnce(endpoint, { allow404 = false } = {}) {
+  async requestOnce(endpoint, { allow404 = false, signal } = {}) {
+    signal?.throwIfAborted();
     if (typeof endpoint !== 'string' || !endpoint.startsWith('/') || endpoint.startsWith('//') || endpoint.includes('://')) throw new Error('Ungültiger GitHub-Endpunkt.');
     const cached = this.cache.get(endpoint);
     const response = await this.fetchImpl(`https://api.github.com${endpoint}`, {
       headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'Git-Cloner', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...(cached?.etag ? { 'If-None-Match': cached.etag } : {}) },
-      signal: AbortSignal.timeout(30000), redirect: 'error'
+      signal: signal ? AbortSignal.any([signal,AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000), redirect: 'error'
     });
     if (response.status === 304 && cached) return structuredClone(cached.data);
     if (allow404 && response.status === 404) return null;
@@ -30,8 +31,12 @@ class GitHubClient {
     const data = await response.json();
     const etag = response.headers?.get('etag');
     if (etag) {
-      if (this.cache.size > 2000) this.cache.delete(this.cache.keys().next().value);
-      this.cache.set(endpoint, { etag, data });
+      const size = Buffer.byteLength(JSON.stringify(data));
+      if (size <= this.cacheLimit) {
+        const old = this.cache.get(endpoint); if (old) { this.cacheStats.bytes -= old.size ?? 0; this.cache.delete(endpoint); }
+        while (this.cache.size && (this.cache.size >= 2000 || this.cacheStats.bytes + size > this.cacheLimit)) { const key = this.cache.keys().next().value; this.cacheStats.bytes -= this.cache.get(key).size ?? 0; this.cache.delete(key); }
+        this.cache.set(endpoint, { etag, data, size }); this.cacheStats.bytes += size;
+      }
     }
     return structuredClone(data);
   }
@@ -66,15 +71,17 @@ class GitHubClient {
     }
     throw new Error('Zu viele Metadaten für einen Durchlauf.');
   }
-  async downloadAsset(fullName, id, file) {
-    return retry(() => this.downloadAssetOnce(fullName,id,file),this.retryOptions);
+  async downloadAsset(fullName, id, file, expected = {}) {
+    return retry(() => this.downloadAssetOnce(fullName,id,file,expected),this.retryOptions);
   }
-  async downloadAssetOnce(fullName, id, file) {
+  async downloadAssetOnce(fullName, id, file, { expectedSize, expectedDigest } = {}) {
     const fs = require('node:fs');
-    const { Readable } = require('node:stream');
+    const { Readable, Transform } = require('node:stream');
+    const { createHash } = require('node:crypto');
     const { pipeline } = require('node:stream/promises');
     parseSource(fullName, 'repository');
     if (!Number.isSafeInteger(id) || id < 1) throw new Error('Ungültiges Release-Asset.');
+    if (expectedSize != null && (!Number.isSafeInteger(expectedSize) || expectedSize < 0)) throw new Error('Ungültige Größe einer Release-Datei.');
     let response = await this.fetchImpl(`https://api.github.com/repos/${fullName}/releases/assets/${id}`, {
       headers: { Accept: 'application/octet-stream', 'User-Agent': 'Git-Cloner', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) }, redirect: 'manual', signal: AbortSignal.timeout(600000)
     });
@@ -84,9 +91,16 @@ class GitHubClient {
       response = await this.fetchImpl(url.href, { redirect: 'error', signal: AbortSignal.timeout(600000) });
     }
     if (!response.ok || !response.body) { const error = new Error('Release-Datei konnte nicht geladen werden.'); error.retryable = [429,500,502,503,504].includes(response.status); throw error; }
-    const stages = [Readable.fromWeb(response.body)]; if (this.transfer) stages.push(this.transfer.budget.stream());
+    let bytes = 0; const hash = createHash('sha256');
+    const meter = new Transform({ transform(chunk,_encoding,done) { bytes += chunk.length; hash.update(chunk); if (Number.isSafeInteger(expectedSize) && bytes > expectedSize) done(new Error('Release-Datei ist größer als von GitHub angegeben.')); else done(null,chunk); } });
+    const stages = [Readable.fromWeb(response.body),meter]; if (this.transfer) stages.push(this.transfer.budget.stream());
     const output = fs.createWriteStream(file, { flags: 'wx', mode: 0o600 }); let owned = false; output.once('open',() => { owned = true; });
-    try { await pipeline(...stages,output); } catch (error) { if (owned) await fs.promises.rm(file,{force:true}); throw error; }
+    try {
+      await pipeline(...stages,output); const digest = hash.digest('hex');
+      if (Number.isSafeInteger(expectedSize) && bytes !== expectedSize) throw new Error('Release-Datei ist unvollständig.');
+      if (typeof expectedDigest === 'string' && /^sha256:[a-f\d]{64}$/i.test(expectedDigest) && digest !== expectedDigest.slice(7).toLowerCase()) throw new Error('Die SHA256-Prüfsumme der Release-Datei stimmt nicht.');
+      return { bytes, sha256: digest };
+    } catch (error) { if (owned) await fs.promises.rm(file,{force:true}); throw error; }
   }
 }
 

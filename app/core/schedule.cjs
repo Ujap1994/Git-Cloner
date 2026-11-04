@@ -1,3 +1,4 @@
+const { effectiveSchedule } = require('./config.cjs');
 function localSlots(schedule, day) {
   return schedule.times.map(time => {
     const [hours, minutes] = time.split(':').map(Number);
@@ -41,11 +42,22 @@ class Scheduler {
     try {
       const config = this.getConfig();
       if (!config.sources.some(source => source.enabled)) return;
-      const due = dueRun(config.schedule, this.getLastRun(), now);
-      if (due) await this.run(due);
+      const plan = dueSources(config, this.getLastRun(), now);
+      if (plan.scheduledAt) await this.run(plan.scheduledAt,plan.sources);
     } catch (error) { this.onError(error); }
     finally { this.ticking = false; }
   }
 }
 
-module.exports = { nextRun, dueRun, Scheduler };
+function dueSources(config, state, now = new Date()) {
+  const sources = {};
+  for (const source of config.sources.filter(s => s.enabled)) {
+    const last = typeof state === 'string' ? state : state?.lastScheduledBySource?.[source.id] ?? state?.lastScheduledAt;
+    const due = dueRun(effectiveSchedule(config,source),last,now);
+    if (due) sources[source.id] = due;
+  }
+  return { sources, scheduledAt: Object.values(sources).sort().at(-1) ?? null };
+}
+function nextConfigRun(config, now = new Date()) { return config.sources.filter(s => s.enabled).map(s => nextRun(effectiveSchedule(config,s),now)).filter(Boolean).sort()[0] ?? null; }
+function registrationTimes(config) { return [...new Set(config.sources.filter(s => s.enabled).flatMap(s => { const schedule = effectiveSchedule(config,s); return schedule.enabled ? schedule.times : []; }))].sort(); }
+module.exports = { nextRun, dueRun, Scheduler, dueSources, nextConfigRun, registrationTimes };

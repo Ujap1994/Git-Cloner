@@ -1,26 +1,19 @@
-Git Cloner **3.0.0** vereinfacht Einrichtung, große Sicherungsläufe und gezielte Wiederherstellung. Die Anwendung startet weiterhin ohne Standardkonten oder Repositories und behält genau einen erfolgreichen Stand je Repository und Ziel.
+Git Cloner **3.1.0** ergänzt eigene Quellenzeitpläne, eine Änderungsvorschau, Laufwerkswiedererkennung sowie gezielte Benachrichtigungen und Release-Sicherungen. Beim ersten Start bleiben alle Quellen leer. Je Repository und Ziel bleibt ein erfolgreicher Sicherungsstand erhalten.
 
-- Dreistufiger Einrichtungsassistent für eigene Quellen, Laufwerk und Prüfzeiten.
-- Reiner Probelauf mit Filterausschlüssen, geplanten Speicherorten und Platzschätzung, ohne Backup-Schreibzugriffe.
-- Nach aktiven Repositories pausieren, Warteschlange über Neustarts behalten und nur ausstehende Ziele fortsetzen.
-- Einzelne Dateien oder Ordner aus Snapshot, GCB und Mirror-HEAD wiederherstellen, einschließlich vorhandener LFS-Inhalte.
-- Eigene Sicherungsoptionen je Quelle oder globale Vererbung.
-- Kleine Aufgaben begrenzt parallel, maximal zwei je erkanntem Datenträger; große und aufwendige Sicherungen exklusiv.
-- Begrenzte Wiederholungen vorübergehender Netzwerkfehler mit Backoff; verschachtelte Wiederholungen vervielfachen das Budget nicht.
-- Gemeinsames Download-Limit für Git/LFS und Release-Dateien; optionale Netzstrom- und WLAN-Regeln vor der ersten Quellenabfrage.
-- Dashboard mit Laufzeit, Restzeitschätzung, Download-Mengen, Backup-Umfang, freiem Platz und überfälligen Prüfungen.
-- Hoher Kontrast, Tastenkürzel, Statusansagen, Überspringlink und Tastaturnavigation in Einstellungsreitern.
-- Zusätzliche Schutzprüfungen für Downloads, temporäre Pfade, Manifeständerungen und Windows-Dateinamen.
-- Erweiterte npm-/Git-/Electron-Tests, Node-22-Kompatibilitätsprüfung und zusätzliche Fedora-Prüfung. Konkrete Ergebnisse stehen in `docs/VALIDIERUNG.md`.
+- Allgemeine Prüfzeiten übernehmen oder je Quelle 1–24 eigene tägliche Zeiten festlegen. Separate Prüfstände verhindern, dass ein Quellenlauf andere fällige Quellen überspringt. Die globale Pause gilt für alle Zeiten. Native OS-Aufgaben übernehmen die zusammengefassten Termine.
+- Gesicherten Git-Stand mit dem aktuellen Standardbranch vergleichen, Änderungen durchsuchen und Text-Diffs bei Bedarf ansehen. Die Vorschau verändert keine Sicherung und führt keinen Projektcode aus. Textdateien sind auf 256 KiB je Version begrenzt; große Dateien und Submodule werden aufgelistet. Während einer geöffneten Vorschau warten automatische Backups.
+- Gespeicherte Ordnerkennungen bei geänderten Mountpfaden beziehungsweise Laufwerksbuchstaben wiederfinden. Nur eindeutige Treffer werden übernommen; aktuelle Sicherungen und bereits erledigte Warteschlangenaufgaben werden neu zugeordnet. Unterbrochene Metadatenänderungen werden beim nächsten Start abgeschlossen.
+- Sicherungsmeldungen für alle Prüfungen, nur Fehler, Änderungen und Fehler oder gar keine. Versionsmeldungen lassen sich separat steuern. Tägliche Ruhezeiten unterstützen Mitternachtswechsel. Zurückgestellte Versionshinweise können danach erscheinen; Sicherungsmeldungen werden nicht gesammelt.
+- Dateien des neuesten offiziellen Releases je Repository sichern: alle Plattformen oder nur das automatisch erkannte Windows, macOS beziehungsweise Linux. Nicht eindeutig passende Dateien werden beim OS-Filter ausgeschlossen, allgemeine Prüfsummen bleiben enthalten. Bekannte Dateigrößen und vorhandene GitHub-SHA256-Digests werden beim Streaming geprüft.
+- Release-Dateien separat auswählen und wiederherstellen, auch aus verschlüsselten Archiven und Mirrors.
+- Sichtbarer Open-Source-Hinweis mit Gewährleistungs-, Fehler- und Backup-Hinweisen in der GitHub-Übersicht.
+- Neue Kern-, Integrations- und echte Electron-GUI-Prüfungen. Die anonymisierten Anleitungen und Screenshots sind aktualisiert.
+- Begrenzter Speicher für den GitHub-ETag-Cache, kleinere Flatpak-Git-Builds ohne Entwicklungs-Debugdaten und ein wiederholbarer Veröffentlichungsprozess, der Release-Dateien vor der offiziellen Freigabe prüft.
 
-Die bisherigen Funktionen bleiben erhalten: vollständige Mirrors, LFS/Submodule, Metadaten, verschlüsselte Archive, Integrität, mehrere Konten/Ziele, Zeitplanung, Autostart, Deutsch/Englisch und Hell/Dunkel.
+**Versionsüberwachung:** Die App vergleicht ihre ausgeführte Version mit dem letzten offiziellen stabilen GitHub-Release und zeigt einen Hinweis. „Diese Version überspringen“ bleibt über Neustarts erhalten; erst eine höhere Version meldet sich wieder. Es gibt keine automatische Update-Installation oder erforderliche Einrichtung von Signierzertifikaten.
 
-**Versionshinweise:** Ausschließlich mit dem letzten offiziellen stabilen GitHub-Release vergleichen und informieren. „Diese Version überspringen“ bleibt nach Neustarts erhalten; erst eine höhere Version meldet sich erneut. Keine automatischen Downloads oder Installer, keine erforderlichen Signierzertifikate.
+**Betrieb:** Git muss im PATH liegen, für LFS zusätzlich Git LFS; Flatpak enthält beides. Installierte Pakete benötigen kein separates Node.js. Der Rechner muss eingeschaltet und wach sein. Backup-Ziele benötigen vorübergehend Platz für bisherigen und neuen Stand. Verschlüsselte Sicherungen benötigen ihr Passwort; ein Passwort kann nicht wiederhergestellt werden.
 
-**Voraussetzungen:** Git im PATH, für LFS zusätzlich Git LFS; beides ist im Flatpak enthalten. Fertige Pakete brauchen kein separates Node.js. Device Flow benötigt eine eigene öffentliche OAuth-Client-ID; öffentliche Quellen und PAT funktionieren unabhängig davon.
+**Grenzen:** Die OS-Auswahl filtert Release-Dateien anhand ihrer Namen und Dateiendungen und umfasst alle Architekturen des jeweiligen Betriebssystems. Automatische GitHub-Quellcodearchive werden nicht zusätzlich heruntergeladen. Geänderte oder beschädigte Backups können die Vorschau verhindern. Sehr große GitHub-Dateibäume können für die API-Vorschau zu umfangreich sein; der normale Sicherungslauf bleibt verfügbar. Kopierte Ordnerkennungen können eine manuelle Laufwerksauswahl erfordern.
 
-**Betrieb:** Temporär Platz für bisherigen und neuen Stand erforderlich. Der Rechner muss wach sein und der Benutzerkontext verfügbar. Die App weckt ihn nicht. WLAN-Ermittlung hängt von OS-Freigaben und verfügbaren Werkzeugen ab; unbekannte erforderliche Zustände pausieren. Ein Probelauf ist eine separate manuelle Leseoperation. Die gemeinsame Download-Messung schließt API-JSON und andere Programme aus.
-
-**Wiederherstellung:** Vorhandene Ausgabeordner werden abgelehnt. Neue Manifeste erlauben die Prüfung ausgewählter Dateien; ältere Sicherungen verwenden zunächst die vollständige Prüfung. Verschlüsselte Archive werden zur Auswahl vollständig authentifiziert und privat temporär entpackt. Reguläres Schließen räumt auf; ein harter Abbruch kann OS-Temp-Dateien hinterlassen. Passwörter unabhängig aufbewahren; noch nicht erneuerte Archive benötigen nach einem Wechsel das bisherige Passwort.
-
-**Veröffentlichung:** Pakete haben keine verifizierte Herausgebersignatur. macOS verwendet Ad-hoc-Signierung und ist nicht notarisiert. Vorbereitete CI-/Release-/Store-Vorlagen bedeuten noch keine ausgeführte öffentliche Veröffentlichung. Prüfsummen stehen in `SHA256SUMS.txt`.
+**Open Source:** Bereitstellung unter der MIT-Lizenz ohne Garantie für Fehlerfreiheit. Zusätzliche unabhängige Backups und regelmäßige Wiederherstellungsprüfungen bleiben erforderlich. Pakete besitzen keine verifizierte Herausgebersignatur; macOS nutzt Ad-hoc-Signierung und ist nicht notarisiert. Prüfsummen werden mit dem Release veröffentlicht.

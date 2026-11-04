@@ -13,8 +13,8 @@ async function checkForUpdates(currentVersion, github, { ignoredVersion = null }
 }
 
 class UpdateMonitor {
-  constructor({ currentVersion, github, state = {}, save = async () => {}, notify = () => {} }) {
-    Object.assign(this, { currentVersion, github, state, save, notify });
+  constructor({ currentVersion, github, state = {}, save = async () => {}, notify = () => {}, canNotify = () => true }) {
+    Object.assign(this, { currentVersion, github, state, save, notify, canNotify });
     this.result = { currentVersion, status: 'idle', latestVersion: null, url: RELEASES_URL, ignoredVersion: state.ignoredVersion ?? null };
   }
   async check() {
@@ -23,27 +23,38 @@ class UpdateMonitor {
     this.checking = (async () => {
       try {
         this.result = await checkForUpdates(this.currentVersion, this.github, this.state);
-        if (this.result.status === 'available' && this.state.lastNotifiedVersion !== this.result.latestVersion) {
-          this.state.lastNotifiedVersion = this.result.latestVersion;
-          await this.save(this.state);
-          this.notify(this.result);
-        }
+        await this.notifyAvailable();
       } catch (error) { this.result = { ...this.result, status: 'error', message: error.message }; }
       return this.result;
     })();
     try { return await this.checking; } finally { this.checking = null; }
   }
+  persist() { this.saving = (this.saving ?? Promise.resolve()).catch(() => {}).then(() => this.save(structuredClone(this.state))); return this.saving; }
+  async notifyAvailable() {
+    if (this.notifying) return this.notifying;
+    this.notifying = (async () => {
+      const result = this.result;
+      if (result.status !== 'available' || this.state.lastNotifiedVersion === result.latestVersion || !this.canNotify(result)) return false;
+      const previous = this.state.lastNotifiedVersion;
+      this.state.lastNotifiedVersion = result.latestVersion;
+      try { await this.persist(); } catch (error) { this.state.lastNotifiedVersion = previous; throw error; }
+      if (this.result.status === 'available' && this.result.latestVersion === result.latestVersion && this.canNotify(result)) { this.notify(result); return true; }
+      if (this.result.status === 'available' && this.state.lastNotifiedVersion === result.latestVersion) { this.state.lastNotifiedVersion = previous; await this.persist(); }
+      return false;
+    })();
+    try { return await this.notifying; } finally { this.notifying = null; }
+  }
   async ignore() {
     if (this.result.status !== 'available' || !semver.valid(this.result.latestVersion)) throw new Error('Keine neuere Version zum Überspringen vorhanden.');
     this.state.ignoredVersion = this.result.latestVersion;
-    await this.save(this.state);
+    await this.persist();
     this.result = { ...this.result, status: 'ignored', ignoredVersion: this.state.ignoredVersion };
     return this.result;
   }
   async reset() {
     this.state.ignoredVersion = null;
     this.state.lastNotifiedVersion = null;
-    await this.save(this.state);
+    await this.persist();
     return this.check();
   }
 }

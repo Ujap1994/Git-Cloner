@@ -1,6 +1,6 @@
 {
   "name": "git-cloner",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Geplante GitHub-Sicherungen auf deinem eigenen Laufwerk.",
   "author": "Ujap1994",
   "license": "MIT",
@@ -26,10 +26,11 @@
     "build:linux": "electron-builder --linux AppImage deb rpm tar.gz --x64 --publish never",
     "build:mac": "electron-builder --mac dmg zip --universal --arm64 --x64 --publish never",
     "build:win": "electron-builder --win nsis portable --x64 --arm64 --publish never",
-    "screenshots": "playwright test tests/e2e/screenshots.spec.cjs tests/e2e/workflows.spec.cjs",
+    "screenshots": "playwright test tests/e2e/screenshots.spec.cjs tests/e2e/workflows.spec.cjs tests/e2e/enhancements.spec.cjs",
     "catalogs": "node scripts/catalogs.cjs"
   },
   "dependencies": {
+    "diff": "^9.0.0",
     "proper-lockfile": "^4.1.2",
     "semver": "^7.8.6",
     "tar": "^7.5.22"

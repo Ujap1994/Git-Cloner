@@ -76,9 +76,9 @@ async function syncRepository({ source, repository, git, github, options = defau
   onProgress({ fullName, status: 'checking' });
   const revision = await git.revision(url, opts.mode === 'mirror');
   if (!revision) return { fullName, destination: target, status: 'empty', message: 'Leeres Repository ohne Commit.', checkedAt: new Date().toISOString() };
-  plan ??= await metadataPlan(repository, opts.metadata, github, git);
+  plan ??= await metadataPlan(repository, opts.metadata, github, git, { releaseScope: opts.releaseScope });
   if (current?.wikiRevision && plan.warning) throw new Error('Das Wiki konnte nicht aktualisiert werden. Die vorhandene Sicherung bleibt erhalten.');
-  const fingerprint = createHash('sha256').update(JSON.stringify({ mode: opts.mode, lfs: opts.lfs, submodules: opts.submodules, encrypted: opts.encryption, metadata: opts.metadata, keyId: opts.encryption ? opts.encryptionKeyId : null })).digest('hex');
+  const fingerprint = createHash('sha256').update(JSON.stringify({ mode: opts.mode, lfs: opts.lfs, submodules: opts.submodules, encrypted: opts.encryption, metadata: opts.metadata, ...(opts.metadata.releases ? { releaseScope: opts.releaseScope, releasePlatform: opts.releaseScope === 'system' ? process.platform : null } : {}), keyId: opts.encryption ? opts.encryptionKeyId : null })).digest('hex');
   let repair = false;
   if (current && current.fingerprint === fingerprint && current.revision === revision && current.metadataDigest === plan.digest) {
     try {
@@ -90,10 +90,11 @@ async function syncRepository({ source, repository, git, github, options = defau
       if (!current.encrypted && await git.head(target) !== current.commit) throw new Error('Commit verändert.');
       const verifiedAt = verificationDue(opts.integrity, current.verifiedAt) ? new Date().toISOString() : current.verifiedAt;
       if (verifiedAt !== current.verifiedAt) await writeJson(path.join(current.encrypted ? target : controlDirectory(target, current.mode), MARKER), { ...current, verifiedAt });
-      return { fullName, destination: target, commit: current.commit, mode: opts.mode, encrypted: opts.encryption, files: current.files, bytes: current.bytes, verifiedAt, verificationStatus: 'ok', status: 'unchanged', checkedAt: new Date().toISOString() };
+      return { fullName, destination: target, commit: current.commit, mode: opts.mode, encrypted: opts.encryption, files: current.files, bytes: current.bytes, releaseInfo: current.releaseInfo ?? null, ...(plan.releaseWarning ? {warning:plan.releaseWarning} : {}), verifiedAt, verificationStatus: 'ok', status: 'unchanged', checkedAt: new Date().toISOString() };
     } catch (_error) { repair = true; }
   }
-  await checkSpace(root, (repository.size ?? 0) * 2048, opts.reserveMB);
+  const estimatedBytes = Math.max((repository.size ?? 0) * 2048 + (plan.estimatedBytes ?? 0),current?.bytes ?? 0);
+  await checkSpace(root, estimatedBytes, opts.reserveMB);
   await writeJson(markerFile, { schemaVersion: 1, fullName });
   let temporary;
   try {
@@ -101,7 +102,7 @@ async function syncRepository({ source, repository, git, github, options = defau
     if (opts.encryption) {
       if (!passphrase) throw new Error('Bitte zuerst das Archivpasswort in den Einstellungen entsperren.');
       temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'git-cloner-encrypt-')); await fs.chmod(temporary, 0o700);
-      await checkSpace(temporary, (repository.size ?? 0) * 2048, opts.reserveMB);
+      await checkSpace(temporary, estimatedBytes, opts.reserveMB);
       payload = path.join(temporary, 'payload'); await fs.mkdir(staging, { mode: 0o700 });
     }
     onProgress({ fullName, status: 'cloning' });
@@ -121,7 +122,7 @@ async function syncRepository({ source, repository, git, github, options = defau
     const commit = await git.head(payload);
     if (!/^[a-f\d]{40,64}$/.test(commit)) throw new Error('Der neue Stand enthält keinen gültigen Commit.');
     const verification = await writeManifest(payload, opts.mode);
-    const marker = { schemaVersion: 1, fullName, commit, revision, mode: opts.mode, encrypted: opts.encryption, fingerprint, metadataDigest: plan.digest, wikiRevision: plan.wikiRevision ?? null, ...verification, updatedAt: new Date().toISOString() };
+    const marker = { schemaVersion: 1, fullName, commit, revision, mode: opts.mode, encrypted: opts.encryption, fingerprint, metadataDigest: plan.digest, wikiRevision: plan.wikiRevision ?? null, releaseInfo: plan.releaseInfo ?? null, ...verification, updatedAt: new Date().toISOString() };
     await writeJson(path.join(controlDirectory(payload, opts.mode), MARKER), { ...marker, encrypted: false });
     if (opts.encryption) {
       onProgress({ fullName, status: 'encrypting' }); await encryptArchive(payload, path.join(staging, 'backup.gcb'), passphrase);
@@ -132,23 +133,24 @@ async function syncRepository({ source, repository, git, github, options = defau
     try { await fs.rename(staging, target); }
     catch (error) { if (current && !await exists(target)) await fs.rename(previous, target); throw error; }
     if (current) await fs.rm(previous, { recursive: true });
-    return { fullName, destination: target, commit, mode: opts.mode, encrypted: opts.encryption, ...verification, verificationStatus: 'ok', status: repair ? 'repaired' : current ? 'updated' : 'cloned', ...(plan.warning ? { warning: plan.warning } : {}), checkedAt: new Date().toISOString() };
+    return { fullName, destination: target, commit, mode: opts.mode, encrypted: opts.encryption, releaseInfo: plan.releaseInfo ?? null, ...verification, verificationStatus: 'ok', status: repair ? 'repaired' : current ? 'updated' : 'cloned', ...(plan.warning || plan.releaseWarning ? { warning: plan.warning || plan.releaseWarning } : {}), checkedAt: new Date().toISOString() };
   } finally {
     await fs.rm(staging, { recursive: true, force: true }); await fs.rm(markerFile, { force: true });
     if (temporary) await fs.rm(temporary, { recursive: true, force: true });
   }
 }
-async function resolveJobs(sources, github, { onlyTargets = null } = {}) {
+async function resolveJobs(sources, github, { onlyTargets = null, onlySources = null } = {}) {
   const selected = sources.filter(s => s.enabled), overrides = new Set(selected.filter(s => s.kind === 'repository').map(s => s.value.toLowerCase()));
   const jobs = [], errors = [], excluded = [], paths = new Set(), reserved = new Set();
   for (const source of selected) {
+    if (onlySources && !onlySources.includes(source.id)) continue;
     try {
       const client = typeof github === 'function' ? github(source) : github;
       const repos = source.kind === 'owner' ? await client.repositories(source.value) : [await client.repository(source.value)];
       for (const repository of repos) {
         const fullName = parseSource(repository.full_name, 'repository');
         if ((source.kind === 'owner' && overrides.has(fullName.toLowerCase())) || !includesRepository(repository, source.filters)) { excluded.push({ fullName, sourceId: source.id, reason: source.kind === 'owner' && overrides.has(fullName.toLowerCase()) ? 'override' : 'filter' }); continue; }
-        for (const target of [{ id: 'primary', destination: source.destination, volumeId: source.volumeId }, ...(source.additionalDestinations ?? [])]) {
+        for (const target of [{ id: 'primary', destination: source.destination, volumeId: source.volumeId, volumeHint: source.volumeHint }, ...(source.additionalDestinations ?? [])]) {
           const targetId = `${source.id}:${target.id}`;
           if (onlyTargets && !onlyTargets.includes(targetId)) continue;
           const destination = path.resolve(target.destination, ...fullName.split('/')).toLowerCase();
@@ -160,7 +162,7 @@ async function resolveJobs(sources, github, { onlyTargets = null } = {}) {
           paths.add(destination);
           internals.forEach(p => reserved.add(p));
           if (jobs.length >= 100000) throw new Error('Zu viele Sicherungsziele. Bitte Quellen mit Filtern auf höchstens 100000 Ziele begrenzen.');
-          jobs.push({ source: { ...source, destination: target.destination, volumeId: target.volumeId }, repository, sourceId: source.id, targetId, github: client });
+          jobs.push({ source: { ...source, destination: target.destination, volumeId: target.volumeId, volumeHint: target.volumeHint }, repository, sourceId: source.id, targetId, github: client });
         }
       }
     } catch (error) {
@@ -179,7 +181,7 @@ function heavy(job, config) {
 class BackupService extends EventEmitter {
   constructor({ github, git, saveState, state = {}, getGit, getPassphrase = async () => '', acquireLock = null, gate = async () => null, sync = syncRepository, transportFactory = createTransport, retryOptions = {} }) {
     super(); Object.assign(this, { github, git, saveState, getGit, getPassphrase, acquireLock, gate, sync, transportFactory, retryOptions });
-    this.state = { repositories: {}, history: [], lastScheduledAt: null, queue: null, ...state }; this.busy = false; this.progress = null;
+    this.state = { repositories: {}, history: [], lastScheduledAt: null, lastScheduledBySource: {}, queue: null, ...state }; this.busy = false; this.progress = null;
   }
   async pause() {
     if (!this.busy && !this.state.queue) throw new Error('Kein Durchlauf zum Pausieren vorhanden.');
@@ -198,7 +200,7 @@ class BackupService extends EventEmitter {
     this.progress = { completed, total: q.jobs.length, active, fullName: active[0]?.fullName || '', status: active[0]?.status || (this.pauseReason ? 'pausing' : 'checking'), elapsedMs: runningMs, etaMs: rate ? Math.max(0, Math.round(rate * (q.jobs.length - completed) / Math.max(1, active.length))) : null, receivedBytes: (q.receivedBytes || 0) + (this.transport?.bytes || 0), pauseRequested: Boolean(this.pauseReason), pauseReason: this.pauseReason || null };
     this.emit('change');
   }
-  async run(config, { scheduledAt = null, trigger = 'manual', onlyTargets = null, resume = false } = {}) {
+  async run(config, { scheduledAt = null, scheduledSources = null, trigger = 'manual', onlyTargets = null, resume = false } = {}) {
     if (this.busy) return { busy: true };
     if (this.state.queue && !resume) return { paused: true };
     if (resume && !this.state.queue) throw new Error('Kein pausierter Durchlauf vorhanden.');
@@ -210,11 +212,11 @@ class BackupService extends EventEmitter {
     try {
       await this.git.version();
       if (!resume) {
-        if (scheduledAt) this.state.lastScheduledAt = scheduledAt;
-        this.state.queue = { id: require('node:crypto').randomUUID(), config: structuredClone(config), jobs: [], unresolved: true, onlyTargets, completed: [], results: [], startedAt: new Date().toISOString(), trigger: scheduledAt ? 'schedule' : trigger, elapsedMs: 0, receivedBytes: 0, pauseReason: null };
+        if (scheduledAt && !scheduledSources) this.state.lastScheduledAt = scheduledAt;
+        this.state.queue = { id: require('node:crypto').randomUUID(), config: structuredClone(config), jobs: [], unresolved: true, onlyTargets, scheduledSources, completed: [], results: [], startedAt: new Date().toISOString(), trigger: scheduledAt ? 'schedule' : trigger, elapsedMs: 0, receivedBytes: 0, pauseReason: null };
       }
       const q = this.state.queue;
-      if (resume && scheduledAt) this.state.lastScheduledAt = scheduledAt;
+      if (resume && scheduledAt && !q.scheduledSources) this.state.lastScheduledAt = scheduledAt;
       // Execution rules may be relaxed while paused; backup content remains fixed.
       q.config.execution = structuredClone(config.execution || defaults().execution);
       if (config.backup?.encryptionKeyId) q.config.backup.encryptionKeyId = config.backup.encryptionKeyId;
@@ -223,7 +225,7 @@ class BackupService extends EventEmitter {
         const blocked = this.pauseReason || await this.gate(q.config.execution);
         if (blocked) { this.pauseReason = blocked; q.pauseReason = blocked; return { paused: true, reason: blocked }; }
         const resolver = source => { const client = typeof this.github === 'function' ? this.github(source) : this.github; return client.withTransfer ? client.withTransfer(null,q.config.execution.retries) : client; };
-        const { jobs, errors } = await resolveJobs(q.config.sources,resolver,{onlyTargets:q.onlyTargets});
+        const { jobs, errors } = await resolveJobs(q.config.sources,resolver,{onlyTargets:q.onlyTargets,onlySources:q.scheduledSources ? Object.keys(q.scheduledSources) : null});
         q.jobs = jobs.map(serialJob); q.results.push(...errors); q.unresolved = false;
       }
       await this.saveState(this.state);
@@ -244,8 +246,8 @@ class BackupService extends EventEmitter {
         let result;
         try {
           result = await retry(async () => {
-            const key = `${job.source.accountId}:${job.repository.full_name}:${JSON.stringify(options.metadata)}`;
-            if (!plans.has(key)) plans.set(key, metadataPlan(job.repository, options.metadata, github, git).catch(error => { plans.delete(key); throw error; }));
+            const key = `${job.source.accountId}:${job.repository.full_name}:${JSON.stringify(options.metadata)}:${options.releaseScope}`;
+            if (!plans.has(key)) plans.set(key, metadataPlan(job.repository, options.metadata, github, git, { releaseScope: options.releaseScope }).catch(error => { plans.delete(key); throw error; }));
             return this.sync({ ...job, github, git, options, plan: await plans.get(key), passphrase: options.encryption ? await this.getPassphrase() : '', onProgress: update });
           }, { ...this.retryOptions, retries: q.config.execution.retries, onRetry: event => update({ status: 'retrying', attempt: event.attempt, retryAt: new Date(Date.now() + event.delay).toISOString() }) });
         } catch (error) { result = { fullName: job.repository.full_name, destination: path.join(job.source.destination, ...job.repository.full_name.split('/')), status: 'error', message: error.message, checkedAt: new Date().toISOString() }; }
@@ -276,7 +278,8 @@ class BackupService extends EventEmitter {
       else {
         const errors = q.results.filter(result => result.status === 'error'), details = q.results.length > 500 ? [...errors, ...q.results.filter(r => r.status !== 'error')].slice(0,500) : q.results;
         const elapsedMs = q.elapsedMs + Date.now() - this.sessionStarted;
-        this.state.history.unshift({ startedAt: q.startedAt, finishedAt: new Date().toISOString(), trigger: q.trigger, results: details, resultCount: q.results.length, errorCount: errors.length, truncatedResults: q.results.length - details.length, durationMs: elapsedMs, receivedBytes: q.receivedBytes + (this.transport?.bytes || 0), backupBytes: q.results.filter(r => ['cloned','updated','repaired'].includes(r.status)).reduce((sum,r) => sum + (r.bytes || 0),0) });
+        this.state.history.unshift({ startedAt: q.startedAt, finishedAt: new Date().toISOString(), trigger: q.trigger, results: details, resultCount: q.results.length, errorCount: errors.length, changedCount: q.results.filter(r => ['cloned','updated','repaired'].includes(r.status)).length, truncatedResults: q.results.length - details.length, durationMs: elapsedMs, receivedBytes: q.receivedBytes + (this.transport?.bytes || 0), backupBytes: q.results.filter(r => ['cloned','updated','repaired'].includes(r.status)).reduce((sum,r) => sum + (r.bytes || 0),0) });
+        if (q.scheduledSources) this.state.lastScheduledBySource = { ...this.state.lastScheduledBySource, ...q.scheduledSources };
         this.state.history = this.state.history.slice(0,100); this.state.queue = null; completedRun = true;
       }
     } catch (error) {
@@ -287,7 +290,8 @@ class BackupService extends EventEmitter {
       if (this.state.queue) { this.state.queue.elapsedMs += Date.now() - this.sessionStarted; this.state.queue.receivedBytes += this.transport?.bytes || 0; }
       try { await this.transport?.close(); } finally { this.transport = null; try { await this.saveState(this.state); } finally { try { await release(); } finally { this.busy = false; this.progress = null; this.emit('change'); } } }
     }
-    return this.state.queue ? { paused: true, reason: this.state.queue.pauseReason } : completedRun ? this.state.history[0] : this.state.history[0];
+    if (completedRun) this.emit('complete',this.state.history[0]);
+    return this.state.queue ? { paused: true, reason: this.state.queue.pauseReason } : this.state.history[0];
   }
 }
 module.exports = { syncRepository, resolveJobs, BackupService, managed, verifyBackup, MARKER, jobId, heavy };

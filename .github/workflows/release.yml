@@ -42,7 +42,7 @@ jobs:
           node -e 'if (!require("semver").valid(process.argv[1])) process.exit(1)' "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if [[ "$(gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null || true)" == 'false' ]]; then
             echo 'publish=false' >> "$GITHUB_OUTPUT"
           else
             echo 'publish=true' >> "$GITHUB_OUTPUT"
@@ -165,6 +165,7 @@ jobs:
 
   publish:
     name: Publish GitHub release
+    timeout-minutes: 30
     needs: [prepare, packages, flatpak]
     runs-on: ubuntu-24.04
     permissions:
@@ -199,6 +200,5 @@ jobs:
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
           RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
         run: |
-          cd release-assets
-          sha256sum * > SHA256SUMS.txt
-          gh release create "v$RELEASE_VERSION" ./* --repo "$GITHUB_REPOSITORY" --target "$RELEASE_COMMIT" --title "Git Cloner $RELEASE_VERSION" --notes-file ../docs/RELEASE-NOTES.md
+          (cd release-assets && sha256sum * > SHA256SUMS.txt)
+          node scripts/publish-release.cjs release-assets docs/RELEASE-NOTES.md

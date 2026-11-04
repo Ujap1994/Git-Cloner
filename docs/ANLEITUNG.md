@@ -297,3 +297,68 @@ Unter **Darstellung** lässt sich **Hoher Kontrast** aktivieren. Tastaturbedienu
 | Cmd/Ctrl + Komma | Einstellungen öffnen. |
 | F1 | Tastenkürzel anzeigen. |
 | Esc | Dialog schließen. |
+
+
+## 17. Eigene Prüfzeiten je Quelle
+
+Unter **Quellen → Quelle bearbeiten → Prüfzeiten dieser Quelle** die Option **Eigene Prüfzeiten verwenden** aktivieren. Anschließend zwischen einer und 24 täglichen Prüfungen wählen und jede Uhrzeit eintragen. Beispiel: `01:00`, `09:00` und `17:00` für `beispiel-konto/projekt`. Die Auswahl **Nur manuell** nimmt diese Quelle aus automatischen Zeitprüfungen heraus; manuelle Durchläufe können sie weiterhin sichern.
+
+Ohne eigene Zeiten gilt der allgemeine Zeitplan. Die globale Pause unter **Zeitplan** pausiert auch die eigenen Quellenzeiten. **Jetzt prüfen** führt einen normalen Durchlauf für alle aktiven Quellen aus. Jede Quelle erhält einen eigenen gespeicherten Prüfstand; ein Lauf für eine Quelle verhindert keine fällige Prüfung einer anderen. Nach dem Aufwachen wird je Quelle nur die letzte verpasste Uhrzeit des aktuellen Tages nachgeholt.
+
+Bei aktivierter unabhängiger System-Zeitplanung übernimmt die installierte native App die gemeinsamen Termine automatisch nach dem Speichern. Der Rechner muss weiterhin eingeschaltet und wach sein.
+
+![Eigene Prüfzeiten einer anonymisierten Quelle](screenshots/source-schedule.png)
+
+## 18. Releases mit Betriebssystemauswahl sichern
+
+Unter **Einstellungen → Sicherung** die Option **Releases mit Download-Dateien** einschalten. Im Bereich **Release-Dateien** auswählen:
+
+- **Alle Betriebssysteme:** alle vom Projekt angebotenen Dateien des neuesten offiziellen Releases sichern.
+- **Nur mein Betriebssystem:** Dateien für das automatisch erkannte **Windows, macOS oder Linux** sichern. Das erkannte System steht direkt neben der Auswahl. Alle Architekturen und Linux-Paketformate des jeweiligen Betriebssystems bleiben enthalten.
+
+Die App ordnet Pakete anhand ihrer Namen und Dateiendungen zu. Dateien ohne eindeutige Zuordnung werden im OS-Modus ausgelassen; gemeinsame Prüfsummen und allgemeine Hinweise bleiben enthalten. Falls benötigte Dateien unklare Namen haben, **Alle Betriebssysteme** verwenden. Die konkrete Auswahl einschließlich ausgelassener Dateien wird mit der Sicherung dokumentiert. GitHubs automatisch erzeugte Quellcode-ZIP- und TAR-Archive werden nicht zusätzlich geladen; der Git-Inhalt wird über die Repository-Sicherung erfasst. Für alle Git-Tags und die Historie den Mirror-Modus verwenden.
+
+Die Einstellung kann unter **Sicherungsumfang dieser Quelle** für einzelne Quellen überschrieben werden. Ein Download wird in den neuen Sicherungsstand integriert. Die App prüft angegebene Dateigrößen und vorhandene SHA256-Digests beim Herunterladen; bei Fehlern bleibt der bisherige erfolgreiche Stand erhalten. Die Platzprüfung berücksichtigt bekannte Release-Dateigrößen zusätzlich zum Repository.
+
+Gesichert werden Dateien des neuesten offiziellen, stabilen Releases je Repository. Frühere Release-Metadaten können im JSON-Export enthalten sein, ihre alten Download-Dateien werden nicht zusätzlich aufgehoben. Die Auswahl bezieht sich auf deine Sicherungsquellen. Die Update-Prüfung für Git Cloner selbst informiert weiterhin nur und installiert keine Programmversion automatisch.
+
+![Release-Auswahl und automatisch erkanntes System](screenshots/release-filter.png)
+
+In der **Übersicht** zeigt eine Sicherung mit Release-Dateien den gespeicherten Tag und die Dateizahl. Über **Release-Dateien wiederherstellen** den Wiederherstellungsassistenten öffnen. **Dateien auswählen**, gewünschte Pakete markieren und einen neuen Ausgabeordner angeben. Beispiel: übergeordneter Ordner `/Volumes/Arbeitsplatte`, neuer Name `projekt-release`. Vorhandene Ausgabeordner werden abgelehnt. Der Assistent kopiert nur die gewählten Release-Dateien und prüft ihre Integrität. Dies funktioniert auch mit verschlüsselten Sicherungen und Mirrors. Heruntergeladene Programme werden nicht automatisch gestartet.
+
+![Release-Dateien getrennt wiederherstellen](screenshots/release-restore.png)
+
+## 19. Änderungen vor einer Sicherung ansehen
+
+In der **Übersicht** bei einer vorhandenen Sicherung **Änderungen ansehen** wählen. Die App vergleicht den gespeicherten Git-Stand mit dem aktuellen Standardbranch auf GitHub. Die Liste unterscheidet neue, geänderte und entfernte Dateien. Die Suche filtert Dateipfade; größere Listen werden seitenweise angezeigt.
+
+Eine Datei anklicken, um ihren Text-Diff zu laden. Textdateien werden bis 256 KiB je Version angezeigt. Große Dateien und Submodule bleiben in der Dateiliste; für Binär- und LFS-Dateien gibt es keine Textansicht. Eine sehr große oder von GitHub gekürzte Dateiliste kann die Vorschau verhindern. Der normale Sicherungslauf bleibt dann verfügbar.
+
+Die Vorschau verändert die gespeicherte Sicherung nicht und führt keinen Projektcode aus. Bei verschlüsselten Sicherungen gegebenenfalls zuerst das Archivpasswort eingeben. Während der Vorschau warten automatische Backups. Schließen gibt die Sicherung wieder frei; eine ungenutzte Sitzung läuft nach etwa fünf Minuten ab. **Alle aktiven Quellen prüfen** schließt die Vorschau und startet den normalen Durchlauf für alle aktiven Quellen.
+
+![Änderungsliste mit echtem Text-Diff](screenshots/change-preview.png)
+
+## 20. Laufwerke nach geändertem Pfad wiederfinden
+
+Unter **Zeitplan → Laufwerke wiederfinden** lässt sich die automatische Zuordnung einschalten. Die App sucht bekannte Sicherungsordner auf verbundenen Laufwerken anhand ihrer gespeicherten Ordnerkennung und des relativen Speicherorts. Sie prüft ungefähr einmal pro Minute und vor einem neuen Sicherungslauf. Eine Suche lässt sich außerdem unter **Quellen → Laufwerke wiederfinden** direkt starten.
+
+Beispiel: Eine bekannte Platte wechselt von `/Volumes/Archiv` nach `/Volumes/Archiv 1` oder unter Windows von `E:` nach `F:`. Bei einem eindeutigen Treffer aktualisiert die App die Zuordnung. Die vorhandene Sicherung wird weiterverwendet; sie wird nicht für die Suche verschoben oder neu geklont. Bereits abgeschlossene Aufgaben einer pausierten Warteschlange bleiben abgeschlossen.
+
+Bei mehreren gleichen Kennungen wird keine automatische Auswahl getroffen. Das kann nach dem vollständigen Kopieren einer Sicherungsplatte vorkommen. Den gewünschten Ordner dann in der Quelle bewusst neu auswählen. Die Ordnerkennung ist keine Hardware-Seriennummer. Fehlt ein Laufwerk, erstellt die Suche keinen Ersatzordner am alten Pfad.
+
+![Anonymisierte Quelle nach erfolgreicher Laufwerkszuordnung](screenshots/drive-recovery.png)
+
+## 21. Benachrichtigungen und Ruhezeiten
+
+Unter **Einstellungen → Meldungen** lassen sich Systemmeldungen insgesamt ausschalten oder genauer festlegen:
+
+- **Alle abgeschlossenen Prüfungen** meldet jeden abgeschlossenen Durchlauf.
+- **Nur Fehler** meldet nur Durchläufe mit Fehlern.
+- **Änderungen und Fehler** meldet neue oder aktualisierte Sicherungen sowie Fehler.
+- **Keine Sicherungsmeldungen** lässt Sicherungsläufe ohne Systemmeldung laufen.
+
+Diese Regeln gelten für manuelle und automatische Läufe. Status und Verlauf bleiben in der App sichtbar. Unter **Neue Programmversionen** kann die Systemmeldung separat deaktiviert werden; ein verfügbarer Versionshinweis bleibt dann in der App sichtbar. „Diese Version überspringen“ behält seine bisherige Wirkung über Neustarts.
+
+Für eine Ruhezeit **Ruhezeit aktivieren** einschalten und beispielsweise `22:00` bis `07:00` eintragen. Es gilt die lokale Uhrzeit; Zeiträume über Mitternacht werden unterstützt. Währenddessen erscheinen keine Systemmeldungen. Sicherungsmeldungen werden nicht nachträglich gesammelt. Ein noch nicht gemeldeter neuer Versionshinweis kann nach Ende der Ruhezeit erscheinen, während die App aktiv ist. Betriebssystemberechtigungen und dessen eigene Fokus-/Nicht-stören-Einstellungen gelten zusätzlich.
+
+![Ausgerichtete Benachrichtigungs- und Ruhezeiteinstellungen](screenshots/notification-rules.png)

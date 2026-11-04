@@ -89,7 +89,7 @@ test('metadata export saves issues, comments, reviews, releases and assets',asyn
     if(endpoint.includes('/pulls?'))return[{number:2,title:'PR'}];
     if(endpoint.endsWith('/releases'))return[{tag_name:'v1',assets:[{id:10,name:'release.bin'}]}];
     return[{body:'metadata'}];
-  },downloadAsset:async(_name,_id,file)=>fs.writeFile(file,'asset bytes')};
+  },request:async()=>({tag_name:'v1',assets:[{id:10,name:'release.bin'}]}),downloadAsset:async(_name,_id,file)=>fs.writeFile(file,'asset bytes')};
   f.options.metadata={issues:true,pullRequests:true,releases:true,wiki:false};
   const record=await f.sync({github});assert.equal(record.status,'cloned');
   const metadata=path.join(f.target,'.git','git-cloner-metadata');

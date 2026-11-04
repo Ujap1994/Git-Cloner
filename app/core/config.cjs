@@ -7,13 +7,15 @@ const DEFAULT_CONFIG = {
   launchAtLogin: false,
   closeToTray: true,
   notifications: true,
+  notificationRules: { backup: 'all', updates: true, quietHours: { enabled: false, start: '22:00', end: '07:00' } },
   checkUpdates: true,
-  backup: { mode: 'snapshot', lfs: false, submodules: false, metadata: { issues: false, pullRequests: false, releases: false, wiki: false }, encryption: false, integrity: 'weekly', reserveMB: 512 },
+  backup: { mode: 'snapshot', lfs: false, submodules: false, metadata: { issues: false, pullRequests: false, releases: false, wiki: false }, releaseScope: 'all', encryption: false, integrity: 'weekly', reserveMB: 512 },
   accounts: [],
   appearance: { language: 'de', theme: 'system', fontScale: 1, highContrast: false },
   execution: { concurrency: 2, smallRepoMB: 50, retries: 2, bandwidthKBps: 0, onlyOnAC: false, allowedNetworks: [] },
   setupCompleted: false,
   onDriveConnect: false,
+  autoRelocate: true,
   systemSchedule: false,
   oauthClientId: ''
 };
@@ -59,18 +61,18 @@ function validateConfig(input) {
     if (typeof accountId !== 'string' || !/^[a-z\d-]{1,64}$/i.test(accountId)) throw new Error('Ungültiges GitHub-Konto.');
     const additionalDestinations = (source.additionalDestinations ?? []).map(validateTarget);
     if (additionalDestinations.length > 9) throw new Error('Maximal zehn Ziele pro Quelle.');
-    return { id: source.id, kind: source.kind, value, destination: path.resolve(source.destination), enabled: source.enabled, ...(source.volumeId ? { volumeId: source.volumeId } : {}), accountId, filters, additionalDestinations, backup: source.backup == null ? null : validateBackup(source.backup) };
+    const volumeHint = validateVolumeHint(source.volumeHint, source.destination);
+    return { id: source.id, kind: source.kind, value, destination: path.resolve(source.destination), enabled: source.enabled, ...(source.volumeId ? { volumeId: source.volumeId } : {}), ...(volumeHint ? { volumeHint } : {}), accountId, filters, additionalDestinations, backup: source.backup == null ? null : validateBackup(source.backup), schedule: source.schedule == null ? null : validateSchedule(source.schedule) };
   });
-  const s = input.schedule;
-  if (!s || typeof s.enabled !== 'boolean' || !Number.isInteger(s.checksPerDay) || s.checksPerDay < 1 || s.checksPerDay > 24) throw new Error('Bitte 1 bis 24 Prüfungen pro Tag auswählen.');
-  if (!Array.isArray(s.times) || s.times.length !== s.checksPerDay || s.times.some(t => typeof t !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(t)) || new Set(s.times).size !== s.times.length) {
-    throw new Error('Für jede Prüfung eine eigene, gültige Uhrzeit eintragen.');
-  }
-  const result = { schemaVersion: 1, sources, schedule: { enabled: s.enabled, checksPerDay: s.checksPerDay, times: [...s.times].sort() } };
+  const result = { schemaVersion: 1, sources, schedule: validateSchedule(input.schedule) };
   for (const key of ['launchAtLogin', 'closeToTray', 'notifications', 'checkUpdates']) {
     if (typeof input[key] !== 'boolean') throw new Error(`Ungültige Einstellung: ${key}`);
     result[key] = input[key];
   }
+  const rules = { ...DEFAULT_CONFIG.notificationRules, ...input.notificationRules, quietHours: { ...DEFAULT_CONFIG.notificationRules.quietHours, ...input.notificationRules?.quietHours } };
+  if (!['all','errors','changes','none'].includes(rules.backup) || typeof rules.updates !== 'boolean' || typeof rules.quietHours.enabled !== 'boolean' || [rules.quietHours.start,rules.quietHours.end].some(t => typeof t !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) throw new Error('Ungültige Benachrichtigungsregel.');
+  if (rules.quietHours.enabled && rules.quietHours.start === rules.quietHours.end) throw new Error('Beginn und Ende der Ruhezeit müssen verschieden sein.');
+  result.notificationRules = { backup: rules.backup, updates: rules.updates, quietHours: { enabled: rules.quietHours.enabled, start: rules.quietHours.start, end: rules.quietHours.end } };
   result.backup = validateBackup(input.backup);
   const accounts = input.accounts ?? [];
   if (!Array.isArray(accounts) || accounts.length > 20) throw new Error('Maximal 20 GitHub-Konten.');
@@ -94,6 +96,8 @@ function validateConfig(input) {
     if (input[key] !== undefined && typeof input[key] !== 'boolean') throw new Error('Ungültige Zeitplanoption.');
     result[key] = input[key] ?? false;
   }
+  if (input.autoRelocate !== undefined && typeof input.autoRelocate !== 'boolean') throw new Error('Ungültige Laufwerksoption.');
+  result.autoRelocate = input.autoRelocate ?? true;
   if (typeof (input.oauthClientId ?? '') !== 'string' || !/^[a-z\d._-]{0,100}$/i.test(input.oauthClientId ?? '')) throw new Error('Ungültige OAuth-Client-ID.');
   result.oauthClientId = input.oauthClientId ?? '';
   return result;
@@ -101,6 +105,7 @@ function validateConfig(input) {
 function validateBackup(input) {
   const backup = { ...DEFAULT_CONFIG.backup, ...input, metadata: { ...DEFAULT_CONFIG.backup.metadata, ...input?.metadata } };
   if (!['snapshot', 'mirror'].includes(backup.mode) || !['always', 'weekly', 'manual'].includes(backup.integrity)) throw new Error('Ungültiger Sicherungsmodus.');
+  if (!['all','system'].includes(backup.releaseScope)) throw new Error('Ungültige Auswahl für Release-Dateien.');
   for (const key of ['lfs', 'submodules', 'encryption']) if (typeof backup[key] !== 'boolean') throw new Error('Ungültige Sicherungsoption.');
   if (backup.mode === 'mirror' && backup.submodules) throw new Error('Submodule benötigen den Modus Arbeitskopie.');
   if (!Number.isInteger(backup.reserveMB) || backup.reserveMB < 64 || backup.reserveMB > 1048576) throw new Error('Speicherreserve muss zwischen 64 und 1048576 MB liegen.');
@@ -109,15 +114,30 @@ function validateBackup(input) {
     if (typeof backup.metadata[key] !== 'boolean') throw new Error('Ungültige Metadatenoption.');
     metadata[key] = backup.metadata[key];
   }
-  return { mode: backup.mode, lfs: backup.lfs, submodules: backup.submodules, encryption: backup.encryption, integrity: backup.integrity, reserveMB: backup.reserveMB, metadata };
+  return { mode: backup.mode, lfs: backup.lfs, submodules: backup.submodules, encryption: backup.encryption, integrity: backup.integrity, reserveMB: backup.reserveMB, metadata, releaseScope: backup.releaseScope };
 }
 function effectiveBackup(config, source) { return { ...(source.backup ?? config.backup ?? DEFAULT_CONFIG.backup), encryptionKeyId: config.backup?.encryptionKeyId }; }
 
 function validateTarget(target) {
   if (!target || typeof target.id !== 'string' || !/^[a-z\d-]{1,64}$/i.test(target.id) || typeof target.destination !== 'string' || !path.isAbsolute(target.destination) || target.destination.includes('\0')) throw new Error('Ungültiges zusätzliches Sicherungsziel.');
   if (target.volumeId !== undefined && !/^[a-f\d-]{36}$/.test(target.volumeId)) throw new Error('Ungültige Laufwerkskennung.');
-  return { id: target.id, destination: path.resolve(target.destination), ...(target.volumeId ? { volumeId: target.volumeId } : {}) };
+  const volumeHint = validateVolumeHint(target.volumeHint, target.destination);
+  return { id: target.id, destination: path.resolve(target.destination), ...(target.volumeId ? { volumeId: target.volumeId } : {}), ...(volumeHint ? { volumeHint } : {}) };
 }
+function validateVolumeHint(input, destination) {
+  if (input == null) return null;
+  if (typeof input.root !== 'string' || !path.isAbsolute(input.root) || input.root.includes('\0') || typeof input.relative !== 'string' || input.relative.length > 4096 || path.isAbsolute(input.relative) || input.relative.split(/[\\/]/).some(p => p === '..' || p === '.') || input.relative.includes('\0')) throw new Error('Ungültiger Laufwerkspfad.');
+  const relative = path.relative(input.root,destination).split(path.sep).join('/');
+  if (relative !== input.relative || relative.startsWith('../')) throw new Error('Laufwerkskennung und Zielordner passen nicht zusammen.');
+  if (input.canonical !== undefined && (typeof input.canonical !== 'string' || !path.isAbsolute(input.canonical) || input.canonical.includes('\0'))) throw new Error('Ungültiger Laufwerkspfad.');
+  return { root: path.resolve(input.root), relative, ...(input.canonical ? {canonical:path.resolve(input.canonical)} : {}) };
+}
+function validateSchedule(schedule) {
+  if (!schedule || typeof schedule.enabled !== 'boolean' || !Number.isInteger(schedule.checksPerDay) || schedule.checksPerDay < 1 || schedule.checksPerDay > 24) throw new Error('Bitte 1 bis 24 Prüfungen pro Tag auswählen.');
+  if (!Array.isArray(schedule.times) || schedule.times.length !== schedule.checksPerDay || schedule.times.some(t => typeof t !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(t)) || new Set(schedule.times).size !== schedule.times.length) throw new Error('Für jede Prüfung eine eigene, gültige Uhrzeit eintragen.');
+  return { enabled: schedule.enabled, checksPerDay: schedule.checksPerDay, times: [...schedule.times].sort() };
+}
+function effectiveSchedule(config, source) { const own = source.schedule ?? config.schedule; return { ...own, enabled: config.schedule.enabled && own.enabled }; }
 function validateFilters(input = {}) {
   const result = { includeForks: input.includeForks ?? true, includeArchived: input.includeArchived ?? true };
   if (typeof result.includeForks !== 'boolean' || typeof result.includeArchived !== 'boolean') throw new Error('Ungültiger Repository-Filter.');
@@ -129,4 +149,4 @@ function validateFilters(input = {}) {
   return result;
 }
 
-module.exports = { defaults, validateConfig, parseSource, validateFilters, validateBackup, effectiveBackup };
+module.exports = { defaults, validateConfig, parseSource, validateFilters, validateBackup, effectiveBackup, validateSchedule, effectiveSchedule };

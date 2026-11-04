@@ -25,7 +25,16 @@ async function prepareDestination(source) {
   }
   if (!marker || marker.schemaVersion !== 1 || !/^[a-f\d-]{36}$/.test(marker.id)) throw new Error('Ungültige Laufwerkskennung im Zielordner.');
   if (source.volumeId && source.volumeId !== marker.id) throw new Error('An diesem Pfad ist ein anderes Laufwerk angeschlossen.');
-  return { ...source, volumeId: marker.id };
+  return { ...source, volumeId: marker.id, volumeHint: await destinationHint(source.destination) };
+}
+async function destinationHint(destination) {
+  const original = path.resolve(destination); let root = original, current = await fs.stat(root);
+  for (;;) {
+    const parent = path.dirname(root); if (parent === root) break;
+    const info = await fs.stat(parent); if (info.dev !== current.dev) break;
+    root = parent; current = info;
+  }
+  return { root, relative: path.relative(root,original).split(path.sep).join('/'), canonical: await fs.realpath(original) };
 }
 
 async function verifyDestination(source) {
@@ -59,4 +68,4 @@ async function checkSpace(root, estimatedBytes = 0, reserveMB = 512) {
   if (available < required) throw new Error('Nicht genug freier Speicher für den neuen Stand und die eingestellte Reserve.');
   return { availableBytes: available.toString(), requiredBytes: required.toString() };
 }
-module.exports = { prepareDestination, verifyDestination, safeDirectory, VOLUME_MARKER, existingRoot, checkSpace };
+module.exports = { prepareDestination, verifyDestination, safeDirectory, VOLUME_MARKER, existingRoot, checkSpace, destinationHint };

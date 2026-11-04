@@ -1,61 +1,57 @@
 # Tatsächlich ausgeführte Prüfungen
 
-Stand: 4. November 2026, Git Cloner **3.0.0**. Diese Übersicht trennt ausgeführte lokale Prüfungen, vorbereitete Workflows und externe Veröffentlichungsschritte.
+Stand: 4. November 2026, Git Cloner **3.1.0**. Prüfungen mit GitHub-Antworten aus Test-Fixtures und tatsächliche Plattformläufe werden getrennt ausgewiesen.
 
-## Aktuelle Version 3
+## Lokale Prüfung von Version 3.1
 
 | Umgebung / Prüfung | Tatsächliches Ergebnis |
 | --- | --- |
-| Node 24.22.1, `npm run check` | ESLint und **109 Kern-/Integrationstests erfolgreich**, keine übersprungenen Tests. |
-| Node 22.23.4 | Dieselben **109 Tests erfolgreich**, keine übersprungenen Tests. |
-| Lokale Electron-GUI | **22 Tests erfolgreich**, einschließlich Setup, Probelauf, Layout, Kontrast, Tastatur, Pause über Neustarts und vollständiger/selektiver verschlüsselter Wiederherstellung. |
-| Fedora 45 Container | **109 Kern-/Integrationstests und 20 GUI-Tests erfolgreich**, keine übersprungenen oder instabilen Tests. Die separate allgemeine Screenshot-Spezifikation ist hier ausgenommen. |
-| Node-Codeabdeckung | Bericht für den geladenen Node-Code erstellt. Er umfasst auch Testcode und ist keine kombinierte Abdeckung der Electron-Oberfläche. |
-| Echter GitHub-Transport | Öffentliches Repository über den gemeinsam auf 256 KiB/s begrenzten HTTPS-Tunnel geklont und mit Git-fsck geprüft. Netzwerkdaten wurden tatsächlich gemessen; TLS-Prüfung blieb aktiv. Keine Quelle wurde in der App voreingestellt. |
-| Produktionsabhängigkeiten | `npm audit --omit=dev`: zum Prüfzeitpunkt keine gemeldeten Schwachstellen. |
-| Konfiguration | Electron-Builder-, CI- und Release-YAML geparst; lokale Dokumentationslinks und Screenshots werden vor Übergabe geprüft. |
-| GitHub-CI | [Zweiter Gesamtlauf](https://github.com/Ujap1994/Git-Cloner/actions/runs/41808990622): **alle zehn Jobs erfolgreich**, einschließlich Windows x64/ARM64, macOS Intel/ARM64 und der vier Linux-Distributionen. Native GUI-Suiten: jeweils 22 Tests; Distro-Suiten: jeweils 21 Tests. Windows überspringt zwei unzutreffende Unix-/Symlink-Prüfungen ausdrücklich. |
-| GitHub-Paketbau | Im [ersten Release-Lauf](https://github.com/Ujap1994/Git-Cloner/actions/runs/41809351735) bestanden alle sieben nativen Paketjobs: Windows x64/ARM64, macOS Universal/ARM64/x64 und Linux x64/ARM64. Der separate Flatpak-Job machte eine fehlende optionale Rust-Buildabhängigkeit sichtbar; siehe unten. |
+| Node 24.22.1, `npm run check` | ESLint und **139 Kern-/Integrationstests erfolgreich**, keine übersprungenen Tests. |
+| Node 22.23.4 | Dieselben **139 Tests erfolgreich**, keine übersprungenen Tests. |
+| Echte Electron-GUI auf Linux/Xvfb | **29 Tests erfolgreich**. Alle sechs neuen Ansichten wurden zusätzlich als echte Screenshots aufgenommen. |
+| Gepackte Linux-x64-App | `build:dir` und echter Start erfolgreich: Version 3.1.0, `isPackaged`, Preload, leere Quellen, Leistungsregeln, OS-Erkennung, Release-Filter und Meldungseinstellungen geprüft. Neue Module und die Diff-Abhängigkeit sind im ASAR enthalten. |
+| Produktionsabhängigkeiten | `npm audit --omit=dev`: zum Prüfzeitpunkt **keine gemeldeten Schwachstellen**. |
+| Konfiguration und Dokumentation | Builder-/Workflow-YAML geparst, Shellskripte syntaktisch geprüft und 64 lokale Dokumentations-/Bildverweise auf vorhandene Dateien geprüft. |
 
-Die Kernprüfungen verwenden echte lokale Git-Repositories und Git LFS. Sie prüfen Mirrors und Refs, inkrementelle Aktualisierung, Integrität, fremde Dateien, Laufwerkswechsel, Absturzerholung, Verschlüsselung, falsche Passwörter, veränderte Archive, Metadaten, Konten, Filter, ETags, Device Flow, Prozesssperren und native Zeitplanvorlagen.
+Die Kernprüfungen verwenden echte lokale Git-Repositories, lokale Laufwerksordner und Git LFS. GitHub-Antworten für kontrollierte Release-, API- und Fehlerszenarien sind Fixtures; sie erzeugen keine fiktiven offiziellen Veröffentlichungen.
 
-Zusätzliche Version-3-Prüfungen decken ab:
+Die zusätzlichen Prüfungen für Version 3.1 umfassen:
 
-- Pausieren nach aktiven Aufgaben, Wiederaufnahme aus einem tatsächlich neu geöffneten Profil und Überspringen bereits abgeschlossener Ziele.
-- Parallelitätsgrenzen und exklusive Verarbeitung aufwendiger Backups.
-- Ressourcenregeln vor der ersten API-Abfrage und automatisches Fortsetzen nach Freigabe der Stromregel.
-- Reales Download-Limit mit gemeinsamem Budget, Backoff und Begrenzung verschachtelter Wiederholungen.
-- Abgebrochene Release-Streams, Schutz bestehender Dateien und Entfernen von Zugangsdaten bei Asset-Weiterleitungen.
-- Freigabe des Prozess-Lease bei Schreibfehlern sowie Abwarten laufender Jobs vor Freigabe nach unerwarteten Fehlern.
-- Kollisionen zwischen Repo-Zielen und temporären Staging-/Rollback-Pfaden.
-- Selektive Wiederherstellung aus Snapshots, verschlüsselten Archiven und Mirror-HEAD, einschließlich ausführbarer Dateien und echter LFS-Inhalte.
-- Schutz vor Pfad-Traversal, Windows-Gerätenamen/ADS, veränderten Manifesten und geänderten ausgewählten Dateien.
-- Wiederherstellung intakter Dateien trotz Schäden an ungewählten Dateien; Ablauf und Bereinigung privater Browsing-Sitzungen.
-- Gleich hohe Felder, große englische Schrift ohne horizontalen Seitenüberlauf, hoher Kontrast mit gemessener Textkontrastprüfung sowie Tastenkürzel und Reiternavigation.
-- Der Überspringlink fokussiert den Hauptinhalt, ohne die Fensteradresse zu verändern; Einstellungen und andere App-Anfragen funktionieren anschließend weiterhin.
+- Quellenzeitpläne, globale Pause, unabhängige Prüfstände und native Windows-Aufgaben mit begrenzter Triggerzahl.
+- Vorrang einzelner Repository-Regeln auch dann, wenn nur die übergeordnete Kontoquelle fällig ist.
+- OS-Filter für Windows/macOS/Linux, mehrdeutige Dateinamen, gemeinsame Prüfsummen und den ungefilterten Modus.
+- Wechsel des neuesten Releases und der OS-Auswahl; Dateigrößen und SHA256; ein fehlgeschlagener Download erhält den bisherigen erfolgreichen Stand und schützt fremde Dateien.
+- Release-Dateien getrennt wiederherstellen, einschließlich eines tatsächlich verschlüsselten Mirrors.
+- Echte Git-Diffs mit erhaltenen Leerzeichen, verzögertes Laden, Binär-/Größenbegrenzung, HTML-Escaping, verschlüsselte Vorschau, Abbruch einer wartenden Anfrage und Freigabe der Prozesssperre nach Fehlern.
+- Laufwerkspfadänderungen, mehrdeutige kopierte Ordnerkennungen, unterbrochene Metadatenänderungen und abgeschlossene Aufgaben in pausierten Warteschlangen.
+- Benachrichtigungsregeln bei manuellen und automatischen Läufen sowie Fortsetzen; Ruhezeitgrenzen über Mitternacht und nachgeholte Versionsmeldungen ohne doppelte Meldung.
+- Begrenzung des GitHub-ETag-Caches.
+- Veröffentlichungswiederholung nach einer unklaren HTTP-502-Antwort, identische bereits veröffentlichte Releases, Ablehnung falscher Dateihashes und Schutz eines Releases mit anderem Quellcommit.
 
-Die Versionsüberwachung wird weiterhin über mehrere App-Neustarts geprüft: dieselbe übersprungene Version bleibt verborgen, erst eine höhere Version meldet sich wieder, und die Auswahl kann ausdrücklich zurückgesetzt werden. Die Release-Antworten dieser Tests sind Fixtures, keine erfundenen offiziellen Veröffentlichungen.
+Die GUI-Prüfung kontrolliert leere Quellen beim ersten Start, deutsche und englische Texte, dunkle Darstellung, große Schrift ohne horizontalen Seitenüberlauf, hohen Kontrast, Tastatursteuerung und gleich hohe benachbarte Felder. Weitere Abläufe prüfen Setup, Probelauf, Pause über Neustarts, vollständige und selektive verschlüsselte Wiederherstellung sowie alle neuen Version-3.1-Ansichten.
 
-## Paketprüfung
+Die Versionsüberwachung wird über mehrere App-Neustarts geprüft: Dieselbe übersprungene Version bleibt verborgen, erst eine höhere Version meldet sich wieder. Die Auswahl kann ausdrücklich zurückgesetzt werden. Es gibt weiterhin keine automatische Update-Installation.
 
-Für Version 3 wurden tatsächlich **AppImage, DEB, RPM, TAR.GZ und ein Arch-/CachyOS-Pacman-Paket für Linux x64** gebaut. Die entpackte Anwendung und das AppImage über seinen eigenen Extract-and-run-Start wurden erfolgreich gestartet; Version 3.0.0, `isPackaged`, leere Quellenliste, Preload und die neuen Leistungseinstellungen wurden geprüft. TAR.GZ und Pacman-Archiv wurden vollständig gelesen, DEB-Inhalt/-Metadaten und RPM-Metadaten erfolgreich ausgewertet. Die Metadaten nennen Version 3.0.0 und die passende x64-Architektur. Ein Paketbau ersetzt keinen interaktiven Installations-/Deinstallationstest auf jedem Zielsystem.
+## CI und Veröffentlichung
 
-Diese lokalen Paket- und Fedora-Ergebnisse stammen vom Stand vor der abschließenden Korrektur des Überspringlinks. Der anschließende lokale Gesamtlauf mit 22 GUI-Tests und ESLint prüft auch diese Korrektur; die Release-Pipeline baut Pakete aus ihrem jeweils geprüften Commit neu.
+Die [CI-Läufe](https://github.com/Ujap1994/Git-Cloner/actions/workflows/ci.yml) prüfen native Windows-x64-/ARM64- und macOS-Intel-/ARM64-Runner, Linux, Node 22 sowie Fedora-, Mint-, Arch- und CachyOS-Container. Jeder native Hauptjob führt Kernprüfungen, echte Electron-GUI-Tests und einen Paketierungscheck aus. Distro-Jobs nehmen die zusätzliche allgemeine Screenshot-Spezifikation aus; die Funktions- und Layouttests laufen dort ebenfalls. Windows lässt zwei ausdrücklich unzutreffende Unix-/Symlink-Prüfungen aus.
 
-Der erste tatsächliche Flatpak-Bau kompilierte Git 2.56 bis zum Aufruf des im SDK fehlenden Cargo-Werkzeugs. Der [isolierte Paketcheck](https://github.com/Ujap1994/Git-Cloner/actions/workflows/flatpak-check.yml) protokolliert die vollständige Compilerausgabe. Die Paketkonfiguration verwendet nun Gits ausdrücklich unterstützten `NO_RUST`-Build mit den C-Implementierungen. `scripts/check-flatpak.sh` installiert das echte Paket und prüft eingebautes Git/Git LFS, einen lokalen Mirror mit Git-fsck und eine öffentliche HTTPS-Abfrage. Auch der Release-Job führt diese Prüfung aus und bewahrt das Buildprotokoll als Artefakt auf. Der jeweilige Abschlussstatus steht unter [Actions](https://github.com/Ujap1994/Git-Cloner/actions).
+Die [Release-Läufe](https://github.com/Ujap1994/Git-Cloner/actions/workflows/release.yml) starten nach erfolgreicher CI und bauen die Dateien aus deren konkretem Commit. Die offizielle Freigabe erfolgt erst, nachdem alle Paketjobs bestanden haben und Namen, Größen sowie GitHub-SHA256-Digests sämtlicher Dateien gegen das veröffentlichte Prüfsummenmanifest geprüft wurden. Ein Entwurf kann bei einem vorübergehenden GitHub-Fehler fortgesetzt werden. Der Abschlussstatus und die Logs jedes tatsächlichen Laufs stehen in Actions; ein angelegter Workflow allein gilt nicht als erfolgreiche Prüfung.
 
-## Grenzen und historische Ergebnisse
+Die [Release-Seite](https://github.com/Ujap1994/Git-Cloner/releases) enthält die Pakete, `SHA256SUMS.txt` und aus den echten Dateien erzeugte Homebrew-, winget-, AUR- und Flathub-Katalogvorlagen. Öffentliche Einreichung und Annahme in diesen Verzeichnissen sind nicht erfolgt.
 
-Die Fedora-Prüfung verwendet distributionsspezifische Git-/LFS- und Desktop-Bibliotheken und echte Electron-Fenster auf Xvfb. Playwright beziehungsweise der isolierte Container-Harness verwendet testbezogen `--no-sandbox`. Der reguläre Produktstart behält seine Sandbox-Einstellungen. Die Testumgebung ist kein Nachweis einer Installation oder Autostartprüfung auf physischer Hardware.
+## Vorherige Version 3.0
 
-Frühere zusätzliche Version-2-Läufe: Fedora 45 mit 72 Kern-/12 GUI-Tests, Arch mit 74 Kern- und 13 GUI-Tests (ein später korrigierter Test zunächst instabil), CachyOS mit 74 Kern-/13 GUI-Tests. Diese älteren Ergebnisse werden nicht als ausgeführte Version-3-Tests ausgegeben. Der lokale Mint-Containerstart wurde wegen des begrenzten Speichers und des hohen Layer-Bedarfs des Docker-vfs-Treibers nicht abgeschlossen.
+Die abschließende [CI für Version 3.0](https://github.com/Ujap1994/Git-Cloner/actions/runs/41810930639) und der [Release-Lauf für Version 3.0](https://github.com/Ujap1994/Git-Cloner/actions/runs/41811357061) bestanden jeweils **alle zehn Jobs**. Version 3.0 ist mit 23 Release-Dateien veröffentlicht. Die 22 Manifest-Einträge wurden gegen die tatsächlichen GitHub-Asset-Digests geprüft. Ein echter Abruf durch die Versionsüberwachung wurde ebenfalls erfolgreich ausgeführt.
 
-Die CI definiert Windows x64/ARM64, macOS Intel/ARM64, Linux, Node 22 sowie Fedora/Mint/Arch/CachyOS. Native Mac-/Windows-Installation, Autostart und ARM64-Hardwaretests sowie ein vollständiger Flatpak-Build wurden in dieser Linux-Umgebung nicht ausgeführt. WLAN-Namen können unter macOS durch Datenschutzregeln verborgen sein; Linux benötigt NetworkManager, und im Flatpak kann die Ermittlung fehlen. Dann wartet eine ausdrücklich aktivierte WLAN-Regel auf einen ermittelbaren erlaubten Namen.
+Lokale Version-3.0-Prüfungen umfassten 109 Kern-/Integrationstests auf Node 22 und 24, 22 GUI-Tests und Linux-x64-Pakete als AppImage, DEB, RPM, TAR.GZ und Pacman-Archiv. Die entpackte Anwendung und das AppImage wurden gestartet. Fedora wurde zusätzlich lokal in einem Container geprüft. Diese älteren Paket- und Containerergebnisse werden nicht als lokale Version-3.1-Installationstests ausgegeben.
 
-Am 4. November 2026 wurde die neu freigegebene GitHub-Installation erfolgreich geprüft. Die vollständigen Quelltexte, Screenshots und Workflows sind als [Commit 905f170](https://github.com/Ujap1994/Git-Cloner/commit/905f17058161fda0aabf69de7c9069ffc2f9f558) veröffentlicht und über Git zurückgelesen worden; lokale und veröffentlichte Dateien hatten denselben Git-Baumhash. Der frühere HTTP-403-Fehler ist damit behoben. Die ursprüngliche lokale Entwicklungshistorie bleibt in einem Archivbranch und Git-Bundle gesichert. Siehe [GITHUB-ZUGRIFF.md](GITHUB-ZUGRIFF.md).
+## Grenzen der Prüfung
 
-Im [ersten echten CI-Lauf](https://github.com/Ujap1994/Git-Cloner/actions/runs/41808203866) bestanden Node 22, Ubuntu, Fedora, Mint, Arch, CachyOS, Windows ARM64 und macOS ARM64 ihre jeweiligen Jobs einschließlich GUI- beziehungsweise Paketprüfungen, soweit im Job definiert. Der Windows-x64-Kernlauf bestand mit 107 Tests und zwei ausdrücklich plattformspezifischen Ausnahmen (Symlink-Privilegien und Unix-Dateirechte). Sein GUI-Lauf deckte einen zu frühen Zustandsabruf im Speichertest auf. Die GUI-Tests warten deshalb jetzt ausdrücklich auf die sichtbare Speicherbestätigung; der anschließende lokale Gesamtlauf mit 22 Tests bestand. Weitere Ergebnisse sind unter [Actions](https://github.com/Ujap1994/Git-Cloner/actions) einsehbar. Ein angelegter Workflow gilt erst mit seinem tatsächlich erfolgreichen Abschluss als bestandene CI-/Release-Prüfung.
+GUI-Tests verwenden virtuelle Bildschirme beziehungsweise die nativen CI-Desktops. Der isolierte Container-Harness benötigt testbezogen `--no-sandbox`; der reguläre Produktstart behält seine Sandbox-Einstellungen. Paketbau und automatisierter App-Start ersetzen keine interaktive Installation, Deinstallation, Hardware-Autostartprüfung oder Prüfung realer Betriebssystembenachrichtigungen auf jedem Zielgerät.
 
-Homebrew-, winget-, AUR- und Flathub-Manifeste werden ausschließlich aus echten Release-Dateien und Prüfsummen erzeugt. Generator-Tests sind erfolgreich; öffentliche Einreichung und Annahme sind nicht erfolgt. Siehe [PAKETVERZEICHNISSE.md](PAKETVERZEICHNISSE.md).
+Laufwerksprüfungen verwenden temporäre Ordner und simulierte Mountlisten. Sie testen die Zuordnungslogik und unveränderte Sicherungsdaten, keine USB-Hardware. Die Kennung identifiziert einen Sicherungsordner, keine physische Seriennummer. WLAN-Namen können unter macOS durch Datenschutzregeln verborgen sein; Linux benötigt NetworkManager, und im Flatpak kann die Ermittlung fehlen. Eine ausdrücklich aktivierte WLAN-Regel wartet dann auf einen ermittelbaren erlaubten Namen.
 
-Verifizierte Signierung, Notarisierung und automatische Update-Installation bleiben auf ausdrücklichen Wunsch ausgeschlossen.
+Der GitHub-Schreibzugang wurde am 4. November 2026 erfolgreich geprüft. Veröffentlichten Quelltext vergleichen wir mit dem lokalen Git-Baumhash. Der frühere HTTP-403-Fehler ist behoben; die vorherige lokale Entwicklungshistorie bleibt im Archivbranch und Git-Bundle erhalten. Siehe [GITHUB-ZUGRIFF.md](GITHUB-ZUGRIFF.md).
+
+Verifizierte Herausgebersignierung, Notarisierung und automatische Update-Installation bleiben auf ausdrücklichen Wunsch ausgeschlossen.

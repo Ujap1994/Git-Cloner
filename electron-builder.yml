@@ -88,8 +88,10 @@ flatpak:
           sha256: e72cf723a4a660438862282e8aecf3885fc8123e88bfcad534cf6b941a354b75
     - name: git
       buildsystem: simple
+      build-options:
+        no-debuginfo: true
       build-commands:
-        - make -j2 prefix=/app NO_RUST=YesPlease NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PERL=YesPlease NO_PYTHON=YesPlease install
+        - make -j2 prefix=/app CFLAGS="$CFLAGS -O2 -g0" NO_RUST=YesPlease NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PERL=YesPlease NO_PYTHON=YesPlease install
         - install -Dm644 COPYING /app/share/licenses/git/COPYING
       sources:
         - type: archive

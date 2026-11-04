@@ -138,3 +138,22 @@ The overview adds elapsed time, approximate remaining time, measured downloads, 
 | No automatic check | Confirm enabled sources, saved times, awake computer, running app or enabled native worker. |
 
 For deeper setup, additional screenshots and OS details, see the [German guide](ANLEITUNG.md). [Architecture](ENTWICKLUNG.md), [distribution catalogs](PAKETVERZEICHNISSE.md) and [validation results](VALIDIERUNG.md) describe technical details and outstanding external publication/hardware steps.
+
+
+## New in 3.1: schedules, releases and previews
+
+**Per-source schedules:** open Sources → Edit source → Check times for this source. Enable custom times, choose 1–24 checks and enter each local time. “Manual only” disables scheduled runs for that source. Without an override, the general schedule applies. The global schedule pause also pauses custom source schedules. Each source has its own persisted checkpoint; manual checks still process all enabled sources. Native OS scheduling combines the enabled sources’ times.
+
+**Release assets:** under Settings → Backup, enable releases with downloadable assets, then choose all operating systems or the automatically detected Windows, macOS or Linux. The filter includes all architectures of that OS. Unknown package names are excluded in OS mode; shared checksums and documentation remain included. Choose all systems when a required asset has an unrecognized name. The latest official stable release’s assets are kept in the single current backup; older release metadata can remain in JSON exports. Automatic GitHub source archives are not downloaded separately. Git data follows your snapshot/mirror choice.
+
+Release downloads are checked against declared sizes and available GitHub SHA256 digests. A failed download keeps the previous successful backup. Use the overview’s “Restore release assets” action to select individual packages and copy them into a new folder. Encrypted backups and mirrors are supported. Programs are never installed or executed automatically.
+
+![Release filter and automatic OS detection](screenshots/release-filter.png)
+
+**Change preview:** choose “Review changes” on an existing backup. Search the added, modified and deleted files, then select a file to load a text diff. Text previews are limited to 256 KiB per version. Large files and submodules are listed; binary and LFS files have no text preview. A truncated GitHub tree can prevent a complete preview while regular backups remain available. The saved backup is unchanged and no project code runs. Backups wait while the dialog is open; closing or expiry releases the session. “Check all enabled sources” starts the regular run after closing.
+
+![Real Git text changes before backup](screenshots/change-preview.png)
+
+**Moved drives:** enable automatic path reassignment under Schedule or search connected drives from Sources. The saved folder marker and relative path identify known destinations. Only unique matches are applied; copied markers require manual selection. Current records and paused queues are updated without repeating completed work. No replacement directory is created at a missing old path. Folder markers are not physical hardware serial numbers.
+
+**Notifications:** Settings → Notifications offers all completed checks, errors only, changes and errors, or no backup notices. Version notices have a separate setting. Daily quiet hours can span midnight. Backup notices are not queued; a pending version notice can appear after quiet hours while the app is active. In-app status remains available. Skipped versions stay hidden until a higher official version is released.

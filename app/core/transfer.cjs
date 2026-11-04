@@ -3,7 +3,7 @@ function exportSettings(config) { return { format: 'git-cloner-settings', versio
 function importSettings(document) {
   if (document?.format !== 'git-cloner-settings' || document.version !== 1) throw new Error('Ungültige Einstellungsdatei.');
   const config = validateConfig(document.config);
-  for (const source of config.sources) { delete source.volumeId; for (const target of source.additionalDestinations) delete target.volumeId; }
+  for (const source of config.sources) { delete source.volumeId; delete source.volumeHint; for (const target of source.additionalDestinations) { delete target.volumeId; delete target.volumeHint; } }
   // OS registrations belong to this machine and are never imported implicitly.
   config.launchAtLogin = false; config.systemSchedule = false;
   return config;

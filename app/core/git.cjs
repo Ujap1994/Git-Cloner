@@ -7,6 +7,7 @@ class Git {
   constructor({ token = '', exec = runFile, proxy = '' } = {}) { Object.assign(this, { token, exec, proxy }); }
   withTransport(proxy) { const scoped = Object.create(this); scoped.proxy = proxy; return scoped; }
   async run(args, options = {}) {
+    const { rawOutput = false, ...executionOptions } = options;
     // The token never appears in argv, the saved remote URL, or a log.
     const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GIT_LFS_SKIP_SMUDGE: '1', GIT_CONFIG_NOSYSTEM: '1' };
     const config = ['-c', 'core.hooksPath=', '-c', 'credential.interactive=false'];
@@ -18,8 +19,8 @@ class Git {
       config.push('-c', 'credential.helper=');
     }
     try {
-      const result = await this.exec('git', [...config, ...args], { timeout: 15 * 60 * 1000, maxBuffer: 4 * 1024 * 1024, windowsHide: true, ...options, env });
-      return result.stdout.trim();
+      const result = await this.exec('git', [...config, ...args], { timeout: 15 * 60 * 1000, maxBuffer: 4 * 1024 * 1024, windowsHide: true, ...executionOptions, env });
+      return rawOutput ? result.stdout : result.stdout.trim();
     } catch (error) {
       if (error.code === 'ENOENT') throw new Error('Git ist nicht installiert oder nicht im PATH. Bitte Git installieren und die App neu starten.');
       // Avoid exposing credentials or remote-controlled messages in error output.
@@ -29,8 +30,8 @@ class Git {
     }
   }
   version() { return this.run(['--version'], { timeout: 5000 }); }
-  async remoteHead(url) {
-    const output = await this.run(['ls-remote', '--', url, 'HEAD']);
+  async remoteHead(url, options = {}) {
+    const output = await this.run(['ls-remote', '--', url, 'HEAD'],options);
     if (!output) return null;
     const head = output.split(/\s/)[0];
     if (!/^[a-f\d]{40,64}$/.test(head)) throw new Error('Das Repository hat noch keinen Standardbranch.');

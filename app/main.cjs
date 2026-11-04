@@ -8,6 +8,8 @@ const { setNativeSchedule } = require('./core/native-schedule.cjs');
 const { exportSettings, importSettings, redactLogs } = require('./core/transfer.cjs');
 const { readJson, writeJson } = require('./core/store.cjs');
 const { RELEASES_URL } = require('./core/updates.cjs');
+const { registrationTimes } = require('./core/schedule.cjs');
+if (process.platform === 'win32') app.setAppUserModelId('io.github.Ujap1994.GitCloner');
 
 const testMode = !app.isPackaged && process.env.GIT_CLONER_E2E === '1';
 if (testMode && process.env.GIT_CLONER_TEST_DATA) app.setPath('userData', process.env.GIT_CLONER_TEST_DATA);
@@ -19,6 +21,7 @@ app.commandLine.appendSwitch('lang', locale);
 const indexFile = path.join(__dirname, 'renderer', 'index.html'), indexUrl = pathToFileURL(indexFile).href;
 let runtime, mainWindow, tray, quitting = false, broadcastTimer, lastData = -1, lastConfig = -1, lastHistory = '', pendingWorker = false;
 const selectedArchives = new Set();
+const pendingNotifications = new Set();
 const text = (de, en) => runtime?.config.appearance.language === 'en' ? en : de;
 
 if (!app.requestSingleInstanceLock({ worker })) app.quit();
@@ -70,33 +73,43 @@ async function workerLog(entry) {
 function notifyUpdate(result) {
   if (!testMode && runtime.config.notifications && Notification.isSupported()) {
     const notice = new Notification({ title: text('Git Cloner · Update verfügbar', 'Git Cloner · Update available'), body: text(`Version ${result.latestVersion} ist verfügbar. In der App öffnen oder diese Version überspringen.`, `Version ${result.latestVersion} is available. Open the app to view or skip this version.`) });
-    notice.on('click', showWindow); notice.show();
+    notice.on('click', showWindow); presentNotification(notice);
   }
+}
+function presentNotification(notice) {
+  let finish;
+  const ready = new Promise(resolve => { const timer = setTimeout(() => finish(),5000); timer.unref?.(); finish = () => {clearTimeout(timer);resolve();}; });
+  pendingNotifications.add(ready); void ready.then(() => pendingNotifications.delete(ready));
+  notice.once('show',finish); notice.once('failed',finish);
+  try { notice.show(); } catch (error) { finish(); throw error; }
 }
 async function applyOS(old, next) {
   if (next.launchAtLogin !== old.launchAtLogin) await setAutostart(app, next.launchAtLogin);
-  const timerChanged = next.systemSchedule !== old.systemSchedule || (next.systemSchedule && JSON.stringify(next.schedule) !== JSON.stringify(old.schedule));
+  const timerChanged = next.systemSchedule !== old.systemSchedule || (next.systemSchedule && JSON.stringify(registrationTimes(next)) !== JSON.stringify(registrationTimes(old)));
   try { if (timerChanged) await setNativeSchedule(app, next); }
-  catch (error) { if (next.launchAtLogin !== old.launchAtLogin) await setAutostart(app, old.launchAtLogin); throw error; }
+  catch (error) { if (timerChanged) await setNativeSchedule(app,old).catch(() => {}); if (next.launchAtLogin !== old.launchAtLogin) await setAutostart(app, old.launchAtLogin); throw error; }
 }
 async function runBackup() {
-  const result = await runtime.run();
-  if (!result.busy && !result.paused && !testMode && runtime.config.notifications && Notification.isSupported()) {
-    const failures = result.errorCount ?? result.results.filter(r => r.status === 'error').length;
-    new Notification({ title: failures ? text('Git Cloner · Sicherung prüfen', 'Git Cloner · Review backup') : text('Git Cloner · Prüfung abgeschlossen', 'Git Cloner · Check complete'), body: text(`${result.resultCount ?? result.results.length} Ergebnisse, ${failures} Fehler.`, `${result.resultCount ?? result.results.length} results, ${failures} errors.`) }).show();
-  }
-  return result;
+  return runtime.run();
+}
+function notifyBackup(result) {
+  const failures = result.errorCount ?? 0;
+  const notice = new Notification({ title: failures ? text('Git Cloner · Sicherung prüfen', 'Git Cloner · Review backup') : text('Git Cloner · Prüfung abgeschlossen', 'Git Cloner · Check complete'), body: text(`${result.resultCount} Ergebnisse, ${failures} Fehler.`, `${result.resultCount} results, ${failures} errors.`) });
+  notice.on('click',showWindow); presentNotification(notice);
 }
 async function start() {
   const release = testMode && process.env.GIT_CLONER_TEST_RELEASE;
   const testRepositories = testMode && process.env.GIT_CLONER_TEST_REPOSITORIES ? JSON.parse(process.env.GIT_CLONER_TEST_REPOSITORIES) : null;
   const testRemotes = testMode && process.env.GIT_CLONER_TEST_REMOTES ? JSON.parse(process.env.GIT_CLONER_TEST_REMOTES) : null;
+  const testAPI = testMode && process.env.GIT_CLONER_TEST_API ? JSON.parse(process.env.GIT_CLONER_TEST_API) : null;
+  const testMounts = testMode && process.env.GIT_CLONER_TEST_MOUNTS ? JSON.parse(process.env.GIT_CLONER_TEST_MOUNTS) : null;
   runtime = await new Runtime({
-    directory: app.getPath('userData'), safeStorage, version: app.getVersion(), applyOS, notifyUpdate,
+    directory: app.getPath('userData'), safeStorage, version: app.getVersion(), applyOS, notifyUpdate, notifyBackup, notificationsAvailable: () => !testMode && Notification.isSupported(),
     environmentState: async () => ({ onBattery: powerMonitor.isOnBatteryPower() }),
+    ...(testMounts ? {mountedRoots:async()=>testMounts} : {}),
     ...(testRepositories ? { fetchImpl: async url => {
       const endpoint = new URL(url).pathname;
-      const data = endpoint.startsWith('/users/') && !endpoint.endsWith('/repos') ? { type: 'User' } : endpoint.endsWith('/repos') ? testRepositories.filter(r => r.full_name.startsWith(endpoint.split('/')[2] + '/')) : testRepositories.find(r => '/repos/' + r.full_name === endpoint);
+      const data = testAPI?.[new URL(url).pathname + new URL(url).search] ?? testAPI?.[endpoint] ?? (endpoint.startsWith('/users/') && !endpoint.endsWith('/repos') ? { type: 'User' } : endpoint.endsWith('/repos') ? testRepositories.filter(r => r.full_name.startsWith(endpoint.split('/')[2] + '/')) : testRepositories.find(r => '/repos/' + r.full_name === endpoint));
       return { ok: Boolean(data), status: data ? 200 : 404, json: async () => data };
     } } : {}),
     ...(testRemotes ? { gitFactory: options => {
@@ -110,7 +123,7 @@ async function start() {
     try {
       const result = await runtime.scheduledRun();
       await workerLog({ event: result.skipped ? 'not-due' : result.busy ? 'busy' : result.paused ? 'paused' : 'complete', results: result.resultCount ?? result.results?.length ?? 0, errors: result.errorCount ?? result.results?.filter(r => r.status === 'error').length ?? 0 });
-      await runtime.stop(); quitting = true; app.exit(result.results?.some(r => r.status === 'error') ? 1 : 0);
+      await runtime.stop(); await Promise.allSettled([...pendingNotifications]); quitting = true; app.exit(result.results?.some(r => r.status === 'error') ? 1 : 0);
     } catch (_error) { await workerLog({ event: 'failed' }); quitting = true; app.exit(1); }
     return;
   }
@@ -134,6 +147,11 @@ async function start() {
   handle('backup:resume', () => { if (runtime.busy()) throw new Error('Bitte den laufenden Vorgang abwarten.'); void runtime.resume().catch(error => { runtime.notice = error.message; broadcast(); }); return { started: true }; });
   handle('backup:discard', () => runtime.discard());
   handle('backup:preview', input => runtime.preview(input));
+  handle('changes:open', options => runtime.openChanges(options));
+  handle('changes:list', options => runtime.changes.list(options));
+  handle('changes:file', options => runtime.changes.file(options));
+  handle('changes:close', () => runtime.closeChanges());
+  handle('drives:locate', () => runtime.locateDrives());
   handle('updates:ignore', () => runtime.ignoreUpdate());
   handle('updates:reset', () => runtime.resetUpdate());
   handle('token:save', (token, accountId = 'default') => runtime.setToken(accountId, token));
@@ -194,6 +212,7 @@ async function start() {
 app.on('activate', showWindow);
 app.on('window-all-closed', () => { if (!tray || !runtime?.config.closeToTray) app.quit(); });
 app.on('before-quit', event => {
+  if (runtime?.operation === 'previewing-changes' && !quitting) { event.preventDefault(); quitting = true; void runtime.closeChanges().finally(() => app.quit()); return; }
   if (runtime?.busy() && !quitting) { event.preventDefault(); showWindow(); void dialog.showMessageBox(mainWindow, { type: 'info', message: text('Ein Vorgang läuft. Bitte den Abschluss abwarten.', 'An operation is running. Please wait for it to finish.'), buttons: ['OK'] }); return; }
   if (!quitting && runtime?.browser.sessions.size) { event.preventDefault(); quitting = true; void runtime.stop().finally(() => app.quit()); return; }
   quitting = true; void runtime?.stop(); clearTimeout(broadcastTimer);

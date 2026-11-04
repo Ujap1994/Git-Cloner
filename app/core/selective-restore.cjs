@@ -8,7 +8,7 @@ const { randomUUID, createHash } = require('node:crypto');
 const { managed } = require('./backup.cjs');
 const { decryptArchive } = require('./archives.cjs');
 const { hashFile, verifyDirectory, controlDirectory } = require('./integrity.cjs');
-const { existingRoot, checkSpace } = require('./destinations.cjs');
+const { existingRoot, checkSpace, safeDirectory } = require('./destinations.cjs');
 const { readJson } = require('./store.cjs');
 function relative(value, allowEmpty = false, platform = process.platform) {
   if (typeof value !== 'string' || (!value && !allowEmpty) || value.length > 4096 || path.isAbsolute(value) || /^[a-z]:/i.test(value) || /[\\\0]/.test(value) || value.split('/').some(p => p === '..' || p === '.' || p === '.git')) throw new Error('Ungültiger Auswahlpfad.');
@@ -55,8 +55,9 @@ async function exportBlob(directory, entry, file) {
 }
 class RestoreBrowser {
   constructor({ git, ttl = 5 * 60000, now = Date.now } = {}) { Object.assign(this,{git,ttl,now}); this.sessions = new Map(); this.timer = setInterval(() => { for (const [id,s] of this.sessions) if (s.expiresAt <= this.now()) void this.close(id); },30000); this.timer.unref?.(); }
-  async open({ record, archive, passphrase }) {
+  async open({ record, archive, passphrase, content = 'repository' }) {
     if (this.sessions.size >= 3) throw new Error('Bitte zuerst die bisherige Dateiauswahl schließen.');
+    if (!['repository','releases'].includes(content)) throw new Error('Ungültiger Wiederherstellungsumfang.');
     let temporary, source, marker;
     try {
       if (record) { marker = await managed(record.destination,record.fullName); if (marker.encrypted) { archive = path.join(record.destination,'backup.gcb'); if (await hashFile(archive) !== marker.archiveHash) throw new Error('Das Archiv ist beschädigt.'); } else source = record.destination; }
@@ -73,9 +74,14 @@ class RestoreBrowser {
       else await verifyDirectory(source,this.git,marker.mode);
       const manifest = await readJson(manifestFile,null);
       if (!manifest?.entries) throw new Error('Diese ältere Sicherung hat kein Dateimanifest. Bitte zunächst vollständig wiederherstellen.');
-      const entries = marker.mode === 'mirror' ? await gitTree(source) : manifest.entries.filter(e => !e.path.split('/').includes('.git')).map(e => ({...e,path:relative(e.path)}));
-      const id = randomUUID(), session = { id, source, marker, entries, temporary, expiresAt: this.now() + this.ttl };
-      this.sessions.set(id,session); return { id, fullName: marker.fullName, mode: marker.mode, fileCount: entries.length, expiresAt: new Date(session.expiresAt).toISOString() };
+      let filesRoot = source, entries;
+      if (content === 'releases') {
+        try { filesRoot = await safeDirectory(controlDirectory(source,marker.mode),['git-cloner-metadata','release-assets']); } catch (error) { if (error.code === 'ENOENT') throw new Error('Diese Sicherung enthält keine Release-Dateien.'); throw error; }
+        const prefix = path.relative(source,filesRoot).split(path.sep).join('/') + '/';
+        entries = manifest.entries.filter(e => e.path.startsWith(prefix) && e.sha256 && e.link === undefined).map(e => ({...e,path:relative(e.path.slice(prefix.length))}));
+      } else entries = marker.mode === 'mirror' ? await gitTree(source) : manifest.entries.filter(e => !e.path.split('/').includes('.git')).map(e => ({...e,path:relative(e.path)}));
+      const id = randomUUID(), session = { id, source, filesRoot, content, marker, entries, temporary, expiresAt: this.now() + this.ttl };
+      this.sessions.set(id,session); return { id, fullName: marker.fullName, mode: marker.mode, content, fileCount: entries.length, expiresAt: new Date(session.expiresAt).toISOString() };
     } catch (error) { if (temporary) await fs.rm(temporary,{recursive:true,force:true}); throw error; }
   }
   session(id) { const s = this.sessions.get(id); if (!s || s.expiresAt <= this.now()) throw new Error('Die Dateiauswahl ist abgelaufen. Bitte erneut öffnen.'); if (s.locked) throw new Error('Die Auswahl wird gerade wiederhergestellt.'); s.expiresAt = this.now() + this.ttl; return s; }
@@ -108,7 +114,7 @@ class RestoreBrowser {
       for (const entry of selected) {
         const file = path.join(staging,...entry.path.split('/')); await fs.mkdir(path.dirname(file),{recursive:true});
         if (entry.link !== undefined) { links.push({file,target:entry.link}); continue; }
-        if (s.marker.mode === 'mirror') {
+        if (s.marker.mode === 'mirror' && s.content !== 'releases') {
           await exportBlob(s.source,entry,file);
           if (entry.symbolic) { const target = await fs.readFile(file,'utf8'); await fs.rm(file); links.push({file,target}); continue; }
           if (entry.size < 1024) {
@@ -120,7 +126,7 @@ class RestoreBrowser {
             }
           }
         } else {
-          const source = await safeFile(s.source,entry.path), info = await fs.lstat(source);
+          const source = await safeFile(s.filesRoot,entry.path), info = await fs.lstat(source);
           if (!info.isFile() || info.isSymbolicLink()) throw new Error('Die Quelldatei wurde verändert.');
           await fs.copyFile(source,file,constants.COPYFILE_FICLONE);
           if (await hashFile(file) !== entry.sha256) throw new Error('Die Integritätsprüfung hat eine veränderte ausgewählte Datei erkannt.');

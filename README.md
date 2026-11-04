@@ -1,5 +1,5 @@
 <p align="center"><img src="build/icon.png" width="80" alt="Git Cloner"></p>
-<h1 align="center">Git Cloner 3</h1>
+<h1 align="center">Git Cloner 3.1</h1>
 <p align="center">Deine Repositories. Auf deinem Laufwerk. Nach deinem Zeitplan.</p>
 <p align="center"><a href="https://github.com/Ujap1994/Git-Cloner/actions/workflows/ci.yml"><img src="https://github.com/Ujap1994/Git-Cloner/actions/workflows/ci.yml/badge.svg" alt="CI"></a> <a href="https://github.com/Ujap1994/Git-Cloner/releases">Downloads</a> · <a href="docs/ANLEITUNG.md">Anonymisierte Anleitung</a> · <a href="docs/GUIDE.en.md">English guide</a></p>
 
@@ -27,7 +27,26 @@ Git Cloner ist eine Electron-Desktop-App für macOS, Windows und Linux. Sie sich
 | Komfort | Suche, Statusfilter, paginierte Listen, Import/Export der Einstellungen ohne Geheimnisse und anonymisierte Diagnoseprotokolle. |
 | Darstellung | Deutsch und Englisch, Hell-/Dunkelmodus oder Systemeinstellung sowie drei Schriftgrößen, hohen Kontrast und Tastenkürzel mit ausgerichteten Eingabefeldern. |
 
-## Neu in Version 3
+## Neu in Version 3.1
+
+| Erweiterung | Verhalten |
+| --- | --- |
+| Eigene Prüfzeiten je Quelle | Allgemeine Zeiten übernehmen oder 1–24 eigene tägliche Uhrzeiten festlegen. Jede Quelle behält ihren eigenen Prüfstand; eine globale Pause gilt für alle Quellen. |
+| Änderungsvorschau | Gespeicherten Git-Stand vor dem Sichern mit dem aktuellen Standardbranch vergleichen. Dateiliste und Text-Diffs werden bei Bedarf geladen; vorhandene Backups bleiben unverändert. |
+| Bekannte Laufwerke wiederfinden | Ordnerkennungen auf verbundenen Laufwerken prüfen und geänderte Mountpfade beziehungsweise Laufwerksbuchstaben eindeutig neu zuordnen. Auch pausierte Warteschlangen bleiben nutzbar. |
+| Gezielte Benachrichtigungen | Alle Prüfungen, nur Fehler, Änderungen und Fehler oder keine Sicherungsmeldungen. Versionsmeldungen separat einstellen und tägliche Ruhezeiten über Mitternacht festlegen. |
+| Release-Dateien mit OS-Auswahl | Dateien des neuesten offiziellen Releases mitsichern: **alle Betriebssysteme** oder **nur das automatisch erkannte Windows, macOS oder Linux**. Funktioniert auch mit eigenen Optionen je Quelle. |
+| Release-Dateien wiederherstellen | Heruntergeladene Pakete gezielt auswählen und an einen neuen Ort kopieren, auch aus verschlüsselten Sicherungen und Mirrors. |
+
+![Release-Auswahl mit automatisch erkanntem Betriebssystem](docs/screenshots/release-filter.png)
+
+![Dateiliste und Text-Diff vor einer Sicherung](docs/screenshots/change-preview.png)
+
+Die OS-Zuordnung verwendet Paketnamen und Dateiendungen. Nicht eindeutig zuordenbare Dateien bleiben bei „Nur mein Betriebssystem“ ausgeschlossen; allgemeine Prüfsummen und Hinweise werden mitgesichert. Alle Architekturen des erkannten Betriebssystems bleiben enthalten. Die Release-Auswahl betrifft Sicherungsquellen; die Versionsüberwachung der App informiert weiterhin ausschließlich und installiert nichts automatisch.
+
+Weitere Bilder und Schritt-für-Schritt-Erklärungen: [Eigene Prüfzeiten, Releases, Vorschau, Laufwerkswechsel und Ruhezeiten](docs/ANLEITUNG.md#17-eigene-prüfzeiten-je-quelle).
+
+## Weitere Funktionen aus Version 3
 
 | Erweiterung | Verhalten |
 | --- | --- |
