@@ -112,6 +112,8 @@ Unter **Einstellungen → Sicherung** sind Zusatzfunktionen standardmäßig ausg
 | Releases | Release-Daten und zugehörige Dateien. Große Dateien benötigen entsprechend Platz und Zeit. |
 | Wiki | Separater Git-Mirror des Wikis. Ein nicht zugängliches Wiki wird ausdrücklich gemeldet. |
 
+Release-Dateien liegen ab Version 3.3 sichtbar unter **`Zielordner / Konto / Repository / Git-Cloner-Releases`**, mit ihren ursprünglichen Dateinamen. Die Übersicht nennt diesen Ordner und bietet **Release-Ordner öffnen**. Besitzt das Repository bereits einen gleichnamigen Ordner, verwendet die App einen freien nummerierten Namen und erhält die Repository-Dateien. Bei verschlüsselten Sicherungen liegt der Release-Ordner innerhalb von `backup.gcb`; zum Zugriff **Release-Dateien wiederherstellen** wählen und entsperren. Ältere Sicherungen mit Dateien im versteckten `.git/git-cloner-metadata/release-assets` bleiben wiederherstellbar und wechseln bei der nächsten erfolgreichen Prüfung in die sichtbare Ablage.
+
 Die Metadaten liegen im Verwaltungsordner `git-cloner-metadata` innerhalb von `.git` beziehungsweise im Bare-Mirror. Sie sind Exporte, kein automatischer Rückimport in GitHub. Der Wiki-Zugriff kann bei nicht angelegten Wikis scheitern. Hat eine vorhandene Sicherung bereits ein Wiki, verhindert ein späterer Abruffehler den Austausch dieses Stands.
 
 ![Sicherungsoptionen mit gleich hohen Auswahlfeldern](screenshots/backup-settings.png)
@@ -436,3 +438,57 @@ Unter **Quellen** bei einer gespeicherten Quelle **Umfang empfehlen** öffnen. B
 Die App erkennt LFS-Attributregeln und Submodul-Verweise, zeigt die gefundenen Pfade und prüft bei LFS auch die lokale Verfügbarkeit von Git LFS. Unvollständige oder begrenzte API-Ergebnisse werden ausgewiesen; fehlende Hinweise sind dann kein Beweis dafür, dass das Projekt keine solchen Inhalte besitzt.
 
 Die Kästchen prüfen und erst **Auswahl für diese Quelle übernehmen** wählen. Dadurch werden eigene Sicherungsoptionen für diese Quelle verwendet; die globalen Einstellungen bleiben erhalten. Bei einer ganzen Konto-/Gruppenquelle gilt die Auswahl für alle ihre Repositories. Submodule benötigen den Modus Arbeitskopie und erreichbare HTTPS-Ziele; bei einem Mirror bleibt diese Empfehlung deaktiviert, bis der Modus bewusst geändert wurde. Git LFS gegebenenfalls separat installieren. Schließen ohne Übernehmen ändert keine Optionen.
+
+## 28. Repositories mit Checkboxen auswählen
+
+Unter **Quellen → Repositories auswählen** zunächst Anbieter und HTTPS-Server festlegen, passende Zugangsdaten auswählen und den eigenen Konto-, Organisations- oder Gruppennamen eingeben. Die Felder starten ohne voreingestellte Konten oder Repository-Namen. Bei GitLab sind auch Untergruppen wie `beispiel-gruppe/untergruppe` möglich. **Laden** fragt nur die Repository-Liste ab; es wird noch nichts geklont oder auf dem gewählten Sicherungslaufwerk angelegt.
+
+Die Liste lädt bis zu 50 Einträge je Seite. Die Suche wird an den Anbieter geschickt. Checkboxen bleiben beim Blättern und bei einer neuen Suche innerhalb derselben Auswahl erhalten. Die Checkbox im Tabellenkopf betrifft ausschließlich die aktuelle Seite. Bereits als einzelne Quellen eingetragene Repositories sind gekennzeichnet. GitHub begrenzt seine Such-API auf höchstens 1.000 Treffer; eine gekürzte Suche wird angezeigt und sollte präzisiert werden. Private Repositories benötigen entsprechende Leserechte.
+
+Danach einen vorhandenen gemeinsamen Zielordner wählen, optional eine zuvor selbst angelegte Gruppe und Favoritenstatus festlegen und **Quellen hinzufügen** drücken. Jedes ausgewählte Repository wird zu einer eigenen, später einzeln anpassbaren Quelle. Insgesamt bleiben maximal 100 Quellen möglich. Eine Auswahl läuft nach 15 Minuten ohne Nutzung ab. Geänderte Anbieter-, Konto- oder Eigentümerangaben müssen vor dem Hinzufügen erneut geladen werden. Abbrechen speichert keine Quellen.
+
+**GitHub-Adressen einfügen:** Eine Adresse wie `https://github.com/beispiel-konto/beispiel-projekt` wird im Quellenfeld sofort zu `beispiel-konto/beispiel-projekt` bereinigt. Auch `.git`, abschließende Schrägstriche und übliche Unterseiten wie Releases oder Branches werden erkannt. Einträge lassen sich weiterhin zeilenweise eingeben.
+
+Eine Konto- oder Organisationshauptseite wie `https://github.com/orgs/beispiel-team/repositories` öffnet automatisch die Repository-Liste und aktiviert **Neue Repositories automatisch mit aufnehmen**. **Sammelquelle hinzufügen** speichert eine Quelle für alle passenden aktuellen und zukünftigen Repositories. Bei jeder Prüfung wird die Liste erneut ermittelt; neue Projekte werden dadurch mitgesichert. Einzelne Repository-Regeln haben Vorrang, auch wenn sie pausiert sind. Bestehende Filter, Sicherungsoptionen und Prüfzeiten aus dem Quellenformular werden übernommen.
+
+Eine erneute Eingabe derselben Hauptseite erzeugt keine doppelte Sammelquelle und überschreibt keine bestehenden Einstellungen. Neue Repositories sind bereits durch die Sammelquelle abgedeckt. Über **Repositories anzeigen** in deren Quelleneintrag lässt sich die aktuelle Liste erneut öffnen. Eine pausierte vorhandene Sammelquelle bleibt pausiert; sie lässt sich ausdrücklich im Quellenbereich aktivieren.
+
+Für eine feste Auswahl **Neue Repositories automatisch mit aufnehmen** deaktivieren. **Alle fehlenden auswählen** berücksichtigt auch weitere Seiten und überspringt bereits eingetragene einzelne Quellen. Übersteigt die Auswahl die Grenze von 100 Quellen, wird nichts teilweise übernommen; die Sammelquelle deckt große Konten mit einer einzigen Quelle ab. Checkboxen und Suche ermöglichen weiterhin eine gezielte Teilmenge.
+
+![Repository-Browser mit anonymisierter Auswahl](screenshots/repository-browser.png)
+
+![Automatische Sammelquelle mit bestehenden Einzelregeln](screenshots/owner-source.png)
+
+## 29. Gruppen, Favoriten und Quellenauswahl
+
+**Quellen → Gruppen** öffnet die Verwaltung für bis zu 30 selbst benannte Gruppen. Dort Gruppen anlegen, umbenennen oder entfernen. Das Entfernen einer Gruppe erhält ihre Quellen und Sicherungsdateien; diese Quellen sind danach ohne Gruppe. Beim ersten Start bestehen keine Gruppen.
+
+Der Stern neben einer Quelle schaltet ihren Favoritenstatus um. Suche, Gruppenfilter und **Favoriten** kombinieren sich. Je Seite werden höchstens 25 Quellen dargestellt. Checkboxen markieren Quellen auch über mehrere Seiten und Filter hinweg. Die Aktionsleiste zeigt die Gesamtzahl; **Auswahl aufheben** entfernt nur die Markierung. Über **Gruppe zuordnen** und **Favoriten setzen/entfernen** lässt sich die Auswahl direkt organisieren. Organisation und Favoriten funktionieren auch bei abgezogenem Laufwerk oder während einer laufenden Sicherung. Sicherungsumfang und aktive Warteschlangen ändern sich dadurch nicht.
+
+![Gruppen, Favoriten und gemeinsame Auswahl](screenshots/source-groups.png)
+
+## 30. Mehrere Quellen gemeinsam bearbeiten
+
+Quellen per Checkbox markieren und **Gemeinsam bearbeiten** öffnen. Alle Felder beginnen mit **Unverändert lassen**. Dadurch bleiben Unterschiede zwischen den ausgewählten Quellen erhalten. Nur ausdrücklich gewählte Werte werden ersetzt.
+
+Neben Gruppe, Favoriten und Aktivierung sind gemeinsame Änderungen an Zielordner, kompatiblen Zugangsdaten, Fork-/Archivfiltern, Namensmustern, Sicherungsumfang und eigenen täglichen Prüfzeiten möglich. Für Sicherungsumfang und Zeitplan lassen sich auch wieder die globalen Optionen übernehmen. Bei gezielten Sicherungsänderungen bleiben alle nicht geänderten Optionen je Quelle erhalten. Ein bewusst leer gelassenes, aktiviertes Musterfeld entfernt die bisherigen Muster. Mirror und Submodule bleiben gegenseitig unvereinbar.
+
+**Änderungen prüfen** zeigt pro betroffener Quelle **Bisher** und **Danach**, mit bis zu zehn Quellen pro Vorschauseite. Die Vorschau schreibt weder Sicherungen noch Laufwerkskennungen. Erst **Änderungen übernehmen** speichert die geprüfte Konfiguration gemeinsam. Wird zwischenzeitlich die Konfiguration geändert, muss die Vorschau neu erstellt werden; eine alte Vorschau überschreibt keine neueren Einstellungen. Eine Vorschau gilt höchstens fünf Minuten.
+
+Ein geänderter Zielordner gilt für zukünftige Sicherungen. Bestehende Sicherungsordner bleiben an ihrem bisherigen Ort erhalten. Quellen und Sicherungsumfang können während laufender oder pausierter Durchläufe nicht geändert werden. Neue Verschlüsselungsoptionen benötigen ein entsperrtes Archivpasswort; unabhängige OS-Aufgaben benötigen zusätzlich das sichere Merken dieses Passworts.
+
+![Gemeinsame Änderung mit Vorher-/Nachher-Vorschau](screenshots/bulk-preview.png)
+
+## 31. Große Release-Downloads fortsetzen
+
+Beim optionalen Mitsichern von Release-Dateien behält die App geprüfte Dateiteile nach einem Netzwerkabbruch. Beim nächsten Versuch oder nach einem Programmneustart setzt sie passende Downloads mit HTTP-Range fort. Eine starke ETag-Kennung oder ausreichend alte, sichere HTTP-Änderungsdaten werden per `If-Range` geprüft; verfügbare SHA256-Angaben werden zusätzlich verifiziert. Ohne geeignete Kennung oder Prüfsumme wird sicher neu begonnen. Ignoriert der Server Range oder ändern sich seine Kennungen, wird die bisherige Datei nicht durch unpassend zusammengesetzte Teile ersetzt.
+
+Die Fortschrittsanzeige nennt Datei, geladene Menge und gegebenenfalls **Fortgesetzt ab …**. Bereits vollständig zwischengespeicherte Dateien werden vor der Übernahme erneut geprüft. Nach einem Fehler bleibt der vorherige erfolgreiche Repository-Stand erhalten.
+
+Der temporäre Ordner `.git-cloner-downloads` liegt im konfigurierten Zielordner und ist vom erfolgreichen Backup getrennt. Bei aktivierter Backup-Verschlüsselung sind auch dauerhaft gespeicherte Download-Teile einzeln mit AES-256-GCM verschlüsselt; das Archivpasswort wird dafür benötigt und nicht im Cache gespeichert. Nicht verschlüsselte Sicherungen verwenden Dateiteile mit eingeschränkten Dateirechten. Für Cache, neue Sicherung und Austausch wird vorübergehend zusätzlicher Platz benötigt.
+
+Nach einer erfolgreichen Sicherung werden zugehörige eigene Cache-Dateien entfernt. Nicht weiterverwendete Teile, die älter als sieben Tage sind, werden bei erneuter Nutzung dieses Repository-Caches geprüft und bereinigt. Fremde Dateien, Links oder ungültige Kennungen werden nicht gelöscht. Wie bei bisherigen verschlüsselten Sicherungen können temporäre Klartextdaten im Arbeitsverzeichnis bei einem harten Prozessabbruch verbleiben; es gibt kein forensisch sicheres Löschen.
+
+![Sichtbarer Release-Ordner in der Übersicht](screenshots/release-location.png)
+
+Weitere Detailansichten sind als [eigenes UI-Konzept](DETAILANSICHTEN.md) beschrieben. Die dort genannten zusätzlichen Funktionen sind noch keine implementierten Funktionen der Version 3.3.

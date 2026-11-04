@@ -109,7 +109,7 @@ async function start() {
     ...(testMounts ? {mountedRoots:async()=>testMounts} : {}),
     ...(testRepositories ? { fetchImpl: async url => {
       const endpoint = new URL(url).pathname;
-      const data = testAPI?.[new URL(url).pathname + new URL(url).search] ?? testAPI?.[endpoint] ?? (endpoint.startsWith('/users/') && !endpoint.endsWith('/repos') ? { type: 'User' } : endpoint.endsWith('/repos') ? testRepositories.filter(r => r.full_name.startsWith(endpoint.split('/')[2] + '/')) : testRepositories.find(r => '/repos/' + r.full_name === endpoint));
+      const data = testAPI?.[new URL(url).pathname + new URL(url).search] ?? testAPI?.[endpoint] ?? (endpoint.startsWith('/users/') && !endpoint.endsWith('/repos') ? { type: 'User' } : endpoint.endsWith('/repos') ? testRepositories.filter(r => r.full_name.startsWith(endpoint.split('/')[2] + '/')).slice((Number(new URL(url).searchParams.get('page') || 1) - 1) * Number(new URL(url).searchParams.get('per_page') || 100), Number(new URL(url).searchParams.get('page') || 1) * Number(new URL(url).searchParams.get('per_page') || 100)) : testRepositories.find(r => '/repos/' + r.full_name === endpoint));
       return { ok: Boolean(data), status: data ? 200 : 404, json: async () => data };
     } } : {}),
     ...(testRemotes ? { gitFactory: options => {
@@ -161,6 +161,14 @@ async function start() {
   handle('rotation:stop',()=>runtime.stopRotation());
   handle('source:recommend',options=>runtime.recommendations(options));
   handle('source:recommend-cancel',()=>runtime.cancelRecommendations());
+  handle('sources:organize', input => runtime.organizeSources(input));
+  handle('sources:preview', input => runtime.previewSources(input));
+  handle('sources:apply', input => runtime.applySources(input));
+  handle('repositories:browse-open', input => runtime.repositoryBrowser.open(input));
+  handle('repositories:browse-page', input => runtime.repositoryBrowser.page(input));
+  handle('repositories:browse-missing', input => runtime.repositoryBrowser.allMissing(input));
+  handle('repositories:browse-close', () => { runtime.repositoryBrowser.close(); return true; });
+  handle('repositories:browse-add', input => runtime.addBrowserSources(input));
   handle('updates:ignore', () => runtime.ignoreUpdate());
   handle('updates:reset', () => runtime.resetUpdate());
   handle('token:save', (token, accountId = 'default') => runtime.setToken(accountId, token));
@@ -201,6 +209,10 @@ async function start() {
   handle('destination:open', async id => {
     const source = runtime.config.sources.find(s => s.id === id), record = runtime.backup.state.repositories[id];
     const destination = source?.destination || record?.destination; if (!destination) throw new Error('Ziel nicht gefunden.');
+    const error = await shell.openPath(destination); if (error) throw new Error(error);
+  });
+  handle('releases:open-directory', async id => {
+    const destination = await runtime.releaseDestination(id);
     const error = await shell.openPath(destination); if (error) throw new Error(error);
   });
   try {

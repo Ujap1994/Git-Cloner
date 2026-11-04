@@ -1,9 +1,11 @@
 const path = require('node:path');
 const { providerSpec, parseHostedSource, providerKey } = require('./provider-spec.cjs');
+const { normalizeSourceInput } = require('../renderer/source-input.js');
 
 const DEFAULT_CONFIG = {
   schemaVersion: 1,
   sources: [],
+  sourceGroups: [],
   schedule: { enabled: true, checksPerDay: 1, times: ['02:00'] },
   launchAtLogin: false,
   closeToTray: true,
@@ -25,15 +27,7 @@ function defaults() { return structuredClone(DEFAULT_CONFIG); }
 
 function parseSource(value, kind) {
   if (typeof value !== 'string') throw new Error('Bitte eine GitHub-Quelle angeben.');
-  let input = value.trim().replace(/\/$/, '');
-  if (/^https?:\/\//i.test(input)) {
-    const url = new URL(input);
-    if (url.protocol !== 'https:' || url.hostname !== 'github.com' || url.port || url.username || url.password || url.search || url.hash) {
-      throw new Error('Nur HTTPS-Adressen von github.com sind erlaubt.');
-    }
-    input = url.pathname.slice(1);
-  }
-  input = input.replace(/\.git$/, '');
+  const input = normalizeSourceInput(value).value;
   const parts = input.split('/');
   if (!/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(parts[0])) throw new Error('Ungültiger GitHub-Name.');
   if (kind === 'owner' && parts.length === 1) return input;
@@ -44,12 +38,16 @@ function parseSource(value, kind) {
 function validateConfig(input) {
   if (!input || typeof input !== 'object' || input.schemaVersion !== 1) throw new Error('Unbekanntes Einstellungsformat.');
   if (!Array.isArray(input.sources) || input.sources.length > 100) throw new Error('Maximal 100 Quellen sind erlaubt.');
+  const sourceGroups = validateSourceGroups(input.sourceGroups ?? []);
+  const groupIds = new Set(sourceGroups.map(group => group.id));
   const ids = new Set();
   const names = new Set();
   const sources = input.sources.map(source => {
     if (!source || !['owner', 'repository'].includes(source.kind)) throw new Error('Ungültiger Quellentyp.');
     if (typeof source.id !== 'string' || !/^[a-z\d-]{1,64}$/i.test(source.id) || ids.has(source.id)) throw new Error('Ungültige oder doppelte Quellen-ID.');
     ids.add(source.id);
+    if (source.favorite !== undefined && typeof source.favorite !== 'boolean') throw new Error('Ungültiger Favoritenstatus.');
+    if (source.groupId != null && !groupIds.has(source.groupId)) throw new Error('Die zugewiesene Quellengruppe fehlt.');
     const spec = providerSpec(source), value = parseHostedSource(source.value, source.kind,spec);
     const key = `${providerKey(spec)}:${source.kind}:${value.toLowerCase()}`;
     if (names.has(key)) throw new Error('Diese Quelle ist bereits eingetragen.');
@@ -63,9 +61,9 @@ function validateConfig(input) {
     const additionalDestinations = (source.additionalDestinations ?? []).map(validateTarget);
     if (additionalDestinations.length > 9) throw new Error('Maximal zehn Ziele pro Quelle.');
     const volumeHint = validateVolumeHint(source.volumeHint, source.destination);
-    return { id: source.id, kind: source.kind, value, ...(spec.provider!=='github'?spec:{}), destination: path.resolve(source.destination), enabled: source.enabled, ...(source.volumeId ? { volumeId: source.volumeId } : {}), ...(volumeHint ? { volumeHint } : {}), accountId, filters, additionalDestinations, backup: source.backup == null ? null : validateBackup(source.backup), schedule: source.schedule == null ? null : validateSchedule(source.schedule) };
+    return { id: source.id, kind: source.kind, value, ...(spec.provider!=='github'?spec:{}), destination: path.resolve(source.destination), enabled: source.enabled, ...(source.volumeId ? { volumeId: source.volumeId } : {}), ...(volumeHint ? { volumeHint } : {}), accountId, filters, additionalDestinations, backup: source.backup == null ? null : validateBackup(source.backup), schedule: source.schedule == null ? null : validateSchedule(source.schedule), groupId: source.groupId ?? null, favorite: source.favorite ?? false };
   });
-  const result = { schemaVersion: 1, sources, schedule: validateSchedule(input.schedule) };
+  const result = { schemaVersion: 1, sources, sourceGroups, schedule: validateSchedule(input.schedule) };
   for (const key of ['launchAtLogin', 'closeToTray', 'notifications', 'checkUpdates']) {
     if (typeof input[key] !== 'boolean') throw new Error(`Ungültige Einstellung: ${key}`);
     result[key] = input[key];
@@ -106,6 +104,16 @@ function validateConfig(input) {
   if (typeof (input.oauthClientId ?? '') !== 'string' || !/^[a-z\d._-]{0,100}$/i.test(input.oauthClientId ?? '')) throw new Error('Ungültige OAuth-Client-ID.');
   result.oauthClientId = input.oauthClientId ?? '';
   return result;
+}
+function validateSourceGroups(groups) {
+  if (!Array.isArray(groups) || groups.length > 30) throw new Error('Maximal 30 Quellengruppen sind erlaubt.');
+  const ids = new Set(), names = new Set();
+  return groups.map(group => {
+    if (!group || typeof group.id !== 'string' || !/^[a-z\d-]{1,64}$/i.test(group.id) || ids.has(group.id) || typeof group.name !== 'string') throw new Error('Ungültige oder doppelte Quellengruppe.');
+    const name = group.name.trim().normalize('NFC');
+    if (!name || name.length > 60 || Array.from(name).some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) || names.has(name.toLocaleLowerCase())) throw new Error('Gruppennamen müssen eindeutig sein und 1 bis 60 Zeichen enthalten.');
+    ids.add(group.id); names.add(name.toLocaleLowerCase()); return { id: group.id, name };
+  });
 }
 function validateBackup(input) {
   const backup = { ...DEFAULT_CONFIG.backup, ...input, metadata: { ...DEFAULT_CONFIG.backup.metadata, ...input?.metadata } };

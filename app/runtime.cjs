@@ -7,10 +7,11 @@ const { readJson, writeJson } = require('./core/store.cjs');
 const { SecretVault } = require('./core/vault.cjs');
 const { GitHubClient } = require('./core/github.cjs');
 const { Git } = require('./core/git.cjs');
-const { BackupService, verifyBackup, backupFingerprint } = require('./core/backup.cjs');
+const { BackupService, verifyBackup, backupFingerprint, managed } = require('./core/backup.cjs');
 const { restoreBackup } = require('./core/restore.cjs');
 const { acquireLease } = require('./core/lease.cjs');
-const { prepareDestination } = require('./core/destinations.cjs');
+const { prepareDestination, safeDirectory } = require('./core/destinations.cjs');
+const { releaseDirectoryName } = require('./core/release-layout.cjs');
 const { Scheduler, nextRun, dueSources, nextConfigRun } = require('./core/schedule.cjs');
 const { notificationAllowed } = require('./core/notifications.cjs');
 const { DriveMonitor } = require('./core/drive-monitor.cjs');
@@ -28,8 +29,17 @@ const {queryHistory,exportHistory,historyDetails}=require('./core/history.cjs');
 const {spaceReady}=require('./core/space-wait.cjs');
 const {rotationInventory,rotatePasswords,recoverRotations}=require('./core/key-rotation.cjs');
 const {inspectRecommendations}=require('./core/recommendations.cjs');
+const { organizeConfig, prepareBulk, configSignature, RepositoryBrowser } = require('./core/source-workspace.cjs');
 
 class Runtime extends EventEmitter {
+  async releaseDestination(id) {
+    const record = this.backup.state.repositories[id];
+    if (!record) throw new Error('Sicherung nicht gefunden.');
+    const marker = await managed(record.destination, record.fullName);
+    if (marker.encrypted) throw new Error('Release-Dateien liegen im verschlüsselten Archiv. Bitte über die Wiederherstellung entsperren.');
+    if (!releaseDirectoryName(marker.releaseInfo?.assetDirectory)) throw new Error('Bitte die Quelle erneut prüfen, um Release-Dateien im sichtbaren Ordner abzulegen.');
+    return safeDirectory(record.destination, [marker.releaseInfo.assetDirectory]);
+  }
   constructor({ directory, safeStorage, version, fetchImpl = fetch, updateFetch, applyOS = async () => {}, notifyUpdate = () => {}, notifyBackup = () => {}, notificationsAvailable = () => true, now = () => new Date(), mountedRoots, environmentState = async () => ({ onBattery: null }), gitFactory = options => new Git(options) }) {
     super(); Object.assign(this, { directory, safeStorage, version, fetchImpl, updateFetch, applyOS, notifyUpdate, notifyBackup, notificationsAvailable, now, mountedRoots, environmentState, gitFactory });
     this.clients = new Map(); this.gitClients = new Map(); this.notice = null; this.operation = null; this.device = null;
@@ -102,6 +112,7 @@ class Runtime extends EventEmitter {
     this.deviceFlow = new DeviceFlow({ fetchImpl: this.fetchImpl });
     this.browser = new RestoreBrowser({ git: this.git });
     this.changes = new ChangesPreview({browser:this.browser});
+    this.repositoryBrowser = new RepositoryBrowser({ clientFor: source => this.sourceClient(source), getConfig: () => this.config });
     await this.refreshDisks();
     return this;
   }
@@ -145,7 +156,7 @@ class Runtime extends EventEmitter {
     return { skipped: true };
   }
   start() { this.scheduler.start(); this.drives.start(); this.configureUpdates(); if (this.config.checkUpdates) void this.checkUpdates(); this.policyTimer = setInterval(() => void this.policyTick(),30000); this.policyTimer.unref?.(); }
-  async stop() { this.scheduler.stop(); this.drives.stop(); clearInterval(this.updateTimer); clearInterval(this.policyTimer); this.deviceFlow.cancel(); await this.closeChanges(); await this.browser.closeAll(); }
+  async stop() { this.scheduler.stop(); this.drives.stop(); clearInterval(this.updateTimer); clearInterval(this.policyTimer); this.deviceFlow.cancel(); this.repositoryBrowser.close(); await this.closeChanges(); await this.browser.closeAll(); }
   async refreshDisks() { this.disks = await Promise.all([...new Set(this.config.sources.flatMap(s => [s.destination,...s.additionalDestinations.map(d => d.destination)]))].map(spaceAt)); this.diskRevision = (this.diskRevision || 0) + 1; this.lastDisksAt = Date.now(); }
   async checkRules(execution = this.config.execution) {
     if (!execution.onlyOnAC && !execution.allowedNetworks.length) return null;
@@ -171,6 +182,32 @@ class Runtime extends EventEmitter {
   stopRotation(){this.rotationStop=true;return{requested:true};}
   recommendations({sourceId,repository}){if(this.busy()||this.saving)throw new Error('Bitte den laufenden Vorgang abwarten.');const controller=new AbortController();this.recommendationController=controller;return this.withOperation('inspecting-options',async()=>{try{const source=this.config.sources.find(s=>s.id===sourceId);if(!source)throw new Error('Quelle nicht gefunden.');return await inspectRecommendations({source,repository:repository||source.value,client:this.sourceClient(source),git:this.sourceGit(source),signal:controller.signal});}finally{if(this.recommendationController===controller)this.recommendationController=null;}});}
   cancelRecommendations(){this.recommendationController?.abort();return true;}
+  async organizeSources(input) {
+    if (this.operation || this.saving) throw new Error('Bitte den laufenden Vorgang abwarten.');
+    this.saving = true;
+    try {
+      const next = organizeConfig(this.config, input);
+      await writeJson(path.join(this.directory, 'settings.json'), next);
+      this.config = next; this.configRevision++; this.changed(); return this.snapshot();
+    } finally { this.saving = false; }
+  }
+  previewSources(input) {
+    const result = prepareBulk(this.config, input), token = require('node:crypto').randomUUID();
+    this.bulkPreview = { token, input: structuredClone(input), signature: configSignature(this.config), expiresAt: Date.now() + 300000 };
+    return { token, changes: result.changes, selected: result.selected, changed: result.changed };
+  }
+  async applySources({ token } = {}) {
+    const preview = this.bulkPreview;
+    if (!preview || preview.token !== token || preview.expiresAt < Date.now() || preview.signature !== configSignature(this.config)) throw new Error('Die Quellen wurden inzwischen geändert. Bitte die Vorschau erneut prüfen.');
+    const result = prepareBulk(this.config, preview.input);
+    await this.saveConfig(result.config); this.bulkPreview = null;
+    return { changed: result.changed };
+  }
+  async addBrowserSources(input) {
+    const result = input.asOwner ? this.repositoryBrowser.ownerSelection(input) : this.repositoryBrowser.selection(input);
+    if (result.added) await this.saveConfig(result.config);
+    this.repositoryBrowser.close(); return { added: result.added, skipped: result.skipped };
+  }
   async locateDrives({automatic = false} = {}) {
     if (this.busy() || this.saving) return {busy:true};
     return this.withOperation('locating-drives',async () => {
@@ -255,7 +292,7 @@ class Runtime extends EventEmitter {
   async setToken(id, token) {
     if (this.busy()) throw new Error('Bitte den laufenden Vorgang abwarten.');
     if (!['default', ...this.config.accounts.map(a => a.id)].includes(id)) throw new Error('Konto nicht gefunden.');
-    await this.vault.setToken(id, token); this.clients.clear(); this.gitClients.clear();
+    await this.vault.setToken(id, token); this.clients.clear(); this.gitClients.clear(); this.repositoryBrowser?.close();
     if (id === 'default') this.updates.github = this.client();
     this.changed();
     return { configured: Boolean(this.vault.tokens[id]) };

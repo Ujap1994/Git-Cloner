@@ -2,7 +2,7 @@ const { parseSource } = require('./config.cjs');
 const { retry } = require('./retry.cjs');
 
 class GitHubClient {
-  constructor({ token = '', fetchImpl = fetch, retryOptions = {}, cacheLimit = 16 * 1048576 } = {}) { Object.assign(this, { token, fetchImpl, retryOptions, cacheLimit }); this.cache = new Map(); this.cacheStats = {bytes:0}; }
+  constructor({ token = '', fetchImpl = fetch, retryOptions = {}, cacheLimit = 16 * 1048576 } = {}) { Object.assign(this, { token, fetchImpl, retryOptions, cacheLimit }); this.cache = new Map(); this.cacheStats = {bytes:0}; this.pagination = new Map(); }
   withTransfer(transfer, retries = 2) { const client = Object.create(this); client.transfer = transfer; client.retryOptions = { ...this.retryOptions, retries }; return client; }
   async request(endpoint, { allow404 = false, signal } = {}) {
     return retry(() => this.requestOnce(endpoint, { allow404, signal }), this.retryOptions);
@@ -29,6 +29,9 @@ class GitHubClient {
       throw new Error(`GitHub antwortet mit HTTP ${response.status}.`);
     }
     const data = await response.json();
+    const link = response.headers?.get('link');
+    this.pagination.set(endpoint, { next: link == null ? null : /rel="?next"?/.test(link) });
+    if (this.pagination.size > 2000) this.pagination.delete(this.pagination.keys().next().value);
     const etag = response.headers?.get('etag');
     if (etag) {
       const size = Buffer.byteLength(JSON.stringify(data));
@@ -43,6 +46,32 @@ class GitHubClient {
   async repository(value, options) {
     const name = parseSource(value, 'repository');
     return this.request(`/repos/${name}`,options);
+  }
+  async repositoryContext(owner, { signal } = {}) {
+    owner = parseSource(owner, 'owner');
+    const profile = await this.request(`/users/${owner}`, { signal });
+    let endpoint = profile.type === 'Organization' ? `/orgs/${owner}/repos?type=all` : `/users/${owner}/repos?type=owner`;
+    if (this.token && profile.type !== 'Organization') {
+      const user = await this.request('/user', { signal });
+      if (user.login?.toLowerCase() === owner.toLowerCase()) endpoint = '/user/repos?affiliation=owner&visibility=all';
+    }
+    return { owner, endpoint };
+  }
+  async repositoryPage(context, { page = 1, perPage = 50, query = '', signal } = {}) {
+    let endpoint, data, batch, total = null, limited = false;
+    if (query) {
+      const search = `user:${context.owner} in:name fork:true "${query.replace(/["\\]/g, '\\$&')}"`;
+      endpoint = `/search/repositories?q=${encodeURIComponent(search)}&sort=updated&order=desc&per_page=${perPage}&page=${page}`;
+      data = await this.request(endpoint, { signal }); batch = data.items; total = data.total_count;
+      limited = Boolean(data.incomplete_results) || total > 1000;
+    } else {
+      endpoint = `${context.endpoint}&sort=full_name&direction=asc&per_page=${perPage}&page=${page}`;
+      batch = await this.request(endpoint, { signal });
+    }
+    if (!Array.isArray(batch)) throw new Error('Ungültige Repository-Seite von GitHub.');
+    const hint = this.pagination.get(endpoint);
+    const hasMore = query ? page * perPage < Math.min(total ?? 0, 1000) : hint?.next ?? batch.length === perPage;
+    return { repositories: batch.filter(repo => repo.full_name?.split('/')[0].toLowerCase() === context.owner.toLowerCase()), hasMore, total, limited };
   }
   async repositories(owner) {
     parseSource(owner, 'owner');
@@ -74,7 +103,20 @@ class GitHubClient {
   async downloadAsset(fullName, id, file, expected = {}) {
     return retry(() => this.downloadAssetOnce(fullName,id,file,expected),this.retryOptions);
   }
-  async downloadAssetOnce(fullName, id, file, { expectedSize, expectedDigest } = {}) {
+  async assetResponse(fullName, id, { offset = 0, etag = null, timeout = 600000, identity = offset > 0 } = {}) {
+    const range = { ...(identity ? { 'Accept-Encoding': 'identity' } : {}), ...(offset ? { Range: `bytes=${offset}-`, ...(etag ? { 'If-Range': etag } : {}) } : {}) };
+    let response = await this.fetchImpl(`https://api.github.com/repos/${fullName}/releases/assets/${id}`, {
+      headers: { Accept: 'application/octet-stream', 'User-Agent': 'Git-Cloner', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...range }, redirect: 'manual', signal: AbortSignal.timeout(timeout)
+    });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const url = new URL(response.headers.get('location'));
+      if (url.protocol !== 'https:' || url.username || url.password || url.port || !['release-assets.githubusercontent.com', 'objects.githubusercontent.com'].includes(url.hostname)) throw new Error('Ungültige Asset-Weiterleitung.');
+      await response.body?.cancel?.();
+      response = await this.fetchImpl(url.href, { ...(offset || identity ? { headers: range } : {}), redirect: 'error', signal: AbortSignal.timeout(timeout) });
+    }
+    return response;
+  }
+  async downloadAssetOnce(fullName, id, file, { expectedSize, expectedDigest, expectedName = '', resume } = {}) {
     const fs = require('node:fs');
     const { Readable, Transform } = require('node:stream');
     const { createHash } = require('node:crypto');
@@ -82,14 +124,9 @@ class GitHubClient {
     parseSource(fullName, 'repository');
     if (!Number.isSafeInteger(id) || id < 1) throw new Error('Ungültiges Release-Asset.');
     if (expectedSize != null && (!Number.isSafeInteger(expectedSize) || expectedSize < 0)) throw new Error('Ungültige Größe einer Release-Datei.');
-    let response = await this.fetchImpl(`https://api.github.com/repos/${fullName}/releases/assets/${id}`, {
-      headers: { Accept: 'application/octet-stream', 'User-Agent': 'Git-Cloner', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) }, redirect: 'manual', signal: AbortSignal.timeout(600000)
-    });
-    if ([301, 302, 307, 308].includes(response.status)) {
-      const url = new URL(response.headers.get('location'));
-      if (url.protocol !== 'https:' || !['release-assets.githubusercontent.com', 'objects.githubusercontent.com'].includes(url.hostname)) throw new Error('Ungültige Asset-Weiterleitung.');
-      response = await this.fetchImpl(url.href, { redirect: 'error', signal: AbortSignal.timeout(600000) });
-    }
+    const timeout = Math.min(86400000, Math.max(600000, this.transfer?.budget.bytesPerSecond && expectedSize ? expectedSize / this.transfer.budget.bytesPerSecond * 1500 : 0));
+    if (resume) return resume.cache.download({ identity: resume.identity, file, expectedSize, expectedDigest, expectedName, transfer: this.transfer, onProgress: resume.onProgress, request: range => this.assetResponse(fullName, id, { ...range, timeout, identity: true }) });
+    const response = await this.assetResponse(fullName, id, { timeout });
     if (!response.ok || !response.body) { const error = new Error('Release-Datei konnte nicht geladen werden.'); error.retryable = [429,500,502,503,504].includes(response.status); throw error; }
     let bytes = 0; const hash = createHash('sha256');
     const meter = new Transform({ transform(chunk,_encoding,done) { bytes += chunk.length; hash.update(chunk); if (Number.isSafeInteger(expectedSize) && bytes > expectedSize) done(new Error('Release-Datei ist größer als von GitHub angegeben.')); else done(null,chunk); } });

@@ -66,13 +66,13 @@ jobs:
             os: windows-latest
             command: npx electron-builder --win nsis portable --arm64 --publish never
           - name: macOS x64
-            os: macos-latest
+            os: macos-15-intel
             command: npx electron-builder --mac dmg zip --x64 --publish never
           - name: macOS ARM64
-            os: macos-latest
+            os: macos-15-intel
             command: npx electron-builder --mac dmg zip --arm64 --publish never
           - name: macOS Universal
-            os: macos-latest
+            os: macos-15-intel
             command: npx electron-builder --mac dmg zip --universal --publish never
           - name: Linux x64
             os: ubuntu-24.04

@@ -69,3 +69,16 @@ Alle sechs zuletzt vorgeschlagenen Erweiterungen sind umgesetzt. Sie behalten je
 | 6 | Umfang vorschlagen | Git-Dateibäume und kleine Attributdateien auswerten; LFS/Submodule und Grenzen anzeigen. Aktivierung nur nach bewusster Auswahl für diese Quelle. |
 
 Eine historische Ordnerrotation bleibt außerhalb des aktuellen Verhaltens. Ein Mirror enthält seine Git-Historie innerhalb eines einzigen Stands.
+
+## Umgesetzt in Version 3.3: erste vier Prioritäten
+
+Zusätzlich: URL-Bereinigung, dynamische Owner-Hauptseiten ohne doppelte Importe und sichtbare, geprüfte Release-Dateien mit direkter Ordneraktion.
+
+| Priorität | Funktion | Umsetzung |
+| --- | --- | --- |
+| 1 | Repository-Browser mit Checkboxen | Anbieter-Suche, Seiten mit höchstens 50 Einträgen, Auswahl über Seiten/Suchen, gemeinsames Ziel und explizites Hinzufügen einzelner Quellen. GitHub, GitLab und Forgejo mit getrennten Zugangsdaten. |
+| 2 | Gruppen und Favoriten | Bis zu 30 selbst benannte Gruppen, Favoriten, kombinierte Filter und Quellenseiten mit 25 Einträgen. Organisation funktioniert unabhängig von der Erreichbarkeit des Laufwerks und verändert keine aktive Sicherung. |
+| 3 | Release-Downloads fortsetzen | Persistente geprüfte Dateiteile, sichere HTTP-Range-Fortsetzung und kontrollierter Neustart. Verschlüsselte Backups verwenden auch für den Cache authentifizierte Verschlüsselung. |
+| 4 | Mehrere Quellen gemeinsam bearbeiten | Gezielte Änderungen mit erhaltener Vererbung und individuellen Unterschieden; paginierte Bisher-/Danach-Vorschau und Schutz vor veralteten Vorschauen. |
+
+Die zusätzlich besprochenen Prioritäten 5–18 sind weitere Ideen. Sie wurden durch diese Beauftragung nicht umgesetzt. Der [Entwurf für weitere Detailansichten](DETAILANSICHTEN.md) beschreibt die geplante Darstellung ausdrücklich als Konzept.

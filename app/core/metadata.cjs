@@ -4,6 +4,7 @@ const { createHash } = require('node:crypto');
 const { writeJson } = require('./store.cjs');
 const { controlDirectory } = require('./integrity.cjs');
 const { selectReleaseAssets } = require('./release-assets.cjs');
+const { createReleaseDirectory } = require('./release-layout.cjs');
 
 async function metadataPlan(repository, options, github, git, { releaseScope = 'all', platform = process.platform } = {}) {
   if(github?.provider&&github.provider!=='github')return require('./hosted-metadata.cjs').hostedMetadataPlan(repository,options,github,git,{releaseScope,platform});
@@ -23,11 +24,11 @@ async function metadataPlan(repository, options, github, git, { releaseScope = '
     try { wikiRevision = await git.revision(`https://github.com/${repository.full_name}.wiki.git`, true); }
     catch (_error) { wikiWarning = 'Wiki nicht vorhanden oder nicht zugänglich.'; }
   }
-  const digest = createHash('sha256').update(JSON.stringify({ data, wikiRevision, wikiWarning, ...(options.releases ? { release: { tag: release?.tag_name, ids: releaseSelection.selected.map(a => a.id), scope: releaseScope, platform: releaseScope === 'system' ? platform : null } } : {}) })).digest('hex');
+  const digest = createHash('sha256').update(JSON.stringify({ data, wikiRevision, wikiWarning, ...(options.releases ? { releaseLayout: 2, release: { tag: release?.tag_name, ids: releaseSelection.selected.map(a => a.id), scope: releaseScope, platform: releaseScope === 'system' ? platform : null } } : {}) })).digest('hex');
   return {
-    digest, warning: wikiWarning, wikiRevision, estimatedBytes, releaseInfo,
+    digest, warning: wikiWarning, wikiRevision, estimatedBytes, releaseInfo, downloadCount: releaseSelection.selected.length,
     releaseWarning: options.releases && assets.length && !releaseSelection.selected.length ? 'Keine eindeutig passenden Release-Dateien für dieses Betriebssystem gefunden. Bei Bedarf alle Betriebssysteme auswählen.' : null,
-    async apply(directory, mode) {
+    async apply(directory, mode, { downloads, onProgress } = {}) {
       const target = path.join(controlDirectory(directory, mode), 'git-cloner-metadata');
       await fs.rm(target, { recursive: true, force: true });
       if (!Object.values(options).some(Boolean)) return;
@@ -47,13 +48,14 @@ async function metadataPlan(repository, options, github, git, { releaseScope = '
         }
       }
       if (options.releases) await writeJson(path.join(target,'release-selection.json'), { tag: release?.tag_name ?? null, scope: releaseScope, platform, platformName: releaseSelection.platformName, selected: releaseSelection.selected.map(a => ({ id: a.id, name: a.name, size: a.size })), excluded: releaseSelection.excluded });
+      const releaseFolder = releaseSelection.selected.length ? await createReleaseDirectory(directory, repository, release, releaseSelection.selected) : null;
       for (const asset of releaseSelection.selected) {
-        const assets = path.join(target, 'release-assets'); await fs.mkdir(assets, { recursive: true });
-        const safeName = `${asset.id}-${asset.name.replace(/[^a-z\d._-]/gi, '_').slice(0, 180)}`;
-        await github.downloadAsset(repository.full_name, asset.id, path.join(assets, safeName), { expectedSize: asset.size, expectedDigest: asset.digest });
+        const safeName = releaseFolder.files.find(file => file.id === asset.id).storedName;
+        await github.downloadAsset(repository.full_name, asset.id, path.join(releaseFolder.target, safeName), { expectedSize: asset.size, expectedDigest: asset.digest, expectedName: asset.name, ...(downloads ? { resume: { cache: downloads, identity: { tag: release.tag_name, id: asset.id, name: asset.name, size: asset.size, digest: asset.digest, updatedAt: asset.updated_at }, onProgress } } : {}) });
       }
       if (wikiRevision) await git.cloneMirror(`https://github.com/${repository.full_name}.wiki.git`, path.join(target, 'wiki.git'));
       await writeJson(path.join(target, 'export.json'), { exportedAt: new Date().toISOString(), options, warning: wikiWarning, wikiRevision });
+      return { releaseInfo: releaseInfo ? { ...releaseInfo, assetDirectory: releaseFolder?.name ?? null } : null };
     }
   };
 }

@@ -94,7 +94,7 @@ test('metadata export saves issues, comments, reviews, releases and assets',asyn
   const record=await f.sync({github});assert.equal(record.status,'cloned');
   const metadata=path.join(f.target,'.git','git-cloner-metadata');
   assert.equal(JSON.parse(await fs.readFile(path.join(metadata,'issues.json'),'utf8')).length,1);
-  assert.equal(await fs.readFile(path.join(metadata,'release-assets','10-release.bin'),'utf8'),'asset bytes');
+  assert.equal(await fs.readFile(path.join(f.target,'Git-Cloner-Releases','release.bin'),'utf8'),'asset bytes');
   assert.ok(calls.some(url=>url.endsWith('/pulls/2/reviews')));assert.ok(calls.some(url=>url.endsWith('/issues/1/comments')));
   assert.equal((await f.sync({github})).status,'unchanged');
 });

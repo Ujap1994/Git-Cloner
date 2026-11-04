@@ -10,6 +10,7 @@ const { decryptArchive } = require('./archives.cjs');
 const { hashFile, verifyDirectory, controlDirectory } = require('./integrity.cjs');
 const { existingRoot, checkSpace, safeDirectory } = require('./destinations.cjs');
 const { readJson } = require('./store.cjs');
+const { releaseDirectoryName, RELEASE_OWNER } = require('./release-layout.cjs');
 function relative(value, allowEmpty = false, platform = process.platform) {
   if (typeof value !== 'string' || (!value && !allowEmpty) || value.length > 4096 || path.isAbsolute(value) || /^[a-z]:/i.test(value) || /[\\\0]/.test(value) || value.split('/').some(p => p === '..' || p === '.' || p === '.git')) throw new Error('Ungültiger Auswahlpfad.');
   if (platform === 'win32' && value.split('/').some(p => /[<>:"|?*]/.test(p) || [...p].some(c => c.codePointAt(0) < 32) || /[. ]$/.test(p) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(p))) throw new Error('Dieser Dateiname wird von Windows nicht unterstützt. Bitte die vollständige Mirror-Sicherung verwenden.');
@@ -76,9 +77,9 @@ class RestoreBrowser {
       if (!manifest?.entries) throw new Error('Diese ältere Sicherung hat kein Dateimanifest. Bitte zunächst vollständig wiederherstellen.');
       let filesRoot = source, entries;
       if (content === 'releases') {
-        try { filesRoot = await safeDirectory(controlDirectory(source,marker.mode),['git-cloner-metadata','release-assets']); } catch (error) { if (error.code === 'ENOENT') throw new Error('Diese Sicherung enthält keine Release-Dateien.'); throw error; }
+        try { filesRoot = releaseDirectoryName(marker.releaseInfo?.assetDirectory) ? await safeDirectory(source,[marker.releaseInfo.assetDirectory]) : await safeDirectory(controlDirectory(source,marker.mode),['git-cloner-metadata','release-assets']); } catch (error) { if (error.code === 'ENOENT') throw new Error('Diese Sicherung enthält keine Release-Dateien.'); throw error; }
         const prefix = path.relative(source,filesRoot).split(path.sep).join('/') + '/';
-        entries = manifest.entries.filter(e => e.path.startsWith(prefix) && e.sha256 && e.link === undefined).map(e => ({...e,path:relative(e.path.slice(prefix.length))}));
+        entries = manifest.entries.filter(e => e.path.startsWith(prefix) && e.path !== prefix + RELEASE_OWNER && e.sha256 && e.link === undefined).map(e => ({...e,path:relative(e.path.slice(prefix.length))}));
       } else entries = marker.mode === 'mirror' ? await gitTree(source) : manifest.entries.filter(e => !e.path.split('/').includes('.git')).map(e => ({...e,path:relative(e.path)}));
       const id = randomUUID(), session = { id, source, filesRoot, content, marker, entries, temporary, expiresAt: this.now() + this.ttl };
       this.sessions.set(id,session); return { id, fullName: marker.fullName, mode: marker.mode, content, fileCount: entries.length, expiresAt: new Date(session.expiresAt).toISOString() };

@@ -63,6 +63,28 @@ class HostedClient {
     const organization=await this.request(`/orgs/${owner}`,{allow404:true});
     return(await this.collection(organization?`/orgs/${owner}/repos`:`/users/${owner}/repos`)).map(r=>this.normalize(r)).filter(r=>r.full_name.split('/')[0].toLowerCase()===owner.toLowerCase());
   }
+  async repositoryContext(owner,{signal}={}) {
+    owner=parseHostedSource(owner,'owner',this);
+    if(this.provider==='gitlab'){
+      const group=await this.request(`/groups/${encodeURIComponent(owner)}`,{allow404:true,signal});
+      if(group)return{owner,endpoint:`/groups/${group.id}/projects?include_subgroups=true&with_shared=false&order_by=path&sort=asc`};
+      if(owner.includes('/'))throw new Error('GitLab-Gruppe nicht gefunden oder keine Zugriffsberechtigung.');
+      const users=await this.request(`/users?username=${encodeURIComponent(owner)}`,{signal}),user=Array.isArray(users)&&users.find(u=>u.username?.toLowerCase()===owner.toLowerCase());
+      if(!user)throw new Error('GitLab-Konto nicht gefunden.');
+      return{owner,endpoint:`/users/${user.id}/projects?owned=true&order_by=path&sort=asc`};
+    }
+    const organization=await this.request(`/orgs/${owner}`,{allow404:true,signal});
+    const profile=organization??await this.request(`/users/${owner}`,{signal});
+    if(!Number.isSafeInteger(profile.id)||profile.id<1)throw new Error('Der Git-Server liefert keine gültige Konto-ID.');
+    return{owner,uid:profile.id};
+  }
+  async repositoryPage(context,{page=1,perPage=50,query='',signal}={}) {
+    const endpoint=this.provider==='gitlab'?`${context.endpoint}&per_page=${perPage}&page=${page}${query?`&search=${encodeURIComponent(query)}`:''}`:`/repos/search?uid=${context.uid}&limit=${perPage}&page=${page}${query?`&q=${encodeURIComponent(query)}`:''}`;
+    const response=await this.request(endpoint,{signal}),batch=this.provider==='gitlab'?response:response.data;
+    if(!Array.isArray(batch))throw new Error('Ungültige Repository-Seite.');
+    const hint=this.pagination.get(endpoint),total=this.provider==='gitlab'?hint?.total:response.total_count;
+    return{repositories:batch.map(item=>this.normalize(item)).filter(repo=>repo.full_name.toLowerCase().startsWith(context.owner.toLowerCase()+'/')),hasMore:hint?.next??(Number.isSafeInteger(total)?page*perPage<total:batch.length===perPage),total:Number.isSafeInteger(total)?total:null};
+  }
   async tree(fullName,revision,{signal}={}) {
     const base=this.projectPath(fullName);
     if(this.provider==='gitlab')return{truncated:false,tree:(await this.collection(`${base}/repository/tree?ref=${encodeURIComponent(revision)}&recursive=true`,{signal})).map(entry=>({...entry,sha:entry.id??entry.sha}))};
@@ -90,15 +112,21 @@ class HostedClient {
     return url.href;
   }
   downloadAsset(fullName,id,file,expected={}) {if(!expected.url)throw new Error('Release-Download-Adresse fehlt.');return retry(()=>this.downloadURL(expected.url,file,expected),this.retryOptions);}
-  async downloadURL(value,file,{expectedSize,expectedDigest,expectedName=''}={}) {
-    if(expectedSize!=null&&(!Number.isSafeInteger(expectedSize)||expectedSize<0))throw new Error('Ungültige Release-Dateigröße.');
+  async assetResponse(value,{offset=0,etag=null,timeout=600000,identity=offset>0}={}) {
     let url=await this.safeDownloadURL(value),response;
-    const timeout=Math.min(86400000,Math.max(600000,this.transfer?.budget.bytesPerSecond&&expectedSize?expectedSize/this.transfer.budget.bytesPerSecond*1500:0));
+    const range={...(identity?{'Accept-Encoding':'identity'}:{}),...(offset?{Range:`bytes=${offset}-`,...(etag?{'If-Range':etag}:{})}:{})};
     for(let redirects=0;redirects<=5;redirects++){
-      response=await this.fetchImpl(url,{headers:this.headers(url,true),redirect:'manual',signal:AbortSignal.timeout(timeout)});
+      response=await this.fetchImpl(url,{headers:{...this.headers(url,true),...range},redirect:'manual',signal:AbortSignal.timeout(timeout)});
       if(![301,302,303,307,308].includes(response.status))break;
       if(redirects===5)throw new Error('Zu viele Release-Weiterleitungen.');const location=response.headers?.get('location');if(!location)throw new Error('Release-Weiterleitung ohne Ziel.');await response.body?.cancel?.();url=await this.safeDownloadURL(new URL(location,url).href);
     }
+    return response;
+  }
+  async downloadURL(value,file,{expectedSize,expectedDigest,expectedName='',resume}={}) {
+    if(expectedSize!=null&&(!Number.isSafeInteger(expectedSize)||expectedSize<0))throw new Error('Ungültige Release-Dateigröße.');
+    const timeout=Math.min(86400000,Math.max(600000,this.transfer?.budget.bytesPerSecond&&expectedSize?expectedSize/this.transfer.budget.bytesPerSecond*1500:0));
+    if(resume)return resume.cache.download({identity:resume.identity,file,expectedSize,expectedDigest,expectedName,transfer:this.transfer,onProgress:resume.onProgress,request:range=>this.assetResponse(value,{...range,timeout,identity:true})});
+    const response=await this.assetResponse(value,{timeout});
     if(!response.ok||!response.body){const error=new Error('Release-Datei konnte nicht geladen werden.');error.retryable=[429,500,502,503,504].includes(response.status);error.helpCode=[401,403].includes(response.status)?'authentication':'network';throw error;}
     if(/^text\/html/i.test(response.headers?.get('content-type')??'')&&!/\.html?$/i.test(expectedName)){await response.body.cancel();const error=new Error('Der Server liefert eine HTML-Anmeldeseite statt der Release-Datei. Token und Download-Berechtigungen prüfen.');error.helpCode='authentication';throw error;}
     const hash=createHash('sha256');let bytes=0,owned=false;

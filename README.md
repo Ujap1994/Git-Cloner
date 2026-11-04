@@ -1,5 +1,5 @@
 <p align="center"><img src="build/icon.png" width="80" alt="Git Cloner"></p>
-<h1 align="center">Git Cloner 3.2</h1>
+<h1 align="center">Git Cloner 3.3</h1>
 <p align="center">Deine Repositories. Auf deinem Laufwerk. Nach deinem Zeitplan.</p>
 <p align="center"><a href="https://github.com/Ujap1994/Git-Cloner/actions/workflows/ci.yml"><img src="https://github.com/Ujap1994/Git-Cloner/actions/workflows/ci.yml/badge.svg" alt="CI"></a> <a href="https://github.com/Ujap1994/Git-Cloner/releases">Downloads</a> · <a href="docs/ANLEITUNG.md">Anonymisierte Anleitung</a> · <a href="docs/GUIDE.en.md">English guide</a></p>
 
@@ -27,9 +27,32 @@ Git Cloner ist eine Electron-Desktop-App für macOS, Windows und Linux. Sie sich
 | Komfort | Suche, Statusfilter, paginierte Listen, Import/Export der Einstellungen ohne Geheimnisse und anonymisierte Diagnoseprotokolle. |
 | Darstellung | Deutsch und Englisch, Hell-/Dunkelmodus oder Systemeinstellung sowie drei Schriftgrößen, hohen Kontrast und Tastenkürzel mit ausgerichteten Eingabefeldern. |
 
-## Neu in Version 3.2
+## Neu in Version 3.3
 
-Alle sechs zuletzt beauftragten Erweiterungen sind umgesetzt:
+Die vier empfohlenen nächsten Schritte sind umgesetzt. Quellen und Gruppen bleiben beim ersten Start leer.
+
+| Erweiterung | Verhalten |
+| --- | --- |
+| Repository-Browser | GitHub-, GitLab- und Forgejo-Repositories beim Anbieter suchen, seitenweise laden und per Checkbox auswählen. Die Auswahl bleibt über Suchbegriffe und Seiten hinweg erhalten. Einen gemeinsamen Speicherort, eine Gruppe und Favoritenstatus vor dem Hinzufügen festlegen. |
+| Gruppen und Favoriten | Bis zu 30 eigene Gruppen, Favoritenfilter, Quellensuche und Seiten mit jeweils 25 Quellen. Die Organisation funktioniert auch während einer Sicherung oder bei abgezogenem Laufwerk. |
+| Fortsetzbare Release-Downloads | Geprüfte Dateiteile über Unterbrechungen und Neustarts behalten. HTTP-Range, ETag beziehungsweise sichere Änderungsdaten und vorhandene SHA256-Angaben prüfen. Bei ungeeigneten Serverantworten kontrolliert neu beginnen. Bei verschlüsselten Backups bleiben auch gespeicherte Download-Teile verschlüsselt. |
+| Gemeinsam bearbeiten | Ausgewählte Quellen mit gezielten Änderungen an Gruppe, Favoriten, Aktivierung, Ziel, Zugangsdaten, Filtern, Sicherungsumfang und Prüfzeiten bearbeiten. Erst die Vorschau mit **Bisher / Danach** prüfen, dann gemeinsam speichern. Zwischenzeitliche Änderungen machen eine alte Vorschau ungültig. |
+
+GitHub-Adressen werden beim Einfügen auf **Owner/Repository** gekürzt. Konto- und Organisationshauptseiten öffnen die Einzelliste als **Sammelquelle**: neue Repositories automatisch entdecken, bestehende Einzelregeln erhalten und wiederholte Eingaben ohne Duplikate übernehmen. Eine feste Auswahl bleibt möglich.
+
+**Release-Dateien finden:** Heruntergeladene Dateien liegen sichtbar in `Zielordner/Owner/Repository/Git-Cloner-Releases/`. Die Übersicht zeigt den Ort und öffnet ihn direkt. Ältere versteckte Ablagen wechseln bei der nächsten erfolgreichen Prüfung; verschlüsselte Sicherungen behalten die Dateien im Archiv. Siehe die [anonymisierte Anleitung](docs/ANLEITUNG.md#4-sicherungsumfang-wählen).
+
+![Quellen mit Gruppen, Favoriten und gemeinsamer Auswahl](docs/screenshots/source-groups.png)
+
+![Repository-Browser mit expliziter Auswahl und gemeinsamem Ziel](docs/screenshots/repository-browser.png)
+
+![Vorschau der gemeinsamen Quellenänderungen](docs/screenshots/bulk-preview.png)
+
+Die [anonymisierte Anleitung ab Abschnitt 28](docs/ANLEITUNG.md#28-repositories-mit-checkboxen-auswählen) beschreibt die Bedienung und die Bedingungen für fortsetzbare Downloads. Der [geplante Aufbau weiterer Detailansichten](docs/DETAILANSICHTEN.md) ist als Konzept dokumentiert; die übrigen Feature-Ideen sind damit noch nicht implementiert.
+
+## Weiterhin enthalten: Version 3.2
+
+Die sechs Erweiterungen aus Version 3.2 sind umgesetzt:
 
 | Erweiterung | Verhalten |
 | --- | --- |

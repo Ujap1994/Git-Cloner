@@ -15,8 +15,16 @@ const { includesRepository } = require('./filters.cjs');
 const { hashFile, writeManifest, verifyDirectory, verificationDue, controlDirectory } = require('./integrity.cjs');
 const { encryptArchive, decryptArchive } = require('./archives.cjs');
 const { metadataPlan } = require('./metadata.cjs');
+const { ReleaseDownloads } = require('./release-downloads.cjs');
+const { releaseDirectoryName } = require('./release-layout.cjs');
 const MARKER = 'git-cloner.json';
 const copyOptions = { recursive: true, mode: constants.COPYFILE_FICLONE, verbatimSymlinks: true };
+async function copyRepository(source, destination, mode, releaseInfo, git) {
+  const metadata = path.join(controlDirectory(source, mode), 'git-cloner-metadata');
+  let releaseFolder = releaseDirectoryName(releaseInfo?.assetDirectory) ? path.join(source, releaseInfo.assetDirectory) : null;
+  if (releaseFolder && mode !== 'mirror' && (await git.run(['-C', source, 'ls-tree', '--name-only', 'HEAD', '--', releaseInfo.assetDirectory])).trim()) releaseFolder = null;
+  await fs.cp(source, destination, { ...copyOptions, filter: file => file !== metadata && file !== releaseFolder });
+}
 async function exists(file) { try { await fs.lstat(file); return true; } catch (error) { if (error.code === 'ENOENT') return false; throw error; } }
 async function managed(directory, fullName) {
   const info = await fs.lstat(directory);
@@ -97,10 +105,10 @@ async function syncRepository({ source, repository, git, github, options = defau
       return { fullName, destination: target, commit: current.commit, mode: opts.mode, encrypted: opts.encryption, files: current.files, bytes: current.bytes, releaseInfo: current.releaseInfo ?? null, ...(plan.releaseWarning ? {warning:plan.releaseWarning} : {}), verifiedAt, verificationStatus: 'ok', status: 'unchanged', checkedAt: new Date().toISOString() };
     } catch (_error) { repair = true; }
   }
-  const estimatedBytes = Math.max((repository.size ?? 0) * 2048 + (plan.estimatedBytes ?? 0),current?.bytes ?? 0);
+  const estimatedBytes = Math.max((repository.size ?? 0) * 2048 + (plan.estimatedBytes ?? 0) * (plan.downloadCount ? 2.02 : 1),current?.bytes ?? 0);
   await checkSpace(root, estimatedBytes, opts.reserveMB);
   await writeJson(markerFile, { schemaVersion: 1, fullName });
-  let temporary;
+  let temporary, downloads, downloadWarning;
   try {
     let payload = staging;
     if (opts.encryption) {
@@ -115,18 +123,20 @@ async function syncRepository({ source, repository, git, github, options = defau
       try { await verifyDirectory(target, git, current.mode); } catch (_error) { reusable = false; repair = true; }
     }
     if (opts.mode === 'mirror') {
-      if (reusable) { await fs.cp(target, payload, copyOptions); await git.updateMirror(payload, url, repository.default_branch); }
+      if (reusable) { await copyRepository(target, payload, opts.mode, current.releaseInfo, git); await git.updateMirror(payload, url, repository.default_branch); }
       else await git.cloneMirror(url, payload);
-    } else if (reusable && current.revision === revision) await fs.cp(target, payload, copyOptions);
+    } else if (reusable && current.revision === revision) await copyRepository(target, payload, opts.mode, current.releaseInfo, git);
     else await git.clone(url, payload);
     if (opts.submodules) await git.submodules(payload);
     if (opts.lfs) await git.lfs(payload, opts.mode === 'mirror');
-    await plan.apply(payload, opts.mode);
+    if (plan.downloadCount) downloads = await ReleaseDownloads.open({ root, volumeId: source.volumeId, scope: `${providerKey(source)}:${source.accountId ?? 'default'}:${fullName.toLowerCase()}`, passphrase: opts.encryption ? passphrase : '', encryptionKeyId: opts.encryptionKeyId || '' });
+    const applied = await plan.apply(payload, opts.mode, { downloads, onProgress });
+    const releaseInfo = structuredClone(applied?.releaseInfo ?? plan.releaseInfo ?? null);
     onProgress({ fullName, status: 'verifying' }); await git.fsck(payload);
     const commit = await git.head(payload);
     if (!/^[a-f\d]{40,64}$/.test(commit)) throw new Error('Der neue Stand enthält keinen gültigen Commit.');
     const verification = await writeManifest(payload, opts.mode);
-    const marker = { schemaVersion: 1, fullName, ...(spec.provider!=='github'?spec:{}), commit, revision, mode: opts.mode, encrypted: opts.encryption, ...(opts.encryptionKeyId?{encryptionKeyId:opts.encryptionKeyId}:{}), fingerprint, metadataDigest: plan.digest, wikiRevision: plan.wikiRevision ?? null, releaseInfo: plan.releaseInfo ?? null, ...verification, updatedAt: new Date().toISOString() };
+    const marker = { schemaVersion: 1, fullName, ...(spec.provider!=='github'?spec:{}), commit, revision, mode: opts.mode, encrypted: opts.encryption, ...(opts.encryptionKeyId?{encryptionKeyId:opts.encryptionKeyId}:{}), fingerprint, metadataDigest: plan.digest, wikiRevision: plan.wikiRevision ?? null, releaseInfo, ...verification, updatedAt: new Date().toISOString() };
     await writeJson(path.join(controlDirectory(payload, opts.mode), MARKER), { ...marker, encrypted: false });
     if (opts.encryption) {
       onProgress({ fullName, status: 'encrypting' }); await encryptArchive(payload, path.join(staging, 'backup.gcb'), passphrase);
@@ -137,14 +147,15 @@ async function syncRepository({ source, repository, git, github, options = defau
     try { await fs.rename(staging, target); }
     catch (error) { if (current && !await exists(target)) await fs.rename(previous, target); throw error; }
     if (current) await fs.rm(previous, { recursive: true });
-    return { fullName, destination: target, commit, mode: opts.mode, encrypted: opts.encryption, releaseInfo: plan.releaseInfo ?? null, ...verification, verificationStatus: 'ok', status: repair ? 'repaired' : current ? 'updated' : 'cloned', ...(plan.warning || plan.releaseWarning ? { warning: plan.warning || plan.releaseWarning } : {}), checkedAt: new Date().toISOString() };
+    try { await downloads?.clear(); } catch (_error) { downloadWarning = 'Die Sicherung ist geprüft. Der temporäre Download-Cache konnte nicht vollständig bereinigt werden.'; }
+    return { fullName, destination: target, commit, mode: opts.mode, encrypted: opts.encryption, releaseInfo, ...verification, verificationStatus: 'ok', status: repair ? 'repaired' : current ? 'updated' : 'cloned', ...(plan.warning || plan.releaseWarning || downloadWarning ? { warning: plan.warning || plan.releaseWarning || downloadWarning } : {}), checkedAt: new Date().toISOString() };
   } finally {
-    await fs.rm(staging, { recursive: true, force: true }); await fs.rm(markerFile, { force: true });
-    if (temporary) await fs.rm(temporary, { recursive: true, force: true });
+    try { await fs.rm(staging, { recursive: true, force: true }); await fs.rm(markerFile, { force: true }); if (temporary) await fs.rm(temporary, { recursive: true, force: true }); }
+    finally { await downloads?.close(); }
   }
 }
 async function resolveJobs(sources, github, { onlyTargets = null, onlySources = null } = {}) {
-  const selected = sources.filter(s => s.enabled), overrides = new Set(selected.filter(s => s.kind === 'repository').map(s => repositoryIdentity(s,s.value)));
+  const selected = sources.filter(s => s.enabled), overrides = new Set(sources.filter(s => s.kind === 'repository').map(s => repositoryIdentity(s,s.value)));
   const jobs = [], errors = [], excluded = [], paths = new Set(), reserved = new Set();
   for (const source of selected) {
     if (onlySources && !onlySources.includes(source.id)) continue;

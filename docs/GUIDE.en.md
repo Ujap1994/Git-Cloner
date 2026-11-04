@@ -39,6 +39,8 @@ Select **Check now** for the first run. The previous successful backup is replac
 
 Under **Settings → Backup**, choose a shallow snapshot of the current default branch or a full bare mirror containing all branches, tags and Git history. Mirrors use incremental fetch. Enable actual LFS downloads if needed. Recursive submodules are supported for snapshots using HTTPS; they cannot be combined with mirror mode.
 
+From version 3.3, downloaded release files are visible under **`destination / owner / repository / Git-Cloner-Releases`** with their original filenames. The overview shows this location and provides **Open release folder**. A numbered alternative protects an existing repository-owned folder. Encrypted backups keep this folder inside `backup.gcb`; use **Restore release assets** and unlock the archive. Legacy hidden `.git/git-cloner-metadata/release-assets` backups remain restorable and migrate on their next successful check.
+
 Optional metadata exports include issues/comments, pull requests/reviews/comments/file changes, releases/assets and a Wiki mirror. They are local exports, not an automatic GitHub reimport. Missing or inaccessible Wikis produce an explicit message; a later Wiki fetch failure preserves an existing backup that already contains its Wiki.
 
 New backups have Git checks and SHA256 manifests. Existing backups are checked weekly by default; always/manual policies are available. A detected damaged managed backup is rebuilt during the next run only if a valid replacement can be obtained. Free-space checks include a reserve, but GitHub's size estimate may not cover large LFS and release assets.
@@ -199,3 +201,47 @@ The process requires space for old/new ciphertext and authenticated/extracted te
 Use **Recommend content** for a saved source. For an account/group, enter one repository belonging to it. The app reads Git trees and small attribute files without cloning or executing project code. It reports LFS rules, submodule links and local Git LFS availability. Incomplete inspections cannot establish absence. Review the checkboxes, then explicitly **Apply selection to this source**. Global options stay unchanged. Group choices affect all repositories in that source; submodules require snapshot mode. Closing without applying changes nothing.
 
 ![Content recommendations](screenshots/content-recommendations.png)
+
+## 28. Choose repositories with checkboxes
+
+Open **Sources → Choose repositories**, select a provider and HTTPS server, choose compatible credentials and enter your own owner, organization or group. Names start empty. GitLab subgroup paths such as `example-group/subgroup` are supported. **Load** only reads repository metadata; it does not clone repositories or create destination markers.
+
+Pages contain up to 50 entries. Search runs on the provider. Selections survive searches and page changes within the current session; the header checkbox selects only the current page. Existing individual sources are marked. GitHub limits search results to 1,000; a limited search is labelled and should be narrowed. Private repositories require appropriate read access.
+
+Choose an existing shared destination and optionally an existing group or favorite status, then add the sources. Each repository remains independently editable. The existing limit of 100 sources applies; inactive browser sessions expire after 15 minutes. Changed provider, credential or owner fields require an explicit reload. Cancel does not save any sources.
+
+**Paste GitHub URLs:** `https://github.com/example-owner/example-project` immediately becomes `example-owner/example-project`. Repository `.git` endings, trailing slashes and common navigation paths are recognized. Owner/organization pages such as `https://github.com/orgs/example-team/repositories` automatically open the repository list with **Automatically include new repositories** enabled. **Add owner source** saves one dynamic source that discovers matching current and future repositories on every check. Explicit repository rules take priority, including paused rules. Options, filters and schedules from the source form are retained.
+
+Entering the same owner page again retains the existing source and settings without duplicates. Newly created repositories are already covered by it. **Show repositories** opens its current list. An existing paused owner source remains paused until explicitly enabled. Uncheck automatic inclusion for a fixed selection. **Select all missing** scans further pages and skips existing individual sources; overflowing the 100-source limit never partially imports a list. A dynamic owner source can cover a large owner with one source.
+
+![Repository browser using anonymous examples](screenshots/repository-browser.png)
+
+![Dynamic owner source with existing individual rules](screenshots/owner-source.png)
+
+## 29. Groups, favorites and source selection
+
+**Sources → Groups** manages up to 30 groups with your own names. Removing a group retains all its sources and backup files. No groups are created on first launch. Stars toggle favorites. Search, group filtering and the favorites filter combine; source pages contain up to 25 rows.
+
+Checkbox selections survive filters and pages. The selection bar shows their total. Assign a group or mark/unmark favorites directly, including while a backup runs or the destination is disconnected. These organizational changes do not alter backup content or the active queue. Clear selection only removes the checkmarks.
+
+![Groups, favorites and shared actions](screenshots/source-groups.png)
+
+## 30. Edit selected sources together
+
+Select sources and open **Edit together**. Every field initially keeps its existing value. Only explicit changes replace values; source-specific differences remain intact. Supported changes include group, favorite, enabled state, destination, compatible credentials, filters, backup content and daily schedules. Global backup/schedule inheritance can be restored. Selected backup changes merge with each source's existing effective options. An explicitly enabled empty pattern field clears those patterns.
+
+**Review changes** displays **Before / After** for each affected source, up to ten sources per preview page. Preview writes no backup files or drive markers. Apply saves the reviewed configuration together. An intervening configuration edit invalidates the old preview; previews expire after five minutes. Cancel saves nothing. New destinations apply to future backups and retain existing backups at their current location. Running or paused backup queues must finish or be discarded before content changes. Encryption still requires an unlocked password and secure remembering for independent OS tasks.
+
+![Bulk change preview](screenshots/bulk-preview.png)
+
+## 31. Resume large release downloads
+
+Optional release-asset backups retain verified parts after network interruptions and can resume after a new attempt or application restart. HTTP Range, strong ETags or sufficiently old canonical HTTP modification dates, and available SHA256 checksums are validated. Unsupported or inconsistent responses cause a controlled restart; unsuitable parts cannot silently become a successful backup. Progress shows the file, byte counts and **Resumed from …** when applicable. Complete cached assets are verified before reuse.
+
+The temporary `.git-cloner-downloads` folder lives in the configured destination, separate from the successful repository backup. Encrypted backups also encrypt persistent download parts with AES-256-GCM; the archive password is required and is never saved in the cache. Unencrypted backups use restricted file permissions. Cache, staging and atomic replacement temporarily require additional space.
+
+Owned cache entries are removed after a successful backup. Unused entries older than seven days are checked and removed when that repository cache is next used. Foreign files, links and invalid ownership markers remain untouched. A hard process termination can still leave temporary plaintext working data, as with previous encrypted-backup operations; deletion is not forensic secure erasure.
+
+![Visible release folder in the overview](screenshots/release-location.png)
+
+The planned layout of further detail views is documented separately in the German [UI concept](DETAILANSICHTEN.md). Those additional views are not implemented features of version 3.3.

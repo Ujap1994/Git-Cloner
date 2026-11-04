@@ -15,7 +15,7 @@ test('release backup downloads the latest stable release only and replaces old a
   const first=await f.sync();assert.equal(first.status,'cloned');assert.deepEqual(f.downloads,[1,2,3,4,5]);
   f.downloads=[];f.options.releaseScope='system';await f.sync();
   const selected=process.platform==='win32'?1:process.platform==='darwin'?2:3;assert.deepEqual(f.downloads,[selected,4]);
-  const folder=path.join(first.destination,'.git','git-cloner-metadata');const filenames=await fs.readdir(path.join(folder,'release-assets'));assert.equal(filenames.length,2);assert.ok(!filenames.includes('6-old.exe'));
+  const folder=path.join(first.destination,'.git','git-cloner-metadata');const filenames=await fs.readdir(path.join(first.destination,'Git-Cloner-Releases'));assert.equal(filenames.filter(name=>!name.startsWith('.')).length,2);assert.ok(!filenames.includes('old.exe'));
   const selection=await readJson(path.join(folder,'release-selection.json'));assert.equal(selection.tag,'v2');assert.equal(selection.platform,process.platform);assert.ok(selection.excluded.some(a=>a.id===5));
   f.downloads=[];assert.equal((await f.sync()).status,'unchanged');assert.deepEqual(f.downloads,[]);
 });
@@ -65,8 +65,8 @@ test('a failed change comparison releases the runtime lease and allows another b
 test('release-only recovery supports encrypted mirrors without exposing Git internals',async t=>{
   const f=await repository(t),asset=f.asset(7,'package.zip','restore only this asset');f.releases=[{tag_name:'v1',assets:[asset]}];
   const record=await f.sync({options:{...f.options,mode:'mirror',metadata:{...f.options.metadata,releases:true},encryption:true},passphrase:'long release test password'}),browser=new RestoreBrowser({git:f.git});t.after(()=>browser.closeAll());
-  const opened=await browser.open({record,passphrase:'long release test password',content:'releases'}),list=browser.list({sessionId:opened.id});assert.deepEqual(list.entries.map(e=>e.path),['7-package.zip']);
-  const restored=await browser.restore({sessionId:opened.id,paths:['7-package.zip'],parent:f.root,name:'release-recovery'});assert.deepEqual(await fs.readdir(restored.destination),['7-package.zip']);assert.equal(await fs.readFile(path.join(restored.destination,'7-package.zip'),'utf8'),'restore only this asset');
+  const opened=await browser.open({record,passphrase:'long release test password',content:'releases'}),list=browser.list({sessionId:opened.id});assert.deepEqual(list.entries.map(e=>e.path),['package.zip']);
+  const restored=await browser.restore({sessionId:opened.id,paths:['package.zip'],parent:f.root,name:'release-recovery'});assert.deepEqual(await fs.readdir(restored.destination),['package.zip']);assert.equal(await fs.readFile(path.join(restored.destination,'package.zip'),'utf8'),'restore only this asset');
 });
 test('a paused additional destination can be reloaded with its own volume hint',async t=>{
   const f=await repository(t),extra=path.join(f.root,'other-drive');await fs.mkdir(extra);const {prepareDestination}=require('../../app/core/destinations.cjs');const target=await prepareDestination({id:'extra',destination:extra});

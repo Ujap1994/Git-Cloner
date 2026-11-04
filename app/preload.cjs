@@ -24,6 +24,14 @@ contextBridge.exposeInMainWorld('gitCloner', {
   stopRotation: ()=>ipcRenderer.invoke('rotation:stop'),
   recommendSource: options=>ipcRenderer.invoke('source:recommend',options),
   cancelRecommendations: ()=>ipcRenderer.invoke('source:recommend-cancel'),
+  organizeSources: input => ipcRenderer.invoke('sources:organize', input),
+  previewSources: input => ipcRenderer.invoke('sources:preview', input),
+  applySources: input => ipcRenderer.invoke('sources:apply', input),
+  browseRepositories: input => ipcRenderer.invoke('repositories:browse-open', input),
+  repositoryPage: input => ipcRenderer.invoke('repositories:browse-page', input),
+  missingRepositories: input => ipcRenderer.invoke('repositories:browse-missing', input),
+  closeRepositoryBrowser: () => ipcRenderer.invoke('repositories:browse-close'),
+  addRepositories: input => ipcRenderer.invoke('repositories:browse-add', input),
   checkUpdates: () => ipcRenderer.invoke('updates:check'),
   ignoreUpdate: () => ipcRenderer.invoke('updates:ignore'),
   resetUpdate: () => ipcRenderer.invoke('updates:reset'),
@@ -44,6 +52,7 @@ contextBridge.exposeInMainWorld('gitCloner', {
   exportLogs: () => ipcRenderer.invoke('logs:export'),
   openLink: name => ipcRenderer.invoke('link:open', name),
   openDestination: id => ipcRenderer.invoke('destination:open', id),
+  openReleaseDirectory: id => ipcRenderer.invoke('releases:open-directory', id),
   onState: callback => {
     const listener = (_event, patch) => { cachedState = { ...cachedState, ...patch }; callback(cachedState); };
     ipcRenderer.on('state:changed', listener);
