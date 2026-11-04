@@ -5,6 +5,9 @@
 
 Git Cloner ist eine Electron-Desktop-App für macOS, Windows und Linux. Sie sichert ganze GitHub-Konten und Organisationen oder ausgewählte Repositories auf eigenen Laufwerken. **Beim ersten Start sind keine Konten oder Repositories eingetragen.** Die Oberfläche konzentriert sich auf Sicherungsstatus, nächste Prüfung und wichtige Meldungen; erweiterte Funktionen bleiben in eigenen Einstellungsbereichen.
 
+> [!IMPORTANT]
+> **Open Source – Nutzung ohne Gewähr.** Dieses Projekt wird unter der [MIT-Lizenz](LICENSE) bereitgestellt. Trotz sorgfältiger Entwicklung und Tests kann es Fehler enthalten; Sicherungen können unvollständig sein oder fehlschlagen, und Datenverluste lassen sich nicht ausschließen. Es gibt keine Garantie für Fehlerfreiheit oder Eignung für einen bestimmten Zweck. Teste Sicherung und Wiederherstellung zunächst mit unkritischen Daten und bewahre zusätzliche, unabhängige Backups auf. Gewährleistung und Haftung richten sich nach der Lizenz und dem geltenden Recht. Fehlerberichte und Verbesserungsvorschläge sind über [GitHub Issues](https://github.com/Ujap1994/Git-Cloner/issues) willkommen.
+
 ![Leere Startübersicht](docs/screenshots/overview.png)
 
 ## Funktionen
