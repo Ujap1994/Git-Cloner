@@ -1,5 +1,6 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const os = require('node:os');
 const { promisify } = require('node:util');
 const { execFile } = require('node:child_process');
 const { createHash, randomUUID } = require('node:crypto');
@@ -21,8 +22,16 @@ async function stamp(file) {
 async function createLink(file, target, name, platform, run) {
   if (platform === 'darwin') return fs.symlink(target, file, 'dir');
   if (platform === 'win32') {
-    const script = '$ErrorActionPreference="Stop"; $d=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:GIT_CLONER_SHORTCUT_DATA))|ConvertFrom-Json; $s=(New-Object -ComObject WScript.Shell).CreateShortcut($d.file); $s.TargetPath=$d.target; $s.WorkingDirectory=$d.directory; $s.Description=$d.name; $s.Save()';
-    return run('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { timeout: 30000, windowsHide: true, env: { ...process.env, GIT_CLONER_SHORTCUT_DATA: Buffer.from(JSON.stringify({ file, target, directory: path.dirname(target), name })).toString('base64') } });
+    // Shell-link persistence is unreliable in hidden staging directories. Let
+    // Windows write in its private temp folder, then stage the completed file.
+    const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'gc-link-'));
+    try {
+      const staged = path.join(temporary, 'program.lnk');
+      const script = '$ErrorActionPreference="Stop"; $d=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:GIT_CLONER_SHORTCUT_DATA))|ConvertFrom-Json; try { $s=(New-Object -ComObject WScript.Shell).CreateShortcut([string]$d.file); $s.TargetPath=[string]$d.target; $s.WorkingDirectory=[string]$d.directory; $s.Description=[string]$d.name; $s.Save() } catch { throw ("Windows shortcut creation failed (HRESULT " + $_.Exception.HResult + "): " + $_.Exception.Message) }';
+      await run('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { timeout: 30000, windowsHide: true, env: { ...process.env, GIT_CLONER_SHORTCUT_DATA: Buffer.from(JSON.stringify({ file: staged, target, directory: path.dirname(target), name })).toString('base64') } });
+      await fs.copyFile(staged, file, fs.constants.COPYFILE_EXCL);
+    } finally { await fs.rm(temporary, { recursive: true, force: true }); }
+    return;
   }
   const value = text => text.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
   await fs.writeFile(file, `[Desktop Entry]\nVersion=1.0\nType=Application\nName=${value(name)}\nExec=${quoteExec(target)}\nPath=${value(path.dirname(target))}\nTerminal=false\n`, { flag: 'wx', mode: 0o755 });
