@@ -15,6 +15,7 @@ const { includesRepository } = require('./filters.cjs');
 const { hashFile, writeManifest, verifyDirectory, verificationDue, controlDirectory } = require('./integrity.cjs');
 const { encryptArchive, decryptArchive } = require('./archives.cjs');
 const { metadataPlan } = require('./metadata.cjs');
+const { ReleaseReuse } = require('./release-reuse.cjs');
 const { ReleaseDownloads } = require('./release-downloads.cjs');
 const { releaseDirectoryName } = require('./release-layout.cjs');
 const MARKER = 'git-cloner.json';
@@ -75,7 +76,7 @@ async function verifyBackup(record, git, passphrase) {
     return await verifyDirectory(payload, git, marker.mode);
   } finally { await fs.rm(temporary, { recursive: true, force: true }); }
 }
-function backupFingerprint(opts){return createHash('sha256').update(JSON.stringify({mode:opts.mode,lfs:opts.lfs,submodules:opts.submodules,encrypted:opts.encryption,metadata:opts.metadata,...(opts.metadata.releases?{releaseScope:opts.releaseScope,releasePlatform:opts.releaseScope==='system'?process.platform:null}:{}),keyId:opts.encryption?opts.encryptionKeyId:null})).digest('hex');}
+function backupFingerprint(opts){return createHash('sha256').update(JSON.stringify({mode:opts.mode,lfs:opts.lfs,submodules:opts.submodules,encrypted:opts.encryption,metadata:opts.metadata,...(opts.metadata.releases?{releaseScope:opts.releaseScope,...((opts.releaseArchitecture&&opts.releaseArchitecture!=='all')||opts.releaseFileTypes?.length?{releaseArchitecture:opts.releaseArchitecture??'all',releaseFileTypes:opts.releaseFileTypes??[],releaseArch:opts.releaseArchitecture==='system'?process.arch:null}:{}),releasePlatform:opts.releaseScope==='system'?process.platform:null}:{}),keyId:opts.encryption?opts.encryptionKeyId:null})).digest('hex');}
 async function syncRepository({ source, repository, git, github, options = defaults().backup, plan, passphrase, onProgress = () => {} }) {
   const fullName = parseHostedSource(repository.full_name, 'repository',source), parts=repositoryParts(source,fullName), name=parts.at(-1),parents=parts.slice(0,-1),spec=providerSpec(source);
   const opts = { ...defaults().backup, ...options, metadata: { ...defaults().backup.metadata, ...options.metadata } };
@@ -88,7 +89,7 @@ async function syncRepository({ source, repository, git, github, options = defau
   onProgress({ fullName, status: 'checking' });
   const revision = await git.revision(url, opts.mode === 'mirror');
   if (!revision) return { fullName, destination: target, status: 'empty', message: 'Leeres Repository ohne Commit.', checkedAt: new Date().toISOString() };
-  plan ??= await metadataPlan(repository, opts.metadata, github, git, { releaseScope: opts.releaseScope });
+  plan ??= await metadataPlan(repository, opts.metadata, github, git, { releaseScope: opts.releaseScope, releaseArchitecture: opts.releaseArchitecture, releaseFileTypes: opts.releaseFileTypes });
   if (current?.wikiRevision && plan.warning) throw new Error('Das Wiki konnte nicht aktualisiert werden. Die vorhandene Sicherung bleibt erhalten.');
   const fingerprint = backupFingerprint(opts);
   let repair = false;
@@ -108,7 +109,7 @@ async function syncRepository({ source, repository, git, github, options = defau
   const estimatedBytes = Math.max((repository.size ?? 0) * 2048 + (plan.estimatedBytes ?? 0) * (plan.downloadCount ? 2.02 : 1),current?.bytes ?? 0);
   await checkSpace(root, estimatedBytes, opts.reserveMB);
   await writeJson(markerFile, { schemaVersion: 1, fullName });
-  let temporary, downloads, downloadWarning;
+  let temporary, downloads, downloadWarning, reuse;
   try {
     let payload = staging;
     if (opts.encryption) {
@@ -130,7 +131,8 @@ async function syncRepository({ source, repository, git, github, options = defau
     if (opts.submodules) await git.submodules(payload);
     if (opts.lfs) await git.lfs(payload, opts.mode === 'mirror');
     if (plan.downloadCount) downloads = await ReleaseDownloads.open({ root, volumeId: source.volumeId, scope: `${providerKey(source)}:${source.accountId ?? 'default'}:${fullName.toLowerCase()}`, passphrase: opts.encryption ? passphrase : '', encryptionKeyId: opts.encryptionKeyId || '' });
-    const applied = await plan.apply(payload, opts.mode, { downloads, onProgress });
+    reuse = await ReleaseReuse.open(current ? { ...current, destination: target } : null, passphrase);
+    const applied = await plan.apply(payload, opts.mode, { downloads, onProgress, reuse });
     const releaseInfo = structuredClone(applied?.releaseInfo ?? plan.releaseInfo ?? null);
     onProgress({ fullName, status: 'verifying' }); await git.fsck(payload);
     const commit = await git.head(payload);
@@ -151,7 +153,7 @@ async function syncRepository({ source, repository, git, github, options = defau
     return { fullName, destination: target, commit, mode: opts.mode, encrypted: opts.encryption, releaseInfo, ...verification, verificationStatus: 'ok', status: repair ? 'repaired' : current ? 'updated' : 'cloned', ...(plan.warning || plan.releaseWarning || downloadWarning ? { warning: plan.warning || plan.releaseWarning || downloadWarning } : {}), checkedAt: new Date().toISOString() };
   } finally {
     try { await fs.rm(staging, { recursive: true, force: true }); await fs.rm(markerFile, { force: true }); if (temporary) await fs.rm(temporary, { recursive: true, force: true }); }
-    finally { await downloads?.close(); }
+    finally { await reuse?.close(); await downloads?.close(); }
   }
 }
 async function resolveJobs(sources, github, { onlyTargets = null, onlySources = null } = {}) {
@@ -263,8 +265,8 @@ class BackupService extends EventEmitter {
         try {
           if(prior?.rekeyPending)throw new Error('Der Passwortwechsel ist noch nicht abgeschlossen. Das Sicherungslaufwerk verbinden und den Assistenten erneut öffnen.');
           result = await retry(async () => {
-            const key = `${providerKey(job.source)}:${job.source.accountId}:${job.repository.full_name}:${JSON.stringify(options.metadata)}:${options.releaseScope}`;
-            if (!plans.has(key)) plans.set(key, metadataPlan(job.repository, options.metadata, github, git, { releaseScope: options.releaseScope }).catch(error => { plans.delete(key); throw error; }));
+            const key = `${providerKey(job.source)}:${job.source.accountId}:${job.repository.full_name}:${JSON.stringify(options.metadata)}:${options.releaseScope}:${options.releaseArchitecture}:${JSON.stringify(options.releaseFileTypes)}`;
+            if (!plans.has(key)) plans.set(key, metadataPlan(job.repository, options.metadata, github, git, { releaseScope: options.releaseScope, releaseArchitecture: options.releaseArchitecture, releaseFileTypes: options.releaseFileTypes }).catch(error => { plans.delete(key); throw error; }));
             return this.sync({ ...job, github, git, options, plan: await plans.get(key), passphrase: options.encryption ? await this.getPassphrase() : '', onProgress: update });
           }, { ...this.retryOptions, retries: q.config.execution.retries, onRetry: event => update({ status: 'retrying', attempt: event.attempt, retryAt: new Date(Date.now() + event.delay).toISOString() }) });
         } catch (error) {
@@ -304,9 +306,10 @@ class BackupService extends EventEmitter {
       }
       if (pending.length) q.pauseReason = this.pauseReason || (failedForSpace.size?'space':'user');
       else {
-        const errors = q.results.filter(result => result.status === 'error'), details = q.results.length > 500 ? [...errors, ...q.results.filter(r => r.status !== 'error')].slice(0,500) : q.results;
+        const failed=result=>result.status==='error'||result.installation?.status==='error';
+        const errors = q.results.filter(failed), details = q.results.length > 500 ? [...errors, ...q.results.filter(r => !failed(r))].slice(0,500) : q.results;
         const elapsedMs = q.elapsedMs + Date.now() - this.sessionStarted;
-        this.state.history.unshift({ startedAt: q.startedAt, finishedAt: new Date().toISOString(), trigger: q.trigger, results: details, resultCount: q.results.length, errorCount: errors.length, changedCount: q.results.filter(r => ['cloned','updated','repaired'].includes(r.status)).length, truncatedResults: q.results.length - details.length, durationMs: elapsedMs, receivedBytes: q.receivedBytes + (this.transport?.bytes || 0), backupBytes: q.results.filter(r => ['cloned','updated','repaired'].includes(r.status)).reduce((sum,r) => sum + (r.bytes || 0),0) });
+        this.state.history.unshift({ startedAt: q.startedAt, finishedAt: new Date().toISOString(), trigger: q.trigger, results: details, resultCount: q.results.length, errorCount: errors.length, changedCount: q.results.filter(r => ['cloned','updated','repaired'].includes(r.status)||r.installation?.status==='installed').length, truncatedResults: q.results.length - details.length, durationMs: elapsedMs, receivedBytes: q.receivedBytes + (this.transport?.bytes || 0), backupBytes: q.results.filter(r => ['cloned','updated','repaired'].includes(r.status)).reduce((sum,r) => sum + (r.bytes || 0),0) });
         if (q.scheduledSources) this.state.lastScheduledBySource = { ...this.state.lastScheduledBySource, ...q.scheduledSources };
         this.state.history = this.state.history.slice(0,100); this.state.queue = null; completedRun = true;
       }

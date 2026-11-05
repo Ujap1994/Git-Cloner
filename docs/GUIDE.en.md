@@ -245,3 +245,42 @@ Owned cache entries are removed after a successful backup. Unused entries older 
 ![Visible release folder in the overview](screenshots/release-location.png)
 
 The planned layout of further detail views is documented separately in the German [UI concept](DETAILANSICHTEN.md). Those additional views are not implemented features of version 3.3.
+
+
+## 32. Reuse existing release assets
+
+Reuse is automatic when Git or metadata changes but selected assets remain identical. Stored manifests, asset identities and copied bytes are verified, using upstream SHA256 when available. Damaged or changed files are downloaded again. Download counters alone do not change backup identity. Unchanged backups retain their normal fast path. Encrypted old archives are authenticated and temporarily decrypted for reuse; failures fall back to a fresh download. Temporary plaintext is removed afterwards, subject to the documented crash and secure-erasure limitations.
+
+## 33. Architecture and file types
+
+Under **Settings → Backup → Release assets**, enable release downloads and choose OS and architecture. **My architecture only** follows the running application's architecture; explicit ARM64/x64/x86/ARMv7 options are also available. Universal packages match multiple CPUs. An explicit architecture filter excludes unclassified names. Under **Choose file types**, mark multiple formats or leave all unchecked to allow all types. OS, architecture and format filters combine; shared checksums and matching signature sidecars are retained.
+
+For an ARM64 Mac example, choose your OS, ARM64 and DMG. Source-specific backup options provide the same controls. Filter changes replace old files only after a successful checked backup and reuse matching existing bytes locally.
+
+![Architecture and format filters](screenshots/architecture-filters.png)
+
+## 34. Downloads and storage
+
+Open **Settings → Backup → Downloads & storage → View download storage**. Inspect owned temporary parts, their size, source where identifiable, part count, completeness and encryption. Encrypted caches do not store plaintext asset names. Select entries and **Review cleanup**. Back cancels without changing files; **Clean selected parts** removes reviewed temporary parts, which must be downloaded again. Completed backups and installed programs remain intact.
+
+Active writes are protected by application and per-cache locks. Changed files or destinations invalidate the preview. Foreign files, links, unknown markers and replaced drives are retained. Inventory is bounded to 1,000 entries and 10,000 parts per entry; unreadable areas produce warnings.
+
+![Download storage](screenshots/download-storage.png)
+
+## 35. Automatically install a repository program
+
+This option updates the program from your selected repository. Git Cloner itself retains notification-only updates. Installation starts disabled and is limited to explicitly chosen individual repositories; owner sources never install newly discovered programs automatically.
+
+1. Add or edit an individual source such as `example-owner/example-program`.
+2. Expand **Automatically install this program** and enable **Install and replace with the latest release**. Source-specific release backups are enabled; newly enabled downloads initially select your OS, while existing active filters are retained.
+3. Choose an existing program destination separate from backup destinations. Managed copies live under `owner/repository`; other providers use their own namespace.
+4. Optionally select a filename pattern, such as `*.dmg`, `*portable*.exe` or `*.AppImage`. The best supported candidate is chosen when unambiguous.
+5. Save and run **Check now**, or wait for the schedule.
+
+After a successful backup, actual asset integrity is checked and a separate program copy is prepared. Only then is the previous managed copy replaced. Current version/content is skipped. Failure preserves the previous program and is shown alongside backup status. The overview provides **Open program folder**. Installation never launches downloaded apps.
+
+macOS supports one signed/ad-hoc `.app` from DMG/ZIP, validating its signature and actual CPU; running apps are deferred. Windows supports portable EXE/ZIP, validating PE headers and CPU and retaining packaged companion files. Linux supports AppImage with matching ELF/AppImage headers and CPU. System installers (MSI/NSIS, PKG, DEB, RPM), arbitrary installation scripts and automatic administrator elevation are excluded. Missing permissions or locked files retain the old copy. Importing settings disables installation until enabled locally again.
+
+Trust the selected publisher and keep personal data outside managed program copies. Additional files in the managed root and foreign staging directories block replacement. Changing destinations retains old installations at their current location. Interrupted swaps recover through ownership markers on the next installation attempt; hard termination can leave temporary working data.
+
+![Opt-in program installation](screenshots/program-installation.png)

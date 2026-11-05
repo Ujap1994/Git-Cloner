@@ -2,6 +2,9 @@ const path = require('node:path');
 const { providerSpec, parseHostedSource, providerKey } = require('./provider-spec.cjs');
 const { normalizeSourceInput } = require('../renderer/source-input.js');
 
+const { validateInstallation } = require('./program-options.cjs');
+const { validateReleaseFilter } = require('./release-assets.cjs');
+
 const DEFAULT_CONFIG = {
   schemaVersion: 1,
   sources: [],
@@ -12,7 +15,7 @@ const DEFAULT_CONFIG = {
   notifications: true,
   notificationRules: { backup: 'all', updates: true, quietHours: { enabled: false, start: '22:00', end: '07:00' } },
   checkUpdates: true,
-  backup: { mode: 'snapshot', lfs: false, submodules: false, metadata: { issues: false, pullRequests: false, releases: false, wiki: false }, releaseScope: 'all', encryption: false, integrity: 'weekly', reserveMB: 512 },
+  backup: { mode: 'snapshot', lfs: false, submodules: false, metadata: { issues: false, pullRequests: false, releases: false, wiki: false }, releaseScope: 'all', releaseArchitecture: 'all', releaseFileTypes: [], encryption: false, integrity: 'weekly', reserveMB: 512 },
   accounts: [],
   appearance: { language: 'de', theme: 'system', fontScale: 1, highContrast: false },
   execution: { concurrency: 2, smallRepoMB: 50, retries: 2, bandwidthKBps: 0, onlyOnAC: false, allowedNetworks: [] },
@@ -61,7 +64,8 @@ function validateConfig(input) {
     const additionalDestinations = (source.additionalDestinations ?? []).map(validateTarget);
     if (additionalDestinations.length > 9) throw new Error('Maximal zehn Ziele pro Quelle.');
     const volumeHint = validateVolumeHint(source.volumeHint, source.destination);
-    return { id: source.id, kind: source.kind, value, ...(spec.provider!=='github'?spec:{}), destination: path.resolve(source.destination), enabled: source.enabled, ...(source.volumeId ? { volumeId: source.volumeId } : {}), ...(volumeHint ? { volumeHint } : {}), accountId, filters, additionalDestinations, backup: source.backup == null ? null : validateBackup(source.backup), schedule: source.schedule == null ? null : validateSchedule(source.schedule), groupId: source.groupId ?? null, favorite: source.favorite ?? false };
+    const installation = validateInstallation(source.installation, { ...source, additionalDestinations }, validateBackup(source.backup ?? input.backup ?? DEFAULT_CONFIG.backup));
+    return { installation, id: source.id, kind: source.kind, value, ...(spec.provider!=='github'?spec:{}), destination: path.resolve(source.destination), enabled: source.enabled, ...(source.volumeId ? { volumeId: source.volumeId } : {}), ...(volumeHint ? { volumeHint } : {}), accountId, filters, additionalDestinations, backup: source.backup == null ? null : validateBackup(source.backup), schedule: source.schedule == null ? null : validateSchedule(source.schedule), groupId: source.groupId ?? null, favorite: source.favorite ?? false };
   });
   const result = { schemaVersion: 1, sources, sourceGroups, schedule: validateSchedule(input.schedule) };
   for (const key of ['launchAtLogin', 'closeToTray', 'notifications', 'checkUpdates']) {
@@ -127,7 +131,7 @@ function validateBackup(input) {
     if (typeof backup.metadata[key] !== 'boolean') throw new Error('Ungültige Metadatenoption.');
     metadata[key] = backup.metadata[key];
   }
-  return { mode: backup.mode, lfs: backup.lfs, submodules: backup.submodules, encryption: backup.encryption, integrity: backup.integrity, reserveMB: backup.reserveMB, metadata, releaseScope: backup.releaseScope };
+  return { ...validateReleaseFilter(backup), mode: backup.mode, lfs: backup.lfs, submodules: backup.submodules, encryption: backup.encryption, integrity: backup.integrity, reserveMB: backup.reserveMB, metadata, releaseScope: backup.releaseScope };
 }
 function effectiveBackup(config, source) { return { ...(source.backup ?? config.backup ?? DEFAULT_CONFIG.backup), encryptionKeyId: config.backup?.encryptionKeyId }; }
 

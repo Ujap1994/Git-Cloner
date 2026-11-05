@@ -1,5 +1,5 @@
 <p align="center"><img src="build/icon.png" width="80" alt="Git Cloner"></p>
-<h1 align="center">Git Cloner 3.3</h1>
+<h1 align="center">Git Cloner 3.4</h1>
 <p align="center">Deine Repositories. Auf deinem Laufwerk. Nach deinem Zeitplan.</p>
 <p align="center"><a href="https://github.com/Ujap1994/Git-Cloner/actions/workflows/ci.yml"><img src="https://github.com/Ujap1994/Git-Cloner/actions/workflows/ci.yml/badge.svg" alt="CI"></a> <a href="https://github.com/Ujap1994/Git-Cloner/releases">Downloads</a> · <a href="docs/ANLEITUNG.md">Anonymisierte Anleitung</a> · <a href="docs/GUIDE.en.md">English guide</a></p>
 
@@ -27,7 +27,26 @@ Git Cloner ist eine Electron-Desktop-App für macOS, Windows und Linux. Sie sich
 | Komfort | Suche, Statusfilter, paginierte Listen, Import/Export der Einstellungen ohne Geheimnisse und anonymisierte Diagnoseprotokolle. |
 | Darstellung | Deutsch und Englisch, Hell-/Dunkelmodus oder Systemeinstellung sowie drei Schriftgrößen, hohen Kontrast und Tastenkürzel mit ausgerichteten Eingabefeldern. |
 
-## Neu in Version 3.3
+## Neu in Version 3.4
+
+| Erweiterung | Verhalten |
+| --- | --- |
+| Release-Dateien lokal wiederverwenden | Passende vorhandene Dateien anhand von Manifest, Kennung und verfügbaren SHA256-Werten prüfen und lokal übernehmen. Änderungen an Downloadzählern lösen keine neue Sicherung aus. Verschlüsselte Archive werden für die Wiederverwendung authentifiziert und vorübergehend entsperrt. |
+| Architektur- und Dateitypfilter | Alle, eigene oder gezielt ARM64/x64/x86/ARMv7 wählen; mehrere Formate wie DMG, ZIP oder AppImage kombinieren. Universal-Pakete und gemeinsame Prüfsummen berücksichtigen. Global und je Quelle einstellbar. |
+| Downloads & Speicher | Temporäre Teile samt Größe, Quelle und Verschlüsselungsstatus anzeigen. Ausgewählte Teile erst nach einer Vorschau bereinigen; geänderte Vorschauen, laufende Zugriffe und fremde Dateien bleiben geschützt. |
+| Programme automatisch installieren | Ausdrücklich je einzelnem Repository aktivieren, getrennten Programmordner wählen und optional den Release-Dateinamen eingrenzen. Nach erfolgreicher Sicherung die aktuelle Programmkopie ersetzen. Unterstützt macOS-App-Bundles aus DMG/ZIP, Windows Portable-EXE/ZIP und Linux AppImage. |
+
+Die Programminstallation startet **keine heruntergeladenen Apps** und verwendet keine automatischen Administratorrechte. macOS-Bundles werden auf Signatur und Prozessorarchitektur geprüft; laufende Mac-Programme werden später erneut versucht. Systeminstaller wie MSI, PKG, DEB oder RPM sind kein unterstützter automatischer Installationsweg. Git Cloner selbst zeigt weiterhin nur Versionshinweise an.
+
+![Architektur- und Dateitypfilter](docs/screenshots/architecture-filters.png)
+
+![Download-Speicher mit Bereinigungsvorschau](docs/screenshots/download-storage.png)
+
+![Optionale Programminstallation je Repository](docs/screenshots/program-installation.png)
+
+Die [anonymisierte Anleitung ab Abschnitt 32](docs/ANLEITUNG.md#32-vorhandene-release-dateien-lokal-übernehmen) beschreibt Einrichtung, Ablage und Grenzen.
+
+## Bereits enthalten: Version 3.3
 
 Die vier empfohlenen nächsten Schritte sind umgesetzt. Quellen und Gruppen bleiben beim ersten Start leer.
 

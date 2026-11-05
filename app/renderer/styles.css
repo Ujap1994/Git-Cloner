@@ -134,3 +134,7 @@ html[data-contrast=high] .source-selection,html[data-contrast=high] .bulk-previe
 .browser-search-row>.button{flex-shrink:0}
 #browser-selected{min-height:20px;line-height:1.5;margin:0 0 12px}
 .release-location{margin-top:4px;overflow-wrap:anywhere}
+
+.download-storage-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:22px 0}.download-storage-summary>div{padding:18px;background:var(--soft);border:1px solid var(--border);border-radius:10px}.download-storage-summary strong,.download-storage-summary span{display:block}.download-storage-summary strong{font-size:1.3rem}.download-storage-summary span{font-size:.75rem;color:var(--muted);margin-top:7px}.release-type-options .check-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.program-status{margin-top:6px;overflow-wrap:anywhere}
+
+.field .organization-favorite{display:flex;align-items:center;height:var(--control-height);min-height:0;padding:0 12px;box-sizing:border-box;gap:9px}.field .organization-favorite input{margin:0}#download-storage-dialog input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px}

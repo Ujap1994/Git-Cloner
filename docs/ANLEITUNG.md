@@ -492,3 +492,56 @@ Nach einer erfolgreichen Sicherung werden zugehörige eigene Cache-Dateien entfe
 ![Sichtbarer Release-Ordner in der Übersicht](screenshots/release-location.png)
 
 Weitere Detailansichten sind als [eigenes UI-Konzept](DETAILANSICHTEN.md) beschrieben. Die dort genannten zusätzlichen Funktionen sind noch keine implementierten Funktionen der Version 3.3.
+
+
+## 32. Vorhandene Release-Dateien lokal übernehmen
+
+Die Wiederverwendung ist automatisch aktiv. Wenn sich Git-Dateien, Release-Beschreibungen oder andere Metadaten ändern, werden bereits gespeicherte, unveränderte Release-Dateien lokal in den neuen Stand übernommen. Vor der Übernahme prüft die App das vorhandene Dateimanifest, die Dateikennung und den kopierten Inhalt. Verfügbare SHA256-Werte des Anbieters haben Vorrang; ansonsten werden Dateiname, ID, Größe und vorhandene Änderungsangaben beziehungsweise URL gebunden. Beschädigte oder geänderte Dateien werden erneut geladen.
+
+Downloadzähler gehören nicht zum Änderungsvergleich. Allein die Anzahl fremder Downloads löst daher keine neue Sicherung aus. Bei vollständig unverändertem Stand bleibt die normale unveränderte Sicherung bestehen. Die Fortschrittsanzeige nennt eine lokale Übernahme ausdrücklich.
+
+Bei verschlüsselten Sicherungen authentifiziert die App das bisherige Archiv und entsperrt es vorübergehend für die Wiederverwendung. Das passende Archivpasswort wird benötigt. Kann der alte Stand nicht sicher gelesen werden, wird die Datei neu heruntergeladen. Temporäre Klartextdaten werden danach entfernt; ein harter Prozessabbruch und forensisch sichere Löschung bleiben technische Grenzen.
+
+## 33. Architektur und Dateitypen auswählen
+
+Unter **Einstellungen → Sicherung → Release-Dateien** zunächst **Releases mit Download-Dateien** aktivieren. Dann Betriebssystem und **Prozessorarchitektur** auswählen. **Nur meine Architektur** verwendet die Architektur der laufenden Anwendung; eine konkrete Auswahl wie ARM64 oder x64 bleibt ebenfalls möglich. Universal-Pakete zählen als passend. Dateien mit unklarer Architektur werden bei einem konkreten Architekturfilter ausgelassen.
+
+Unter **Dateitypen auswählen** die gewünschten Formate markieren. Ohne Markierungen sind alle Formate erlaubt. Mehrere Markierungen kombinieren sich: beispielsweise DMG und ZIP. Betriebssystem, Architektur und Dateityp wirken zusammen. Für ein ARM64-Mac-Beispiel **Nur mein Betriebssystem**, **ARM64** und **DMG** wählen. Auf anderen Systemen die eigene Auswahl treffen. Gemeinsame Prüfsummen und passende Signaturdateien werden weiterhin mitgesichert.
+
+Die Auswahl gilt global oder über **Quelle bearbeiten → Sicherungsumfang dieser Quelle → Eigene Sicherungsoptionen verwenden** gezielt für ein Repository. Ein Filterwechsel baut den aktuellen Stand neu auf und übernimmt passende vorhandene Dateien lokal. Nicht mehr ausgewählte Dateien verschwinden erst mit einer erfolgreich geprüften Ersatzsicherung. Die Auswahl beschreibt Dateinamen des Anbieters; sie führt keine fremden Programme aus.
+
+![Architektur und mehrere Dateitypen](screenshots/architecture-filters.png)
+
+## 34. Download-Speicher kontrolliert bereinigen
+
+**Einstellungen → Sicherung → Downloads & Speicher → Download-Speicher anzeigen** liest die verbundenen konfigurierten Sicherungsziele. Die Ansicht zeigt belegte Bytes der erkannten temporären Dateien, Teilanzahl, Zeitpunkt, Vollständigkeit und Verschlüsselung. Soweit zuordenbar, erscheint die Quelle. Verschlüsselte Downloadreste speichern keine unverschlüsselten Release-Dateinamen; die Anzeige kann daher allgemeiner ausfallen.
+
+Einträge per Checkbox markieren und **Bereinigung prüfen** öffnen. Die Vorschau nennt Anzahl und Größe. **Zurück** verändert keine Dateien. Erst **Ausgewählte Teile bereinigen** entfernt die geprüften eigenen temporären Teile. Diese müssen beim nächsten Download erneut geladen werden. Fertige Sicherungen und installierte Programme werden dabei erhalten.
+
+Während eigener Schreibvorgänge wird nicht bereinigt. Zusätzliche Sperren schützen aktive Downloads anderer App-Prozesse. Nach Änderungen an den Dateien oder Sicherungszielen ist eine neue Vorschau erforderlich. Fremde Dateien, Links, ungültige Kennungen und ausgetauschte Laufwerke werden nicht gelöscht. Die Anzeige ist auf 1.000 Einträge und je Eintrag auf 10.000 Teile begrenzt; Warnungen erläutern nicht prüfbare Bereiche.
+
+![Speicherübersicht mit ausgewählten temporären Teilen](screenshots/download-storage.png)
+
+## 35. Programme aus einem Repository automatisch installieren
+
+Diese Option aktualisiert **das Programm aus deiner gewählten Quelle**, nicht Git Cloner selbst. Sie ist zunächst aus und gilt nur für einzeln eingetragene Repositories. Eine Sammelquelle installiert keine neu entdeckten Programme automatisch.
+
+1. **Quellen → Quelle hinzufügen/bearbeiten** öffnen und ein eigenes einzelnes Repository wie `beispiel-konto/beispiel-programm` eintragen.
+2. **Programm automatisch installieren** aufklappen und **Neueste Release-Version installieren und ersetzen** aktivieren. Dadurch werden eigene Sicherungsoptionen mit Release-Dateien aktiviert. Waren Release-Dateien zuvor aus, wird zunächst das eigene Betriebssystem gewählt. Bereits aktive Release-Filter bleiben erhalten.
+3. Einen bestehenden **Programm-Zielordner** getrennt von allen Sicherungsordnern wählen. Die App legt darin eine zugeordnete Ablage unter `Konto/Repository` an. Für andere Anbieter kommt eine eigene Anbieter-/Server-Zuordnung hinzu.
+4. Optional den **Release-Dateinamen** eingrenzen: zum Beispiel `*.dmg`, `*portable*.exe` oder `*.AppImage`. `*` und `?` sind möglich. Ohne Muster wird ein passend klassifiziertes unterstütztes Paket bevorzugt; bei gleichwertigen mehreren Kandidaten wird eine genauere Auswahl verlangt.
+5. Quelle speichern und **Jetzt prüfen** starten oder den nächsten geplanten Lauf abwarten.
+
+Nach der erfolgreichen Sicherung prüft die App die tatsächlichen Release-Dateien erneut und bereitet das Programm getrennt vor. Erst danach wird die vorhandene zugeordnete Programmkopie ersetzt. Ist Version und Inhalt bereits aktuell, bleibt die vorhandene Installation bestehen. Fehler erhalten den bisherigen Programmstand und erscheinen zusätzlich zum Sicherungsstatus sowie im Fehlerzähler, Verlauf und den eingestellten Fehlermeldungen. Die Übersicht zeigt den installierten Tag und bietet **Programmordner öffnen**. Programme werden durch die Installation nicht automatisch gestartet.
+
+| System | Unterstützter automatischer Installationsweg |
+| --- | --- |
+| macOS | Ein eindeutig erkennbares `.app`-Bundle aus DMG oder ZIP. Signatur, Bundle und tatsächliche Prozessorarchitektur werden geprüft. Ad-hoc-signierte Bundles sind möglich; eigene Signierzertifikate werden nicht eingerichtet. Laufende Mac-Programme werden später erneut versucht. |
+| Windows | Als Portable gekennzeichnete EXE oder ZIP mit einem eindeutig erkennbaren Hauptprogramm und Begleitdateien. PE-Kopf und tatsächliche Architektur werden geprüft. |
+| Linux | AppImage mit passendem ELF-/AppImage-Kopf und Prozessorarchitektur. Die Datei wird ausführbar in der zugeordneten Ablage gespeichert. |
+
+MSI-/NSIS-Systeminstallationen, PKG, DEB, RPM und beliebige Installationsskripte werden nicht automatisch ausgeführt. Es gibt keine automatische Rechteerhöhung. Wenn Rechte fehlen oder Windows eine verwendete Datei sperrt, bleibt der bisherige Stand erhalten. Bei importierten Einstellungen ist die Installation zunächst wieder deaktiviert und muss lokal je Quelle eingeschaltet werden.
+
+Nutze die Option nur für Herausgeber, denen du vertraust. Bewahre persönliche Daten und Einstellungen außerhalb der verwalteten Programmkopie auf. Zusätzliche Dateien direkt im verwalteten Ziel oder fremde temporäre Ordner blockieren den Austausch. Zielwechsel behalten vorhandene Installationen am alten Ort; sie werden nicht ungefragt verschoben oder gelöscht. Ein harter Abbruch kann eigene temporäre Arbeitsdaten hinterlassen; ein unterbrochener Austausch wird beim nächsten Installationsversuch anhand seiner Kennungen wieder aufgenommen.
+
+![Ausdrückliche Programminstallation mit separatem Ziel](screenshots/program-installation.png)

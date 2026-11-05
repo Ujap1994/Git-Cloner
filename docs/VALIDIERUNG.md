@@ -1,8 +1,23 @@
 # Tatsächlich ausgeführte Prüfungen
 
-Stand: 4. November 2026, Git Cloner **3.3.0**. Prüfungen mit GitHub-Antworten aus Test-Fixtures und tatsächliche Plattformläufe werden getrennt ausgewiesen.
+Stand: 5. November 2026, Git Cloner **3.4.0**. Prüfungen mit GitHub-Antworten aus Test-Fixtures und tatsächliche Plattformläufe werden getrennt ausgewiesen.
 
-## Lokale Prüfung von Version 3.3
+## Lokale Prüfung von Version 3.4
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Node 24, `npm run check` | ESLint und **241 Tests erfolgreich**, keine Fehler; zwei ausschließlich native macOS-Tests unter Linux übersprungen. Insgesamt 243 registrierte Tests. |
+| Node 22.23.4 | Dieselben **241 Tests erfolgreich**, dieselben zwei Plattformausnahmen. |
+| Echte Electron-GUI Linux/Xvfb | **55 Tests erfolgreich**, darunter sechs neue Abläufe zu Architektur/Formaten, ausdrücklicher Installation, tatsächlichen Cache-Teilen, Vorschau/Abbruch, veränderten Vorschauen, Dunkelmodus und großer Schrift. |
+| Forgejo 17.0.1 über HTTPS | Private Git-/Metadaten-/Wiki-/Release-Abrufe erfolgreich. |
+| Produktionsabhängigkeiten | `npm audit --omit=dev`: keine gemeldeten Schwachstellen zum Prüfzeitpunkt. |
+| Gepackte Anwendung | Linux-x64-`build:dir` und tatsächlicher Start erfolgreich; alle **60 Anwendungsdateien** stimmen mit dem ASAR überein. Die sechs neuen Module und ihre Produktionsabhängigkeiten sind enthalten. Native Plattformpakete werden in CI/Release gebaut. |
+
+Neue Prüfungen verwenden echte lokale Git-Repositories und tatsächlich verschlüsselte Archive, kontrolliert unterbrochene Streams, eigene temporäre Laufwerke, konkrete ZIP-Archive sowie PE-/ELF-Fixtures. Sie prüfen lokale Wiederverwendung nach Git-/Metadatenänderungen, unveränderte Zähler, beschädigte Dateien und fehlende externe Digests. Bereinigung schützt laufende Leases, Fremddateien, geänderte Vorschauen und ausgetauschte Laufwerkskennungen. Installationsprüfungen testen aktuellen Stand, Austausch, Reparatur, Fehlererhalt, Fremd-Staging, importierte Opt-ins und Runtime-Anbindung.
+
+Die beiden neuen macOS-Tests erzeugen auf den nativen Mac-Runnern echte ad-hoc-signierte App-Bundles, ZIPs und DMGs, prüfen die installierte Signatur und erkennen ein laufendes harmloses lokales Testprogramm. Ein zusätzlicher CI-Schritt auf macOS ARM64 führt `npm run test:wordcraft` aus: echter öffentlicher und per SHA256 gepinnter DMG-Download, echte Git-Quelle, isolierte App-Installation und wiederholte Prüfung ohne App-Start. Diese nativen Ergebnisse werden nicht als lokal unter Linux ausgeführte Prüfungen ausgegeben; die tatsächlichen Ergebnisse stehen in Actions.
+
+## Frühere lokale Prüfung von Version 3.3
 
 | Prüfung | Tatsächliches Ergebnis |
 | --- | --- |

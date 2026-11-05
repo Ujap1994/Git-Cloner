@@ -32,6 +32,9 @@ contextBridge.exposeInMainWorld('gitCloner', {
   missingRepositories: input => ipcRenderer.invoke('repositories:browse-missing', input),
   closeRepositoryBrowser: () => ipcRenderer.invoke('repositories:browse-close'),
   addRepositories: input => ipcRenderer.invoke('repositories:browse-add', input),
+  downloadInventory: () => ipcRenderer.invoke('downloads:inventory'),
+  previewDownloadCleanup: input => ipcRenderer.invoke('downloads:preview-cleanup', input),
+  cleanDownloads: input => ipcRenderer.invoke('downloads:cleanup', input),
   checkUpdates: () => ipcRenderer.invoke('updates:check'),
   ignoreUpdate: () => ipcRenderer.invoke('updates:ignore'),
   resetUpdate: () => ipcRenderer.invoke('updates:reset'),
@@ -52,6 +55,7 @@ contextBridge.exposeInMainWorld('gitCloner', {
   exportLogs: () => ipcRenderer.invoke('logs:export'),
   openLink: name => ipcRenderer.invoke('link:open', name),
   openDestination: id => ipcRenderer.invoke('destination:open', id),
+  openProgramDirectory: id => ipcRenderer.invoke('program:open-directory', id),
   openReleaseDirectory: id => ipcRenderer.invoke('releases:open-directory', id),
   onState: callback => {
     const listener = (_event, patch) => { cachedState = { ...cachedState, ...patch }; callback(cachedState); };

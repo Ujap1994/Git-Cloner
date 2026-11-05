@@ -82,3 +82,13 @@ Zusätzlich: URL-Bereinigung, dynamische Owner-Hauptseiten ohne doppelte Importe
 | 4 | Mehrere Quellen gemeinsam bearbeiten | Gezielte Änderungen mit erhaltener Vererbung und individuellen Unterschieden; paginierte Bisher-/Danach-Vorschau und Schutz vor veralteten Vorschauen. |
 
 Die zusätzlich besprochenen Prioritäten 5–18 sind weitere Ideen. Sie wurden durch diese Beauftragung nicht umgesetzt. Der [Entwurf für weitere Detailansichten](DETAILANSICHTEN.md) beschreibt die geplante Darstellung ausdrücklich als Konzept.
+
+
+## Umgesetzt in Version 3.4
+
+1. Unveränderte Release-Dateien nach Inhaltsprüfung lokal übernehmen, einschließlich verschlüsselter Altarchive; Downloadzähler aus dem Änderungsvergleich ausnehmen.
+2. Architektur- und mehrere Dateitypfilter global und je Quelle.
+3. Download-Speicherübersicht und geprüfte Bereinigung ausschließlich eigener temporärer Teile.
+4. Optionale Installation von Programmen aus einzelnen Repository-Quellen mit getrenntem Ziel und Austausch einer verwalteten Programmkopie. Unterstützte portable/App-Bundle-Formate sind in der Anleitung aufgeführt. Git Cloner selbst behält ausschließlich Versionshinweise.
+
+Weitere Detailansichten bleiben das separat dokumentierte Konzept. Nächste mögliche Verbesserungen: freigegebene Installation in bestehende Programmverzeichnisse, gezielte Auswahl mehrerer Programme eines Archivs, Programmverknüpfungen und eine Download-Historie mit Zeit-/Bandbreitenersparnis.

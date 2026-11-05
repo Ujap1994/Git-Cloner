@@ -7,7 +7,7 @@ const { readJson, writeJson } = require('./core/store.cjs');
 const { SecretVault } = require('./core/vault.cjs');
 const { GitHubClient } = require('./core/github.cjs');
 const { Git } = require('./core/git.cjs');
-const { BackupService, verifyBackup, backupFingerprint, managed } = require('./core/backup.cjs');
+const { BackupService, verifyBackup, backupFingerprint, managed, syncRepository, jobId } = require('./core/backup.cjs');
 const { restoreBackup } = require('./core/restore.cjs');
 const { acquireLease } = require('./core/lease.cjs');
 const { prepareDestination, safeDirectory } = require('./core/destinations.cjs');
@@ -31,7 +31,32 @@ const {rotationInventory,rotatePasswords,recoverRotations}=require('./core/key-r
 const {inspectRecommendations}=require('./core/recommendations.cjs');
 const { organizeConfig, prepareBulk, configSignature, RepositoryBrowser } = require('./core/source-workspace.cjs');
 
+const downloadStorage = require('./core/download-storage.cjs');
+const { ProgramInstaller } = require('./core/program-installation.cjs');
+const { FILE_TYPES, ARCHITECTURES } = require('./core/release-assets.cjs');
+
 class Runtime extends EventEmitter {
+  downloadRoots() {
+    return [...new Map(this.config.sources.flatMap(source => [source, ...source.additionalDestinations]).filter(target => target.volumeId).map(target => [target.destination, { destination: target.destination, volumeId: target.volumeId }])).values()];
+  }
+  async downloadInventory() {
+    const result = await downloadStorage.inventory(this.downloadRoots());
+    const names = [...this.config.sources.filter(source=>source.kind==='repository').map(source=>({source,fullName:source.value})), ...Object.values(this.backup.state.repositories).map(record=>({source:this.config.sources.find(source=>source.id===record.sourceId),fullName:record.fullName})).filter(item=>item.source)];
+    for(const entry of result.entries){const match=names.find(item=>createHash('sha256').update(`${providerKey(item.source)}:${item.source.accountId??'default'}:${item.fullName.toLowerCase()}`).digest('hex')===entry.scope);entry.label=match?.fullName??null;}
+    this.downloadEntries = result.entries;
+    return { entries: result.entries.map(({ directory: _directory, scopeDirectory: _scopeDirectory, signature: _signature, ...entry }) => entry), warnings: result.warnings };
+  }
+  previewDownloadCleanup({ ids } = {}) {
+    if (!Array.isArray(ids) || !ids.length || new Set(ids).size !== ids.length) throw new Error('Bitte Downloadreste auswählen.');
+    const entries = ids.map(id => this.downloadEntries?.find(entry => entry.id === id));
+    if (entries.some(entry => !entry)) throw new Error('Die Downloadübersicht bitte neu laden.');
+    const token = require('node:crypto').randomUUID(); this.downloadCleanup = { token, entries, expires: Date.now() + 300000 };
+    return { token, count: entries.length, bytes: entries.reduce((sum, entry) => sum + entry.bytes, 0) };
+  }
+  cleanDownloads({ token } = {}) {
+    return this.withOperation('cleaning-downloads', async () => { const preview = this.downloadCleanup; if (!preview || preview.token !== token || preview.expires < Date.now()) throw new Error('Die Bereinigungsvorschau ist abgelaufen.'); const roots = this.downloadRoots(); if (preview.entries.some(entry => !roots.some(root => root.destination === entry.root && root.volumeId === entry.volumeId))) throw new Error('Die Sicherungsziele wurden inzwischen geändert.'); const result = await downloadStorage.clean(preview.entries); this.downloadCleanup = null; return result; });
+  }
+
   async releaseDestination(id) {
     const record = this.backup.state.repositories[id];
     if (!record) throw new Error('Sicherung nicht gefunden.');
@@ -94,6 +119,15 @@ class Runtime extends EventEmitter {
     if(Object.values(records).some(r=>r.rekeyPending)){const release=await acquireLease(this.directory);try{await recoverRotations(state,this.vault,value=>this.persistState(value));}finally{await release();}}
     this.backup = new BackupService({
       state: { ...state, repositories: records }, git: this.git,
+      sync: async input => {
+        const previousInstallation = this.backup.state.repositories[jobId(input)]?.installation;
+        const record = await syncRepository(input);
+        if (input.source.installation?.enabled && ['cloned','updated','repaired','unchanged'].includes(record.status)) {
+          try { record.installation = await new ProgramInstaller().install({ source: input.source, record, git: input.git, passphrase: input.passphrase, onProgress: input.onProgress }); }
+          catch (error) { record.installation = { ...previousInstallation, latestTag: record.releaseInfo?.tag, status: ['PROGRAM_RUNNING','EBUSY'].includes(error.code)?'waiting':'error', message: error.message }; record.warning = [record.warning, 'Programminstallation: ' + error.message].filter(Boolean).join(' '); }
+        }
+        return record;
+      },
       github: source => this.sourceClient(source), getGit: source => this.sourceGit(source),
       getPassphrase: async () => this.vault.archivePassword, acquireLock: () => acquireLease(this.directory),
       saveState: value => this.persistState(value), gate: execution => this.checkRules(execution)
@@ -136,7 +170,7 @@ class Runtime extends EventEmitter {
       encryptionReady: Boolean(this.vault.archivePassword), encryptionRemembered: this.vault.rememberPassword, device: this.device,
       queue: this.backup.state.queue ? { id: this.backup.state.queue.id, total: this.backup.state.queue.jobs.length, unresolved: Boolean(this.backup.state.queue.unresolved), completed: this.backup.state.queue.completed.length, pauseReason: this.backup.state.queue.pauseReason, message: this.backup.state.queue.message, elapsedMs: this.backup.state.queue.elapsedMs, receivedBytes: this.backup.state.queue.receivedBytes } : null,
       metrics: this.metricsSnapshot, environment: this.environment, driveRecovery: this.driveRecovery ?? null,
-      rotation:this.rotation??null,
+      rotation:this.rotation??null, releaseFormats: FILE_TYPES, releaseArchitectures: ARCHITECTURES,
       dataRevision: this.dataRevision, configRevision: this.configRevision
     };
   }

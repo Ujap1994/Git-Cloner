@@ -14,7 +14,7 @@ test('release backup downloads the latest stable release only and replaces old a
   f.releases=[{id:100,tag_name:'v2',assets},{id:90,tag_name:'v1',assets:[old]}];f.options.metadata.releases=true;
   const first=await f.sync();assert.equal(first.status,'cloned');assert.deepEqual(f.downloads,[1,2,3,4,5]);
   f.downloads=[];f.options.releaseScope='system';await f.sync();
-  const selected=process.platform==='win32'?1:process.platform==='darwin'?2:3;assert.deepEqual(f.downloads,[selected,4]);
+  assert.deepEqual(f.downloads,[]);
   const folder=path.join(first.destination,'.git','git-cloner-metadata');const filenames=await fs.readdir(path.join(first.destination,'Git-Cloner-Releases'));assert.equal(filenames.filter(name=>!name.startsWith('.')).length,2);assert.ok(!filenames.includes('old.exe'));
   const selection=await readJson(path.join(folder,'release-selection.json'));assert.equal(selection.tag,'v2');assert.equal(selection.platform,process.platform);assert.ok(selection.excluded.some(a=>a.id===5));
   f.downloads=[];assert.equal((await f.sync()).status,'unchanged');assert.deepEqual(f.downloads,[]);

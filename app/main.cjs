@@ -38,7 +38,7 @@ else {
   });
 }
 function showWindow() { if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus(); } }
-function state() { return { ...runtime.snapshot(), platform: process.platform, packaged: app.isPackaged, nativeScheduleSupported: app.isPackaged && !process.env.FLATPAK_ID }; }
+function state() { return { ...runtime.snapshot(), platform: process.platform, arch: process.arch, packaged: app.isPackaged, nativeScheduleSupported: app.isPackaged && !process.env.FLATPAK_ID }; }
 function broadcast() {
   if (worker || broadcastTimer) return;
   broadcastTimer = setTimeout(() => {
@@ -123,7 +123,7 @@ async function start() {
     try {
       const result = await runtime.scheduledRun();
       await workerLog({ event: result.skipped ? 'not-due' : result.busy ? 'busy' : result.paused ? 'paused' : 'complete', results: result.resultCount ?? result.results?.length ?? 0, errors: result.errorCount ?? result.results?.filter(r => r.status === 'error').length ?? 0 });
-      await runtime.stop(); await Promise.allSettled([...pendingNotifications]); quitting = true; app.exit(result.results?.some(r => r.status === 'error') ? 1 : 0);
+      await runtime.stop(); await Promise.allSettled([...pendingNotifications]); quitting = true; app.exit((result.errorCount??0)>0 ? 1 : 0);
     } catch (_error) { await workerLog({ event: 'failed' }); quitting = true; app.exit(1); }
     return;
   }
@@ -169,6 +169,9 @@ async function start() {
   handle('repositories:browse-missing', input => runtime.repositoryBrowser.allMissing(input));
   handle('repositories:browse-close', () => { runtime.repositoryBrowser.close(); return true; });
   handle('repositories:browse-add', input => runtime.addBrowserSources(input));
+  handle('downloads:inventory', () => runtime.downloadInventory());
+  handle('downloads:preview-cleanup', input => runtime.previewDownloadCleanup(input));
+  handle('downloads:cleanup', input => runtime.cleanDownloads(input));
   handle('updates:ignore', () => runtime.ignoreUpdate());
   handle('updates:reset', () => runtime.resetUpdate());
   handle('token:save', (token, accountId = 'default') => runtime.setToken(accountId, token));
@@ -211,6 +214,7 @@ async function start() {
     const destination = source?.destination || record?.destination; if (!destination) throw new Error('Ziel nicht gefunden.');
     const error = await shell.openPath(destination); if (error) throw new Error(error);
   });
+  handle('program:open-directory', async id => { const record=runtime.record(id), destination=record.installation?.destination; if(!destination)throw new Error('Kein installiertes Programm vorhanden.'); const stat=await fs.lstat(destination); if(!stat.isDirectory()||stat.isSymbolicLink())throw new Error('Programmordner nicht verfügbar.'); const error=await shell.openPath(destination); if(error)throw new Error(error); });
   handle('releases:open-directory', async id => {
     const destination = await runtime.releaseDestination(id);
     const error = await shell.openPath(destination); if (error) throw new Error(error);

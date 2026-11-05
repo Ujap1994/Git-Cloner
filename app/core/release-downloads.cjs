@@ -54,7 +54,7 @@ class ReleaseDownloads {
     try { const info = await regular(file); if (info.size > 8 * 1048576) throw new Error('Der Teildownload ist zu umfangreich.'); meta = await readJson(file, null); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
     if (!meta) {
-      meta = { format: 'git-cloner-release-parts', version: 1, key, owner: randomUUID(), encrypted: Boolean(this.passphrase), salt: randomBytes(16).toString('base64'), etag: null, modified: null, total: null, complete: false, chunks: [] };
+      meta = { format: 'git-cloner-release-parts', version: 1, key, owner: randomUUID(), encrypted: Boolean(this.passphrase), label: this.passphrase ? null : { name: typeof identity.name === 'string' ? identity.name.slice(0,500) : '', tag: typeof identity.tag === 'string' ? identity.tag.slice(0,100) : '' }, salt: randomBytes(16).toString('base64'), etag: null, modified: null, total: null, complete: false, chunks: [] };
       await writeJson(file, meta);
     }
     if (meta.format !== 'git-cloner-release-parts' || meta.version !== 1 || meta.key !== key || !uuid(meta.owner) || meta.encrypted !== Boolean(this.passphrase) || typeof meta.salt !== 'string' || Buffer.from(meta.salt, 'base64').length !== 16 || !Array.isArray(meta.chunks) || meta.chunks.length > 100000 || meta.chunks.some(chunk => !uuid(chunk.id) || !Number.isSafeInteger(chunk.bytes) || chunk.bytes < 1 || chunk.bytes > this.chunkBytes || !/^[a-f\d]{64}$/.test(chunk.sha256))) throw new Error('Die Kennung eines Teildownloads ist beschädigt.');
