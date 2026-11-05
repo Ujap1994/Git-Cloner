@@ -1,8 +1,27 @@
 # Tatsächlich ausgeführte Prüfungen
 
-Stand: 5. November 2026, Git Cloner **3.4.0**. Prüfungen mit GitHub-Antworten aus Test-Fixtures und tatsächliche Plattformläufe werden getrennt ausgewiesen.
+Stand: 5. November 2026, Git Cloner **3.5.0**. Prüfungen mit GitHub-Antworten aus Test-Fixtures und tatsächliche Plattformläufe werden getrennt ausgewiesen.
 
-## Lokale Prüfung von Version 3.4
+## Lokale Prüfung von Version 3.5
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Node 24, `npm run check` | ESLint und **253 Tests erfolgreich**, keine Fehler. Insgesamt 258 registrierte Tests; vier ausschließlich native Mac-Tests und eine ausschließlich native Windows-LNK-Prüfung unter Linux übersprungen. |
+| Node 22.23.4 | Dieselben **253 Tests erfolgreich**, dieselben fünf Plattformausnahmen. |
+| Echte Electron-GUI Linux/Xvfb | **60 Tests erfolgreich**, einschließlich fünf neuer Abläufe für Mehrfachauswahl, Abbruch/Zurücksetzen, Verknüpfungs-Opt-in, Suche/Filter/Seiten, erhaltenen Fokus, tatsächlichen Neustart, verschlüsselte Dateinamen und englischen Dunkelmodus mit großer Schrift. |
+| Forgejo 17.0.1 über HTTPS | Private Git-/Metadaten-/Wiki-/Release-Abrufe mit den erweiterten Download-Clients erfolgreich. |
+| Produktionsabhängigkeiten | `npm audit --omit=dev`: keine gemeldeten Schwachstellen zum Prüfzeitpunkt. |
+| Gepackte Anwendung | Linux-x64-`build:dir` und tatsächlicher Start erfolgreich, einschließlich neuer Download-Historie. Alle **65 Anwendungsdateien** stimmen mit dem ASAR überein. |
+
+Neue Kernprüfungen verwenden echte lokale Repositories, tatsächliche ZIPs mit mehreren PE-Programmen und Begleitdateien, tatsächliche ELF-Dateien und eigene Verknüpfungen. Sie prüfen gemeinsamen Austausch, unveränderte Wiederholung, fehlende/ungültige Mitglieder, Schutz bearbeiteter Links, Zielwechsel, Wiederaufnahme einer vorbereiteten Verknüpfung, Opt-in nach Import und erhaltene Programme bei einem Verknüpfungsfehler. Signaturen und Nutzdaten werden nicht durch die Auswahl umgangen.
+
+Ein lokaler HTTP-Server bricht eine echte Übertragung nach 128 von 512 Nutzdatenbytes ab. Der nächste Abruf empfängt genau 384 weitere Bytes, verwendet 128 vorhandene Bytes und die Wiederholung aus vollständigem Cache empfängt null neue Nutzdaten. Ein zusätzlicher Wiederholungsfall zählt neu erhaltene Teile desselben Versuchs nicht als vermiedenen Abruf. Tatsächliche Cache-Dateigrößen stimmen mit der entfernten Menge überein. Persistenz, 2.000-Ereignis-Grenze, Filter/Pagination und das Weglassen verschlüsselter Asset-Namen sind geprüft. Die native Plattformprüfung wird unter Linux ausdrücklich nicht behauptet.
+
+Die Mac-CI führt zusätzlich zwei neue Mehrfach-App-Läufe aus ZIP und DMG aus: lokal kompilierte und ad-hoc-signierte Apps, Prüfung/Installation beider Programme, gemeinsamer Austausch und Finder-Verknüpfungen. Die Windows-CI prüft echte LNK-Dateien über die native COM-Schnittstelle, einschließlich strukturiert übergebener Pfade mit Apostroph und Dollarzeichen. Der bestehende echte, per SHA256 gepinnte Wordcraft-DMG-Test prüft zusätzlich seine Finder-Verknüpfung. Tatsächliche native Ergebnisse sind in [GitHub Actions](https://github.com/Ujap1994/Git-Cloner/actions/workflows/ci.yml) sichtbar.
+
+Die neue GUI-Programmliste verwendet eine ausdrücklich auf den E2E-Modus begrenzte Vorschau-Fixture, während die Kern- und nativen Prüfungen echte Archive öffnen. Die Historien-GUI verwendet dieselbe reale lokale Persistenzklasse wie die App. Screenshots zeigen isolierte neutrale Profile ohne Zugangsdaten.
+
+## Frühere lokale Prüfung von Version 3.4
 
 | Prüfung | Ergebnis |
 | --- | --- |

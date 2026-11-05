@@ -545,3 +545,51 @@ MSI-/NSIS-Systeminstallationen, PKG, DEB, RPM und beliebige Installationsskripte
 Nutze die Option nur für Herausgeber, denen du vertraust. Bewahre persönliche Daten und Einstellungen außerhalb der verwalteten Programmkopie auf. Zusätzliche Dateien direkt im verwalteten Ziel oder fremde temporäre Ordner blockieren den Austausch. Zielwechsel behalten vorhandene Installationen am alten Ort; sie werden nicht ungefragt verschoben oder gelöscht. Ein harter Abbruch kann eigene temporäre Arbeitsdaten hinterlassen; ein unterbrochener Austausch wird beim nächsten Installationsversuch anhand seiner Kennungen wieder aufgenommen.
 
 ![Ausdrückliche Programminstallation mit separatem Ziel](screenshots/program-installation.png)
+## 36. Programmverknüpfungen
+
+Die Beispiele bleiben anonym: `beispiel-konto/programmsammlung`, ein selbst gewählter Sicherungsordner und ein davon getrennter Programmordner. Es wird kein Beispiel-Repository automatisch eingetragen.
+
+1. **Quellen → Quelle bearbeiten → Programm automatisch installieren** öffnen.
+2. Die Installation einschalten und einen bestehenden Programm-Zielordner wählen, falls noch nicht eingerichtet.
+3. **Programmverknüpfungen erstellen** einschalten. Als Vorschlag erscheint der vom Betriebssystem gemeldete Desktop-/Schreibtischordner; über **Durchsuchen** lässt sich ein anderer bestehender Ordner wählen. Er muss außerhalb der Sicherungs- und konkreten Programmablage liegen.
+4. **Änderungen speichern** und **Jetzt prüfen** ausführen oder den geplanten Lauf abwarten.
+
+Nach erfolgreicher Installation erhält jedes gewählte Programm eine Verknüpfung: macOS eine symbolische Finder-Verknüpfung zur `.app`, Windows eine echte `.lnk`, Linux einen `.desktop`-Starter. Die App startet dabei kein heruntergeladenes Programm. Unter einigen Linux-Desktops muss das Starten einer Desktop-Datei einmal ausdrücklich erlaubt werden. Auf Windows wird die integrierte PowerShell für die Verknüpfung verwendet, ohne den Programmcode auszuführen.
+
+Verknüpfungen zeigen auf den aktuellen verwalteten Programmstand. Bei einer geänderten Auswahl werden nur eigene unveränderte Verknüpfungen entfernt; nach einem Ordnerwechsel werden erst die neuen angelegt. Eine vom Benutzer bearbeitete oder fremde Datei wird nicht überschrieben oder gelöscht. In diesem Fall erscheint eine Meldung zusätzlich zur erfolgreichen Programminstallation. Die Zuordnung liegt in einem versteckten Begleitordner im gewählten Verknüpfungsordner. Wird diese Zuordnung entfernt, behandelt die App übrig gebliebene Dateien vorsichtig als fremd.
+
+Zum Entfernen eigener Verknüpfungen die Option ausschalten, speichern und noch einmal prüfen lassen. Das bloße Deaktivieren der gesamten Programminstallation oder einer Quelle entfernt vorhandene Programme und Verknüpfungen nicht. Alte Programmkopien an früheren Zielorten bleiben ebenfalls erhalten.
+
+![Programmverknüpfungen je Quelle](screenshots/program-shortcuts.png)
+
+## 37. Mehrere Programme aus einer Release-Datei
+
+1. Ein einzelnes Repository mit **Release-Dateien** sichern. Falls das Archiv mehrere Programme enthält, kann die zunächst nicht eindeutige Installation eine Meldung erzeugen; die Release-Sicherung bleibt erfolgreich erhalten.
+2. Die gespeicherte Quelle bearbeiten und **Programm automatisch installieren → Programme aus Sicherung auswählen** öffnen. Bei mehreren gleichwertigen Release-Paketen zunächst den **Release-Dateinamen** eingrenzen, etwa mit `*suite*.zip`.
+3. Die App öffnet ausschließlich die vorhandene geprüfte Release-Datei. Unter macOS werden `.app`-Bundles aus DMG/ZIP angezeigt, unter Windows mögliche Hauptprogramme aus einem Portable-ZIP. Signatur/Programmformat und CPU werden vor der Auswahl geprüft; nicht passende Einträge bleiben deaktiviert. Linux-AppImages und einzelne Portable-EXEs bleiben einzelne Programme.
+4. Zwischen einem und 64 Programme auswählen, **Auswahl übernehmen** und anschließend die Quelle mit **Änderungen speichern** sichern. **Abbrechen** übernimmt keine Auswahl. **Automatische Auswahl** setzt die Auswahl auf das bisherige Verhalten mit einem eindeutig erkannten Programm zurück.
+5. **Jetzt prüfen** starten. Die ausgewählten Programme werden gemeinsam vorbereitet und die zugeordnete Installation erst nach vollständiger Prüfung ausgetauscht. Auch eine geänderte Auswahl bei identischem Release löst den erforderlichen Austausch aus.
+
+Die Auswahl verwendet die Pfade innerhalb des Archivs und gilt für spätere Releases. Ändert ein Herausgeber diese Pfade oder fehlt eine gewählte App, bleibt die vorherige Installation erhalten. Dann die Auswahl aus der neuen Sicherung erneut öffnen. Läuft eine der verwalteten Mac-Apps noch, wird der Austausch bei einer späteren Prüfung erneut versucht.
+
+Windows-Portable-Programme benötigen oft gemeinsame DLLs und Hilfsdateien: Der zugehörige Portable-Ordner wird mitsamt Begleitdateien kopiert. Weitere EXEs können deshalb als Begleitdateien vorhanden bleiben; ausgewählt werden die zu verwaltenden Hauptprogramme und ihre Verknüpfungen. Es werden weiterhin keine MSI-/NSIS-/PKG-Systeminstaller oder beliebigen Installationsskripte ausgeführt.
+
+![Explizite Auswahl mehrerer kompatibler Programme](screenshots/multiple-programs.png)
+
+## 38. Download-Verlauf und gemessene Ersparnis
+
+**Einstellungen → Sicherung → Downloads & Speicher → Download-Verlauf anzeigen** öffnet die neue Übersicht. Sie liest den Verlauf erst beim Öffnen oder Aktualisieren und benötigt dafür keinen GitHub-Abruf.
+
+| Wert | Messgrundlage |
+| --- | --- |
+| Empfangene Release-Nutzdaten | Tatsächlich aus den Antwort-Streams gelesene Dateibytes, einschließlich fehlgeschlagener Versuche. HTTP-/TLS-Header und sonstiger Protokollverkehr sind nicht enthalten; komprimierte Antworten werden nach der Dekodierung gezählt. Git-Klon- und Metadatenverkehr gehört nicht zu diesem Wert. |
+| Datenabruf vermieden | Inhaltlich geprüfte lokal übernommene Dateien sowie bereits vor diesem Abruf vorhandene, später erfolgreich verwendete Downloadteile. Innerhalb desselben Versuchs neu empfangene Teile werden auch bei Wiederholungen nicht als Ersparnis gezählt. Unveränderte Repository-Prüfungen erzeugen keine erfundenen Dateieinsparungen. |
+| Cache-Dateibytes bereinigt | Vor erfolgreichem Entfernen gemessene Größen eigener temporärer Dateien einschließlich Cache-Kennungen. Automatische Bereinigung nach einem Backup und manuelle Bereinigung sind enthalten. Physisch freie Kapazität kann wegen Dateisystemblöcken, Kompression und gemeinsam belegten Blöcken abweichen. |
+
+Nach Repository, Dateiname oder Tag suchen und nach **Ergebnis** oder **Zeitraum** filtern. Die Kennzahlen gelten immer für alle gefilterten Treffer, nicht nur für die sichtbare Seite. Jede Seite enthält höchstens 50 Einträge; der Verlauf behält maximal 2.000 Ereignisse. Es werden keine historischen Werte nachträglich erfunden und keine vermeintlich gemessenen Zeitgewinne geschätzt.
+
+Der Verlauf wird lokal im App-Profil gespeichert und bleibt nach Neustarts erhalten. Schreibvorgänge sind gebündelt; der erste Eintrag sowie Zustands- und Laufabschlüsse sichern ausstehende Einträge. Bei einem harten Prozessabbruch können noch nicht geschriebene Ereignisse fehlen. Auch Bereinigung kann keine verlorenen alten Einträge rekonstruieren. Bei verschlüsselten Sicherungen werden Dateinamen der Release-Dateien nicht in den Verlauf geschrieben; Repository-Namen und Tags bleiben wie im vorhandenen Sicherungsstatus sichtbar. Einträge mit **Fehlgeschlagen** zählen empfangene Nutzdaten, aber keine erfolgreich vermiedenen Dateidownloads.
+
+![Download-Verlauf und gleich ausgerichtete Filter](screenshots/download-history.png)
+
+![Englischer Dunkelmodus mit großer Schrift](screenshots/download-history-dark.png)

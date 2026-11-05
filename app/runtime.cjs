@@ -33,6 +33,8 @@ const { organizeConfig, prepareBulk, configSignature, RepositoryBrowser } = requ
 
 const downloadStorage = require('./core/download-storage.cjs');
 const { ProgramInstaller } = require('./core/program-installation.cjs');
+const { ProgramShortcuts } = require('./core/program-shortcuts.cjs');
+const { DownloadHistory } = require('./core/download-history.cjs');
 const { FILE_TYPES, ARCHITECTURES } = require('./core/release-assets.cjs');
 
 class Runtime extends EventEmitter {
@@ -54,7 +56,20 @@ class Runtime extends EventEmitter {
     return { token, count: entries.length, bytes: entries.reduce((sum, entry) => sum + entry.bytes, 0) };
   }
   cleanDownloads({ token } = {}) {
-    return this.withOperation('cleaning-downloads', async () => { const preview = this.downloadCleanup; if (!preview || preview.token !== token || preview.expires < Date.now()) throw new Error('Die Bereinigungsvorschau ist abgelaufen.'); const roots = this.downloadRoots(); if (preview.entries.some(entry => !roots.some(root => root.destination === entry.root && root.volumeId === entry.volumeId))) throw new Error('Die Sicherungsziele wurden inzwischen geändert.'); const result = await downloadStorage.clean(preview.entries); this.downloadCleanup = null; return result; });
+    return this.withOperation('cleaning-downloads', async () => { const preview = this.downloadCleanup; if (!preview || preview.token !== token || preview.expires < Date.now()) throw new Error('Die Bereinigungsvorschau ist abgelaufen.'); const roots = this.downloadRoots(); if (preview.entries.some(entry => !roots.some(root => root.destination === entry.root && root.volumeId === entry.volumeId))) throw new Error('Die Sicherungsziele wurden inzwischen geändert.'); const started = Date.now(), result = await downloadStorage.clean(preview.entries); try { await this.downloadHistory.append([{ status: 'cleaned', freedBytes: result.bytes, durationMs: Date.now() - started }]); await this.downloadHistory.flush(); } catch (error) { this.notice = 'Download-Verlauf: ' + error.message; } this.downloadCleanup = null; return result; });
+  }
+
+  downloadHistoryQuery(options) { return this.downloadHistory.query(options); }
+  programCandidates({ sourceId, pattern = '' } = {}) {
+    return this.withOperation('inspecting-programs', async () => {
+      const configured = this.config.sources.find(source => source.id === sourceId);
+      if (!configured || configured.kind !== 'repository') throw new Error('Bitte ein einzelnes gespeichertes Repository auswählen.');
+      const source = validateConfig({ ...this.config, sources: [{ ...configured, installation: { ...configured.installation, enabled: false, pattern } }] }).sources[0];
+      const candidates = Object.values(this.backup.state.repositories).filter(record => record.sourceId === sourceId && record.releaseInfo?.fileCount && record.fullName.toLowerCase() === source.value.toLowerCase());
+      const record = candidates.find(record => record.destination.startsWith(source.destination + path.sep)) || candidates[0];
+      if (!record) throw new Error('Bitte zuerst die Quelle speichern und ihre Release-Dateien mit Jetzt prüfen sichern.');
+      return new ProgramInstaller().inspect({ source, record: this.record(record.id), git: this.sourceGit(source), passphrase: this.vault.passwordFor(record) });
+    });
   }
 
   async releaseDestination(id) {
@@ -67,6 +82,7 @@ class Runtime extends EventEmitter {
   }
   constructor({ directory, safeStorage, version, fetchImpl = fetch, updateFetch, applyOS = async () => {}, notifyUpdate = () => {}, notifyBackup = () => {}, notificationsAvailable = () => true, now = () => new Date(), mountedRoots, environmentState = async () => ({ onBattery: null }), gitFactory = options => new Git(options) }) {
     super(); Object.assign(this, { directory, safeStorage, version, fetchImpl, updateFetch, applyOS, notifyUpdate, notifyBackup, notificationsAvailable, now, mountedRoots, environmentState, gitFactory });
+    this.programJobs = new Map(); this.downloadHistory = new DownloadHistory(path.join(directory, 'download-history.json'));
     this.clients = new Map(); this.gitClients = new Map(); this.notice = null; this.operation = null; this.device = null;
     this.dataRevision = 0; this.configRevision = 0; this.saving = false; this.disks = []; this.environment = { onBattery: null, network: null }; this.lastEnvironmentAt = 0;
   }
@@ -120,13 +136,23 @@ class Runtime extends EventEmitter {
     this.backup = new BackupService({
       state: { ...state, repositories: records }, git: this.git,
       sync: async input => {
-        const previousInstallation = this.backup.state.repositories[jobId(input)]?.installation;
-        const record = await syncRepository(input);
-        if (input.source.installation?.enabled && ['cloned','updated','repaired','unchanged'].includes(record.status)) {
-          try { record.installation = await new ProgramInstaller().install({ source: input.source, record, git: input.git, passphrase: input.passphrase, onProgress: input.onProgress }); }
-          catch (error) { record.installation = { ...previousInstallation, latestTag: record.releaseInfo?.tag, status: ['PROGRAM_RUNNING','EBUSY'].includes(error.code)?'waiting':'error', message: error.message }; record.warning = [record.warning, 'Programminstallation: ' + error.message].filter(Boolean).join(' '); }
-        }
-        return record;
+        const events = [];
+        try {
+          const record = await syncRepository({ ...input, onDownload: event => { if (events.length === 2000) events.shift(); events.push({ ...event, fullName: input.repository.full_name, encrypted: input.options.encryption }); } });
+          if (input.source.installation?.enabled && ['cloned','updated','repaired','unchanged'].includes(record.status)) {
+            const key = path.resolve(input.source.installation.destination), previousTask = this.programJobs.get(key) || Promise.resolve();
+            const task = previousTask.catch(() => {}).then(async () => {
+              const previousInstallation = this.backup.state.repositories[jobId(input)]?.installation;
+              try {
+                record.installation = await new ProgramInstaller().install({ source: input.source, record, git: input.git, passphrase: input.passphrase, onProgress: input.onProgress });
+                try { record.installation.shortcuts = await new ProgramShortcuts().sync({ source: input.source, installation: record.installation, previous: previousInstallation }); }
+                catch (error) { record.installation.shortcuts = { ...previousInstallation?.shortcuts, ...error.shortcutState, status: 'error', message: error.message }; record.warning = [record.warning, 'Programmverknüpfungen: ' + error.message].filter(Boolean).join(' '); }
+              } catch (error) { record.installation = { ...previousInstallation, latestTag: record.releaseInfo?.tag, status: ['PROGRAM_RUNNING','EBUSY'].includes(error.code)?'waiting':'error', message: error.message }; record.warning = [record.warning, 'Programminstallation: ' + error.message].filter(Boolean).join(' '); }
+            });
+            this.programJobs.set(key, task); try { await task; } finally { if (this.programJobs.get(key) === task) this.programJobs.delete(key); }
+          }
+          return record;
+        } finally { if (events.length) try { await this.downloadHistory.append(events); } catch (error) { this.notice = 'Download-Verlauf: ' + error.message; this.changed(); } }
       },
       github: source => this.sourceClient(source), getGit: source => this.sourceGit(source),
       getPassphrase: async () => this.vault.archivePassword, acquireLock: () => acquireLease(this.directory),
@@ -151,6 +177,7 @@ class Runtime extends EventEmitter {
     return this;
   }
   async persistState(value) {
+    try { await this.downloadHistory.flush(); } catch (error) { this.notice = 'Download-Verlauf: ' + error.message; }
     const { history = [], ...current } = value;
     await writeJson(path.join(this.directory, 'state.json'), { ...current, history: [] });
     const signature = `${history.length}:${history[0]?.finishedAt}`;

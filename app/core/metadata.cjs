@@ -1,3 +1,4 @@
+const { transferAsset } = require('./release-transfer.cjs');
 const { stableReleaseData, finishReleaseFolder, assetIdentity } = require('./release-reuse.cjs');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -29,7 +30,7 @@ async function metadataPlan(repository, options, github, git, { releaseScope = '
   return {
     digest, warning: wikiWarning, wikiRevision, estimatedBytes, releaseInfo, downloadCount: releaseSelection.selected.length,
     releaseWarning: options.releases && assets.length && !releaseSelection.selected.length ? 'Keine Release-Dateien passen zu den gewählten Filtern. Betriebssystem, Architektur und Dateitypen prüfen.' : null,
-    async apply(directory, mode, { downloads, onProgress, reuse } = {}) {
+    async apply(directory, mode, { downloads, onProgress, reuse, onDownload } = {}) {
       const target = path.join(controlDirectory(directory, mode), 'git-cloner-metadata');
       await fs.rm(target, { recursive: true, force: true });
       if (!Object.values(options).some(Boolean)) return;
@@ -52,8 +53,8 @@ async function metadataPlan(repository, options, github, git, { releaseScope = '
       const releaseFolder = releaseSelection.selected.length ? await createReleaseDirectory(directory, repository, release, releaseSelection.selected) : null;
       for (const asset of releaseSelection.selected) {
         const safeName = releaseFolder.files.find(file => file.id === asset.id).storedName;
-        if (await reuse?.copy(asset, path.join(releaseFolder.target, safeName))) { onProgress?.({ status: 'reusing', asset: asset.name, downloadBytes: asset.size ?? 0 }); continue; }
-        await github.downloadAsset(repository.full_name, asset.id, path.join(releaseFolder.target, safeName), { expectedSize: asset.size, expectedDigest: asset.digest, expectedName: asset.name, ...(downloads ? { resume: { cache: downloads, identity: { tag: release.tag_name, id: asset.id, name: asset.name, size: asset.size, digest: asset.digest, updatedAt: asset.updated_at }, onProgress } } : {}) });
+        await transferAsset({ asset, tag: release.tag_name, target: path.join(releaseFolder.target, safeName), downloads, reuse, onProgress, onDownload,
+          download: measured => github.downloadAsset(repository.full_name, asset.id, path.join(releaseFolder.target, safeName), { expectedSize: asset.size, expectedDigest: asset.digest, expectedName: asset.name, ...measured }) });
       }
       await finishReleaseFolder(releaseFolder, releaseSelection.selected);
       if (wikiRevision) await git.cloneMirror(`https://github.com/${repository.full_name}.wiki.git`, path.join(target, 'wiki.git'));

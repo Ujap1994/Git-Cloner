@@ -38,7 +38,7 @@ else {
   });
 }
 function showWindow() { if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus(); } }
-function state() { return { ...runtime.snapshot(), platform: process.platform, arch: process.arch, packaged: app.isPackaged, nativeScheduleSupported: app.isPackaged && !process.env.FLATPAK_ID }; }
+function state() { return { ...runtime.snapshot(), platform: process.platform, arch: process.arch, desktopDirectory: app.getPath('desktop'), packaged: app.isPackaged, nativeScheduleSupported: app.isPackaged && !process.env.FLATPAK_ID }; }
 function broadcast() {
   if (worker || broadcastTimer) return;
   broadcastTimer = setTimeout(() => {
@@ -169,6 +169,8 @@ async function start() {
   handle('repositories:browse-missing', input => runtime.repositoryBrowser.allMissing(input));
   handle('repositories:browse-close', () => { runtime.repositoryBrowser.close(); return true; });
   handle('repositories:browse-add', input => runtime.addBrowserSources(input));
+  handle('downloads:history', options => runtime.downloadHistoryQuery(options));
+  handle('program:candidates', options => testMode && process.env.GIT_CLONER_TEST_PROGRAMS ? JSON.parse(process.env.GIT_CLONER_TEST_PROGRAMS) : runtime.programCandidates(options));
   handle('downloads:inventory', () => runtime.downloadInventory());
   handle('downloads:preview-cleanup', input => runtime.previewDownloadCleanup(input));
   handle('downloads:cleanup', input => runtime.cleanDownloads(input));

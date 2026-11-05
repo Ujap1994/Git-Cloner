@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('gitCloner', {
   missingRepositories: input => ipcRenderer.invoke('repositories:browse-missing', input),
   closeRepositoryBrowser: () => ipcRenderer.invoke('repositories:browse-close'),
   addRepositories: input => ipcRenderer.invoke('repositories:browse-add', input),
+  downloadHistory: options => ipcRenderer.invoke('downloads:history', options),
+  programCandidates: options => ipcRenderer.invoke('program:candidates', options),
   downloadInventory: () => ipcRenderer.invoke('downloads:inventory'),
   previewDownloadCleanup: input => ipcRenderer.invoke('downloads:preview-cleanup', input),
   cleanDownloads: input => ipcRenderer.invoke('downloads:cleanup', input),

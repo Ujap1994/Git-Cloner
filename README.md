@@ -1,5 +1,5 @@
 <p align="center"><img src="build/icon.png" width="80" alt="Git Cloner"></p>
-<h1 align="center">Git Cloner 3.4</h1>
+<h1 align="center">Git Cloner 3.5</h1>
 <p align="center">Deine Repositories. Auf deinem Laufwerk. Nach deinem Zeitplan.</p>
 <p align="center"><a href="https://github.com/Ujap1994/Git-Cloner/actions/workflows/ci.yml"><img src="https://github.com/Ujap1994/Git-Cloner/actions/workflows/ci.yml/badge.svg" alt="CI"></a> <a href="https://github.com/Ujap1994/Git-Cloner/releases">Downloads</a> · <a href="docs/ANLEITUNG.md">Anonymisierte Anleitung</a> · <a href="docs/GUIDE.en.md">English guide</a></p>
 
@@ -27,7 +27,23 @@ Git Cloner ist eine Electron-Desktop-App für macOS, Windows und Linux. Sie sich
 | Komfort | Suche, Statusfilter, paginierte Listen, Import/Export der Einstellungen ohne Geheimnisse und anonymisierte Diagnoseprotokolle. |
 | Darstellung | Deutsch und Englisch, Hell-/Dunkelmodus oder Systemeinstellung sowie drei Schriftgrößen, hohen Kontrast und Tastenkürzel mit ausgerichteten Eingabefeldern. |
 
-## Neu in Version 3.4
+## Neu in Version 3.5
+
+| Erweiterung | Verhalten |
+| --- | --- |
+| Programmverknüpfungen | Optional je Quelle einen eigenen Ordner wählen, beispielsweise den Desktop. macOS erhält Finder-Verknüpfungen, Windows echte `.lnk`-Dateien und Linux `.desktop`-Starter. Sie folgen der verwalteten Installation; fremde oder nachträglich bearbeitete Verknüpfungen werden erhalten. |
+| Mehrere Programme eines Archivs | Nach der ersten Release-Sicherung den geprüften Inhalt anzeigen, ein bis 64 passende Programme auswählen und die Auswahl speichern. Gewählte Mac-Apps oder Windows-Portable-Programme werden gemeinsam vorbereitet und ausgetauscht. Fehlende oder inkompatible Programme erhalten den bisherigen Stand. |
+| Download-Verlauf | Empfangene Release-Dateibytes, lokal vermiedene Abrufe und tatsächlich entfernte Cache-Dateibytes anzeigen. Suche, Ergebnis-/Zeitraumfilter, 50 Einträge je Seite und höchstens 2.000 gespeicherte Ereignisse. Bei verschlüsselten Sicherungen bleiben Asset-Dateinamen verborgen. |
+
+![Mehrere Programme einer Release-Datei auswählen](docs/screenshots/multiple-programs.png)
+
+![Programmverknüpfungen ausdrücklich je Quelle einschalten](docs/screenshots/program-shortcuts.png)
+
+![Download-Verlauf mit gemessenen Dateibytes](docs/screenshots/download-history.png)
+
+Die [anonymisierte Anleitung ab Abschnitt 36](docs/ANLEITUNG.md#36-programmverknüpfungen) beschreibt die drei Erweiterungen. Empfangene Nutzdaten schließen HTTP-/TLS-Overhead aus; bei komprimierten Antworten sind es dekodierte Dateibytes. Bereinigte Cache-Dateibytes sind keine Schätzung zusätzlicher physisch freier Kapazität. Es gibt keine geschätzten Zeitgewinne. Quellen bleiben beim ersten Start leer; Git Cloner selbst meldet neue offizielle Versionen weiterhin ausschließlich als Hinweis.
+
+## Bereits enthalten: Version 3.4
 
 | Erweiterung | Verhalten |
 | --- | --- |

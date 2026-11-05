@@ -116,7 +116,7 @@ class GitHubClient {
     }
     return response;
   }
-  async downloadAssetOnce(fullName, id, file, { expectedSize, expectedDigest, expectedName = '', resume } = {}) {
+  async downloadAssetOnce(fullName, id, file, { expectedSize, expectedDigest, expectedName = '', resume, onMeasure = () => {} } = {}) {
     const fs = require('node:fs');
     const { Readable, Transform } = require('node:stream');
     const { createHash } = require('node:crypto');
@@ -125,11 +125,11 @@ class GitHubClient {
     if (!Number.isSafeInteger(id) || id < 1) throw new Error('Ungültiges Release-Asset.');
     if (expectedSize != null && (!Number.isSafeInteger(expectedSize) || expectedSize < 0)) throw new Error('Ungültige Größe einer Release-Datei.');
     const timeout = Math.min(86400000, Math.max(600000, this.transfer?.budget.bytesPerSecond && expectedSize ? expectedSize / this.transfer.budget.bytesPerSecond * 1500 : 0));
-    if (resume) return resume.cache.download({ identity: resume.identity, file, expectedSize, expectedDigest, expectedName, transfer: this.transfer, onProgress: resume.onProgress, request: range => this.assetResponse(fullName, id, { ...range, timeout, identity: true }) });
+    if (resume) return resume.cache.download({ identity: resume.identity, file, expectedSize, expectedDigest, expectedName, transfer: this.transfer, onProgress: resume.onProgress, onMeasure: resume.onMeasure || onMeasure, request: range => this.assetResponse(fullName, id, { ...range, timeout, identity: true }) });
     const response = await this.assetResponse(fullName, id, { timeout });
     if (!response.ok || !response.body) { const error = new Error('Release-Datei konnte nicht geladen werden.'); error.retryable = [429,500,502,503,504].includes(response.status); throw error; }
     let bytes = 0; const hash = createHash('sha256');
-    const meter = new Transform({ transform(chunk,_encoding,done) { bytes += chunk.length; hash.update(chunk); if (Number.isSafeInteger(expectedSize) && bytes > expectedSize) done(new Error('Release-Datei ist größer als von GitHub angegeben.')); else done(null,chunk); } });
+    const meter = new Transform({ transform(chunk,_encoding,done) { bytes += chunk.length; onMeasure({ networkBytes: chunk.length }); hash.update(chunk); if (Number.isSafeInteger(expectedSize) && bytes > expectedSize) done(new Error('Release-Datei ist größer als von GitHub angegeben.')); else done(null,chunk); } });
     const stages = [Readable.fromWeb(response.body),meter]; if (this.transfer) stages.push(this.transfer.budget.stream());
     const output = fs.createWriteStream(file, { flags: 'wx', mode: 0o600 }); let owned = false; output.once('open',() => { owned = true; });
     try {

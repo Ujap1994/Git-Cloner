@@ -133,7 +133,7 @@ class ReleaseDownloads {
     entry.meta.chunks = []; entry.meta.complete = false; entry.meta.etag = null; entry.meta.modified = null; entry.meta.total = null;
     await writeJson(entry.file, entry.meta);
   }
-  async materialize(entry, file, expectedSize, expectedDigest) {
+  async materialize(entry, file, expectedSize, expectedDigest, onMeasure = () => {}) {
     const digest = createHash('sha256'); let bytes = 0, output, owned = false;
     try {
       output = await fs.open(file, 'wx', 0o600); owned = true;
@@ -145,17 +145,19 @@ class ReleaseDownloads {
       if (/^sha256:[a-f\d]{64}$/i.test(expectedDigest ?? '') && sha256 !== expectedDigest.slice(7).toLowerCase()) { await this.reset(entry); throw downloadError('Die SHA256-Prüfsumme der Release-Datei stimmt nicht.', true); }
       await output.close(); output = null;
       entry.meta.complete = true; await writeJson(entry.file, entry.meta);
+      onMeasure({ usedChunks: entry.meta.chunks.map(({ id, bytes }) => ({ id, bytes })) });
       return { bytes, sha256 };
     } catch (error) { await output?.close(); if (owned) await fs.rm(file, { force: true }); if (error.code === 'CACHE_INTEGRITY') { await this.reset(entry); error.retryable = true; } throw error; }
   }
-  async download({ identity, file, expectedSize, expectedDigest, expectedName = '', request, transfer, onProgress = () => {} }) {
+  async download({ identity, file, expectedSize, expectedDigest, expectedName = '', request, transfer, onProgress = () => {}, onMeasure = () => {} }) {
     const entry = await this.entry(identity);
+    onMeasure({ cacheChunks: entry.meta.chunks.map(({ id, bytes }) => ({ id, bytes })) });
     try {
       let offset;
       try { offset = await this.prefix(entry); } catch (error) { if (error.code !== 'CACHE_INTEGRITY') throw error; await this.reset(entry); offset = 0; }
       let resumedBytes = offset;
       const knownDigest = /^sha256:[a-f\d]{64}$/i.test(expectedDigest ?? '');
-      if (entry.meta.complete && knownDigest) { const result = await this.materialize(entry, file, expectedSize, expectedDigest); onProgress({ status: 'downloading', asset: expectedName, downloadBytes: result.bytes, downloadTotal: result.bytes, resumedBytes: result.bytes }); return { ...result, resumedBytes: result.bytes }; }
+      if (entry.meta.complete && knownDigest) { const result = await this.materialize(entry, file, expectedSize, expectedDigest, onMeasure); onProgress({ status: 'downloading', asset: expectedName, downloadBytes: result.bytes, downloadTotal: result.bytes, resumedBytes: result.bytes }); return { ...result, resumedBytes: result.bytes }; }
       if (offset && (entry.meta.encoded || !knownDigest && !strongETag(entry.meta.etag) && !httpDate(entry.meta.modified))) { await this.reset(entry); offset = 0; resumedBytes = 0; }
       let restarts = 0;
       for (let part = 0; part < 1000; part++) {
@@ -165,7 +167,7 @@ class ReleaseDownloads {
           const completeRange = response.headers?.get('content-range') === `bytes */${offset}`;
           const sameEntity = strongETag(entry.meta.etag) ? response.headers?.get('etag') === entry.meta.etag : httpDate(entry.meta.modified) && response.headers?.get('last-modified') === entry.meta.modified && strongModified(entry.meta.modified, response.headers?.get('date'));
           if (knownDigest && expectedSize === offset || completeRange && sameEntity && (expectedSize == null || expectedSize === offset)) {
-            const result = await this.materialize(entry, file, expectedSize ?? offset, expectedDigest); onProgress({ status: 'downloading', asset: expectedName, downloadBytes: result.bytes, downloadTotal: result.bytes, resumedBytes }); return { ...result, resumedBytes };
+            const result = await this.materialize(entry, file, expectedSize ?? offset, expectedDigest, onMeasure); onProgress({ status: 'downloading', asset: expectedName, downloadBytes: result.bytes, downloadTotal: result.bytes, resumedBytes }); return { ...result, resumedBytes };
           }
           if (++restarts > 1) throw downloadError('Der Server akzeptiert keine sichere Fortsetzung.');
           await this.reset(entry); offset = 0; resumedBytes = 0; continue;
@@ -197,7 +199,7 @@ class ReleaseDownloads {
         onProgress({ status: 'downloading', asset: expectedName, downloadBytes: offset, downloadTotal: total, resumedBytes });
         try {
           for await (const raw of response.body) {
-            const chunk = Buffer.from(raw); await transfer?.budget.consume(chunk.length); received += chunk.length;
+            const chunk = Buffer.from(raw); onMeasure({ networkBytes: chunk.length }); await transfer?.budget.consume(chunk.length); received += chunk.length;
             if (total != null && received > total || end != null && received > end) throw new Error('Release-Datei ist größer als angegeben.');
             for (let cursor = 0; cursor < chunk.length;) {
               const take = Math.min(this.chunkBytes - buffered, chunk.length - cursor); buffers.push(chunk.subarray(cursor, cursor + take)); buffered += take; cursor += take;
@@ -212,7 +214,7 @@ class ReleaseDownloads {
         }
         if (end != null && offset !== end || total != null && offset < total && end == null) throw downloadError('Release-Datei ist unvollständig.', true);
         if (total != null && offset < total) continue;
-        return { ...await this.materialize(entry, file, total ?? offset, expectedDigest), resumedBytes };
+        return { ...await this.materialize(entry, file, total ?? offset, expectedDigest, onMeasure), resumedBytes };
       }
       throw new Error('Zu viele Teilantworten für einen Release-Download.');
     } finally { entry.keyBytes?.fill(0); }
@@ -232,7 +234,8 @@ class ReleaseDownloads {
         try { await handle.read(prefix); } finally { await handle.close(); }
         if (!prefix.equals(expected)) throw new Error('Eine fremde Teildownload-Datei wird nicht entfernt.');
       }
-      await fs.rm(directory, { recursive: true });
+      let bytes = 0; for (const name of files) { try { bytes += (await regular(path.join(directory, name))).size; } catch (error) { if (error.code !== 'ENOENT') throw error; } }
+      await fs.rm(directory, { recursive: true }); return bytes;
   }
   async sweep() {
     await this.checkRoot();
@@ -243,7 +246,7 @@ class ReleaseDownloads {
   }
   async clear() {
     await this.checkRoot();
-    for (const name of await fs.readdir(this.directory)) if (/^[a-f\d]{64}$/.test(name)) await this.removeEntry(name);
+    let bytes = 0; for (const name of await fs.readdir(this.directory)) if (/^[a-f\d]{64}$/.test(name)) bytes += await this.removeEntry(name); return bytes;
   }
   async close() { this.passphrase = ''; await this.release?.(); this.release = null; }
 }

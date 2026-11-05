@@ -122,15 +122,15 @@ class HostedClient {
     }
     return response;
   }
-  async downloadURL(value,file,{expectedSize,expectedDigest,expectedName='',resume}={}) {
+  async downloadURL(value,file,{expectedSize,expectedDigest,expectedName='',resume,onMeasure=()=>{}}={}) {
     if(expectedSize!=null&&(!Number.isSafeInteger(expectedSize)||expectedSize<0))throw new Error('Ungültige Release-Dateigröße.');
     const timeout=Math.min(86400000,Math.max(600000,this.transfer?.budget.bytesPerSecond&&expectedSize?expectedSize/this.transfer.budget.bytesPerSecond*1500:0));
-    if(resume)return resume.cache.download({identity:resume.identity,file,expectedSize,expectedDigest,expectedName,transfer:this.transfer,onProgress:resume.onProgress,request:range=>this.assetResponse(value,{...range,timeout,identity:true})});
+    if(resume)return resume.cache.download({identity:resume.identity,file,expectedSize,expectedDigest,expectedName,transfer:this.transfer,onProgress:resume.onProgress,onMeasure:resume.onMeasure||onMeasure,request:range=>this.assetResponse(value,{...range,timeout,identity:true})});
     const response=await this.assetResponse(value,{timeout});
     if(!response.ok||!response.body){const error=new Error('Release-Datei konnte nicht geladen werden.');error.retryable=[429,500,502,503,504].includes(response.status);error.helpCode=[401,403].includes(response.status)?'authentication':'network';throw error;}
     if(/^text\/html/i.test(response.headers?.get('content-type')??'')&&!/\.html?$/i.test(expectedName)){await response.body.cancel();const error=new Error('Der Server liefert eine HTML-Anmeldeseite statt der Release-Datei. Token und Download-Berechtigungen prüfen.');error.helpCode='authentication';throw error;}
     const hash=createHash('sha256');let bytes=0,owned=false;
-    const meter=new Transform({transform(chunk,_encoding,done){bytes+=chunk.length;hash.update(chunk);done(expectedSize!=null&&bytes>expectedSize?new Error('Release-Datei ist größer als angegeben.'):null,chunk);}}),output=fs.createWriteStream(file,{flags:'wx',mode:0o600});output.once('open',()=>{owned=true;});
+    const meter=new Transform({transform(chunk,_encoding,done){bytes+=chunk.length;onMeasure({networkBytes:chunk.length});hash.update(chunk);done(expectedSize!=null&&bytes>expectedSize?new Error('Release-Datei ist größer als angegeben.'):null,chunk);}}),output=fs.createWriteStream(file,{flags:'wx',mode:0o600});output.once('open',()=>{owned=true;});
     try{await pipeline(Readable.fromWeb(response.body),meter,...(this.transfer?[this.transfer.budget.stream()]:[]),output);const digest=hash.digest('hex');if(expectedSize!=null&&bytes!==expectedSize)throw new Error('Release-Datei ist unvollständig.');if(/^sha256:[a-f\d]{64}$/i.test(expectedDigest??'')&&digest!==expectedDigest.slice(7).toLowerCase())throw new Error('Die SHA256-Prüfsumme der Release-Datei stimmt nicht.');return{bytes,sha256:digest};}catch(error){if(owned)await fs.promises.rm(file,{force:true});throw error;}
   }
 }

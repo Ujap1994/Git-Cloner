@@ -284,3 +284,41 @@ macOS supports one signed/ad-hoc `.app` from DMG/ZIP, validating its signature a
 Trust the selected publisher and keep personal data outside managed program copies. Additional files in the managed root and foreign staging directories block replacement. Changing destinations retains old installations at their current location. Interrupted swaps recover through ownership markers on the next installation attempt; hard termination can leave temporary working data.
 
 ![Opt-in program installation](screenshots/program-installation.png)
+## 36. Program shortcuts
+
+All examples are anonymous, such as `example-owner/program-suite`, a backup folder and a separate program folder. No example repository is preconfigured.
+
+Open **Sources → Edit source → Automatically install this program**, enable the program installation and select its folder. Enable **Create program shortcuts**, choose the desktop suggested by the operating system or another existing folder, save the source and run **Check now**. Shortcuts must be outside backup folders and the concrete managed installation.
+
+macOS creates Finder symlinks to `.app` bundles, Windows creates real `.lnk` files using built-in PowerShell, and Linux creates `.desktop` launchers. No downloaded program is launched during creation. Some Linux desktops require explicitly allowing a desktop launcher before its first use.
+
+Shortcuts follow managed program updates. Folder changes create the new links before removing unchanged owned old links. Unrelated or user-modified files remain untouched and produce a warning. Keep the hidden ownership folder alongside the shortcuts. Disabling shortcuts and running another check removes unchanged owned shortcuts; disabling the entire installation or source retains existing programs and shortcuts. Old program copies at previous destinations are retained.
+
+![Opt-in program shortcuts](screenshots/program-shortcuts.png)
+
+## 37. Select multiple programs inside a release archive
+
+1. Back up a single repository with release assets. An ambiguous first installation may report that program selection is required while retaining the successful backup.
+2. Edit the saved source and open **Automatically install this program → Choose programs from backup**. Narrow the release filename, for example `*suite*.zip`, if several packages match equally.
+3. Inspect the backed-up release file and choose one to 64 compatible programs. macOS supports `.app` bundles from DMG/ZIP, Windows supports main executables in portable ZIPs. Signatures/program format and architecture are checked. Incompatible entries are disabled. Linux AppImages and individual portable EXEs remain single programs.
+4. Click **Apply selection**, then **Save changes** and **Check now**. Canceling does not change the selection. **Automatic selection** restores the earlier behavior requiring exactly one recognizable program.
+
+All chosen programs are prepared and verified before the managed installation is replaced together. A selection change can update an otherwise unchanged release. Saved archive paths apply to future releases. Missing or renamed members retain the previous installation and require selecting the programs again. Running managed Mac apps defer the update to a later check.
+
+Windows portable folders retain shared DLLs and companion files; additional EXEs may be present as companions. The selection defines managed main programs and shortcuts, rather than deleting every other executable from a portable distribution. System installers and arbitrary installation scripts are still excluded.
+
+![Choose multiple compatible programs](screenshots/multiple-programs.png)
+
+## 38. Download history and measured savings
+
+Open **Settings → Backup → Downloads & storage → View download history**. History is read on demand without a GitHub request. Search by repository, filename or tag, filter by result or period, and browse pages of 50 entries. Totals include all filtered matches. At most 2,000 events are retained locally across app restarts.
+
+- **Received release payload:** actual bytes consumed from release response streams, including failed attempts. HTTP/TLS headers, Git traffic and metadata requests are excluded. Compressed HTTP responses count decoded file bytes.
+- **Transfer avoided:** content-verified local files and successfully used parts that existed before that transfer began. A retry cannot count newly received parts from the same attempt as savings. Unchanged repository checks do not invent saved bytes.
+- **Cache file bytes removed:** measured sizes of successfully removed owned temporary files, including cache metadata, through automatic or manual cleanup. This is not a prediction of physically free drive capacity: filesystem blocks, compression and shared extents can differ.
+
+No historical values are backfilled and no time savings are presented as measurements. Writes are batched; the first event and state/run checkpoints flush pending data. A hard process termination can lose unwritten events. Encrypted asset filenames are omitted from persisted history; repository names and tags remain visible as in the existing backup status. Failed transfers count received payload without crediting successfully avoided downloads.
+
+![Measured download history](screenshots/download-history.png)
+
+![English dark mode with large text](screenshots/download-history-dark.png)

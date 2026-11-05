@@ -91,4 +91,10 @@ Die zusätzlich besprochenen Prioritäten 5–18 sind weitere Ideen. Sie wurden 
 3. Download-Speicherübersicht und geprüfte Bereinigung ausschließlich eigener temporärer Teile.
 4. Optionale Installation von Programmen aus einzelnen Repository-Quellen mit getrenntem Ziel und Austausch einer verwalteten Programmkopie. Unterstützte portable/App-Bundle-Formate sind in der Anleitung aufgeführt. Git Cloner selbst behält ausschließlich Versionshinweise.
 
-Weitere Detailansichten bleiben das separat dokumentierte Konzept. Nächste mögliche Verbesserungen: freigegebene Installation in bestehende Programmverzeichnisse, gezielte Auswahl mehrerer Programme eines Archivs, Programmverknüpfungen und eine Download-Historie mit Zeit-/Bandbreitenersparnis.
+Weitere Detailansichten bleiben das separat dokumentierte Konzept. Die drei zuletzt beauftragten Erweiterungen folgen in Version 3.5. Eine Übernahme fremder bereits vorhandener Installationen ist weiterhin nicht enthalten.
+
+## Umgesetzt in Version 3.5
+
+1. Optionale eigene Programmverknüpfungen mit aktualisierten Zielen, geschützter Benutzerbearbeitung und Wiederanlauf vorbereiteter Änderungen.
+2. Auswahl von ein bis 64 kompatiblen Programmen in einer bereits gesicherten Release-Datei, gemeinsamer Austausch und Erhalt der alten Installation bei fehlenden oder ungültigen Mitgliedern.
+3. Begrenzter Download-Verlauf mit tatsächlichen Nutzdaten, geprüfter Abrufersparnis und entfernten Cache-Dateibytes. Physische Blockersparnis und vermeintlich gemessene Zeitgewinne werden nicht behauptet.

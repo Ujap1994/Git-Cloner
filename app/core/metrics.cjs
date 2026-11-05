@@ -1,7 +1,7 @@
 function dashboard(repositories, history, disks = [], now = Date.now()) {
   const records = Object.values(repositories), valid = records.filter(r => r.commit);
   const overdue = valid.filter(r => !r.checkedAt || now - Date.parse(r.checkedAt) > 48 * 3600000).length;
-  const errors = records.filter(r => r.status === 'error' || r.verificationStatus === 'error' || r.installation?.status === 'error').length;
+  const errors = records.filter(r => r.status === 'error' || r.verificationStatus === 'error' || r.installation?.status === 'error' || r.installation?.shortcuts?.status === 'error').length;
   const days = Array.from({length:7},(_,i) => {
     const date = new Date(now); date.setDate(date.getDate()-6+i); date.setHours(0,0,0,0);
     const end = new Date(date); end.setDate(end.getDate()+1);

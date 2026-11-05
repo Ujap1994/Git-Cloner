@@ -8,6 +8,25 @@ const { promisify } = require('node:util');
 const { repository } = require('../helpers/repository.cjs');
 const { ProgramInstaller } = require('../../app/core/program-installation.cjs');
 const run = promisify(execFile);
+for (const extension of ['zip', 'dmg']) test(`native macOS updates two selected signed apps and their Finder links together from ${extension}`, { skip: process.platform !== 'darwin', timeout: 180000 }, async t => {
+  const f = await repository(t), content = path.join(f.root, 'suite'), programs = path.join(f.root, 'programs'), desktop = path.join(f.root, 'Desktop'); await fs.mkdir(content); await fs.mkdir(programs); await fs.mkdir(desktop);
+  const code = path.join(f.root, 'fixture.c'); await fs.writeFile(code, '#include <unistd.h>\nint main(void) { sleep(30); return 0; }\n');
+  for (const name of ['Writer', 'Viewer']) {
+    const app = path.join(content, name + '.app'), contents = path.join(app, 'Contents'); await fs.mkdir(path.join(contents, 'MacOS'), { recursive: true });
+    await run('/usr/bin/clang', ['-arch', process.arch === 'x64' ? 'x86_64' : 'arm64', code, '-o', path.join(contents, 'MacOS', name)]);
+    await fs.writeFile(path.join(contents, 'Info.plist'), `<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>org.example.${name}</string><key>CFBundleExecutable</key><string>${name}</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleVersion</key><string>1</string></dict></plist>`); await run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', app]);
+  }
+  const file = path.join(f.root, 'suite-macos-universal.' + extension);
+  if (extension === 'zip') await run('/usr/bin/ditto', ['-c', '-k', content, file]); else await run('/usr/bin/hdiutil', ['create', '-quiet', '-fs', 'HFS+', '-srcfolder', content, '-volname', 'Suite', file], { timeout: 60000 });
+  f.source.installation = { enabled: true, destination: programs, pattern: '*.' + extension, programs: ['Viewer.app', 'Writer.app'], shortcut: { enabled: true, destination: desktop } }; f.options.metadata.releases = true; f.releases = [{ tag_name: 'v1', assets: [f.asset(1, path.basename(file), await fs.readFile(file))] }];
+  const installer = new ProgramInstaller(), record = await f.sync(), preview = await installer.inspect({ source: f.source, record, git: f.git }); assert.equal(preview.candidates.filter(item => item.available).length, 2);
+  const installed = await installer.install({ source: f.source, record, git: f.git }); assert.equal(installed.programs.length, 2);
+  const { ProgramShortcuts } = require('../../app/core/program-shortcuts.cjs'), links = new ProgramShortcuts(), shortcuts = await links.sync({ source: f.source, installation: installed }); assert.equal(shortcuts.count, 2);
+  f.releases[0].tag_name = 'v2'; const next = await f.sync(), updated = await installer.install({ source: f.source, record: next, git: f.git }); assert.equal(updated.status, 'installed'); assert.equal(updated.tag, 'v2');
+  await links.sync({ source: f.source, installation: updated, previous: { shortcuts } });
+  for (let i = 0; i < updated.programs.length; i++) { await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', updated.programs[i].executable]); assert.equal(await fs.readlink(path.join(desktop, shortcuts.files[i])), updated.programs[i].executable); }
+  f.source.installation.programs = ['Missing.app']; await assert.rejects(installer.install({ source: f.source, record: next, git: f.git }), /Programmauswahl/); for (const item of updated.programs) assert(await fs.stat(item.executable));
+});
 for (const extension of ['zip', 'dmg']) test(`native macOS installs a real ad-hoc signed fixture app from ${extension}`, { skip: process.platform !== 'darwin', timeout: 120000 }, async t => {
   const f = await repository(t), app = path.join(f.root, 'Example.app'), contents = path.join(app, 'Contents'); await fs.mkdir(path.join(contents, 'MacOS'), { recursive: true });
   // System tools on Apple Silicon can use the private arm64e ABI. Compile the

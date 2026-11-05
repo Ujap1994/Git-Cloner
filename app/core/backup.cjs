@@ -77,7 +77,7 @@ async function verifyBackup(record, git, passphrase) {
   } finally { await fs.rm(temporary, { recursive: true, force: true }); }
 }
 function backupFingerprint(opts){return createHash('sha256').update(JSON.stringify({mode:opts.mode,lfs:opts.lfs,submodules:opts.submodules,encrypted:opts.encryption,metadata:opts.metadata,...(opts.metadata.releases?{releaseScope:opts.releaseScope,...((opts.releaseArchitecture&&opts.releaseArchitecture!=='all')||opts.releaseFileTypes?.length?{releaseArchitecture:opts.releaseArchitecture??'all',releaseFileTypes:opts.releaseFileTypes??[],releaseArch:opts.releaseArchitecture==='system'?process.arch:null}:{}),releasePlatform:opts.releaseScope==='system'?process.platform:null}:{}),keyId:opts.encryption?opts.encryptionKeyId:null})).digest('hex');}
-async function syncRepository({ source, repository, git, github, options = defaults().backup, plan, passphrase, onProgress = () => {} }) {
+async function syncRepository({ source, repository, git, github, options = defaults().backup, plan, passphrase, onProgress = () => {}, onDownload = () => {} }) {
   const fullName = parseHostedSource(repository.full_name, 'repository',source), parts=repositoryParts(source,fullName), name=parts.at(-1),parents=parts.slice(0,-1),spec=providerSpec(source);
   const opts = { ...defaults().backup, ...options, metadata: { ...defaults().backup.metadata, ...options.metadata } };
   let root = await verifyDestination(source);
@@ -132,7 +132,7 @@ async function syncRepository({ source, repository, git, github, options = defau
     if (opts.lfs) await git.lfs(payload, opts.mode === 'mirror');
     if (plan.downloadCount) downloads = await ReleaseDownloads.open({ root, volumeId: source.volumeId, scope: `${providerKey(source)}:${source.accountId ?? 'default'}:${fullName.toLowerCase()}`, passphrase: opts.encryption ? passphrase : '', encryptionKeyId: opts.encryptionKeyId || '' });
     reuse = await ReleaseReuse.open(current ? { ...current, destination: target } : null, passphrase);
-    const applied = await plan.apply(payload, opts.mode, { downloads, onProgress, reuse });
+    const applied = await plan.apply(payload, opts.mode, { downloads, onProgress, reuse, onDownload });
     const releaseInfo = structuredClone(applied?.releaseInfo ?? plan.releaseInfo ?? null);
     onProgress({ fullName, status: 'verifying' }); await git.fsck(payload);
     const commit = await git.head(payload);
@@ -149,7 +149,7 @@ async function syncRepository({ source, repository, git, github, options = defau
     try { await fs.rename(staging, target); }
     catch (error) { if (current && !await exists(target)) await fs.rename(previous, target); throw error; }
     if (current) await fs.rm(previous, { recursive: true });
-    try { await downloads?.clear(); } catch (_error) { downloadWarning = 'Die Sicherung ist geprüft. Der temporäre Download-Cache konnte nicht vollständig bereinigt werden.'; }
+    try { const freedBytes = await downloads?.clear(); if (freedBytes) onDownload({ status: 'cleaned', freedBytes }); } catch (_error) { downloadWarning = 'Die Sicherung ist geprüft. Der temporäre Download-Cache konnte nicht vollständig bereinigt werden.'; }
     return { fullName, destination: target, commit, mode: opts.mode, encrypted: opts.encryption, releaseInfo, ...verification, verificationStatus: 'ok', status: repair ? 'repaired' : current ? 'updated' : 'cloned', ...(plan.warning || plan.releaseWarning || downloadWarning ? { warning: plan.warning || plan.releaseWarning || downloadWarning } : {}), checkedAt: new Date().toISOString() };
   } finally {
     try { await fs.rm(staging, { recursive: true, force: true }); await fs.rm(markerFile, { force: true }); if (temporary) await fs.rm(temporary, { recursive: true, force: true }); }
@@ -306,7 +306,7 @@ class BackupService extends EventEmitter {
       }
       if (pending.length) q.pauseReason = this.pauseReason || (failedForSpace.size?'space':'user');
       else {
-        const failed=result=>result.status==='error'||result.installation?.status==='error';
+        const failed=result=>result.status==='error'||result.installation?.status==='error'||result.installation?.shortcuts?.status==='error';
         const errors = q.results.filter(failed), details = q.results.length > 500 ? [...errors, ...q.results.filter(r => !failed(r))].slice(0,500) : q.results;
         const elapsedMs = q.elapsedMs + Date.now() - this.sessionStarted;
         this.state.history.unshift({ startedAt: q.startedAt, finishedAt: new Date().toISOString(), trigger: q.trigger, results: details, resultCount: q.results.length, errorCount: errors.length, changedCount: q.results.filter(r => ['cloned','updated','repaired'].includes(r.status)||r.installation?.status==='installed').length, truncatedResults: q.results.length - details.length, durationMs: elapsedMs, receivedBytes: q.receivedBytes + (this.transport?.bytes || 0), backupBytes: q.results.filter(r => ['cloned','updated','repaired'].includes(r.status)).reduce((sum,r) => sum + (r.bytes || 0),0) });
