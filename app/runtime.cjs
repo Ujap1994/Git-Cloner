@@ -80,8 +80,8 @@ class Runtime extends EventEmitter {
     if (!releaseDirectoryName(marker.releaseInfo?.assetDirectory)) throw new Error('Bitte die Quelle erneut prüfen, um Release-Dateien im sichtbaren Ordner abzulegen.');
     return safeDirectory(record.destination, [marker.releaseInfo.assetDirectory]);
   }
-  constructor({ directory, safeStorage, version, fetchImpl = fetch, updateFetch, applyOS = async () => {}, notifyUpdate = () => {}, notifyBackup = () => {}, notificationsAvailable = () => true, now = () => new Date(), mountedRoots, environmentState = async () => ({ onBattery: null }), gitFactory = options => new Git(options) }) {
-    super(); Object.assign(this, { directory, safeStorage, version, fetchImpl, updateFetch, applyOS, notifyUpdate, notifyBackup, notificationsAvailable, now, mountedRoots, environmentState, gitFactory });
+  constructor({ directory, safeStorage, version, writeWindowsShortcut, fetchImpl = fetch, updateFetch, applyOS = async () => {}, notifyUpdate = () => {}, notifyBackup = () => {}, notificationsAvailable = () => true, now = () => new Date(), mountedRoots, environmentState = async () => ({ onBattery: null }), gitFactory = options => new Git(options) }) {
+    super(); Object.assign(this, { directory, safeStorage, version, writeWindowsShortcut, fetchImpl, updateFetch, applyOS, notifyUpdate, notifyBackup, notificationsAvailable, now, mountedRoots, environmentState, gitFactory });
     this.programJobs = new Map(); this.downloadHistory = new DownloadHistory(path.join(directory, 'download-history.json'));
     this.clients = new Map(); this.gitClients = new Map(); this.notice = null; this.operation = null; this.device = null;
     this.dataRevision = 0; this.configRevision = 0; this.saving = false; this.disks = []; this.environment = { onBattery: null, network: null }; this.lastEnvironmentAt = 0;
@@ -145,7 +145,7 @@ class Runtime extends EventEmitter {
               const previousInstallation = this.backup.state.repositories[jobId(input)]?.installation;
               try {
                 record.installation = await new ProgramInstaller().install({ source: input.source, record, git: input.git, passphrase: input.passphrase, onProgress: input.onProgress });
-                try { record.installation.shortcuts = await new ProgramShortcuts().sync({ source: input.source, installation: record.installation, previous: previousInstallation }); }
+                try { record.installation.shortcuts = await new ProgramShortcuts({ writeWindowsShortcut: this.writeWindowsShortcut }).sync({ source: input.source, installation: record.installation, previous: previousInstallation }); }
                 catch (error) { record.installation.shortcuts = { ...previousInstallation?.shortcuts, ...error.shortcutState, status: 'error', message: error.message }; record.warning = [record.warning, 'Programmverknüpfungen: ' + error.message].filter(Boolean).join(' '); }
               } catch (error) { record.installation = { ...previousInstallation, latestTag: record.releaseInfo?.tag, status: ['PROGRAM_RUNNING','EBUSY'].includes(error.code)?'waiting':'error', message: error.message }; record.warning = [record.warning, 'Programminstallation: ' + error.message].filter(Boolean).join(' '); }
             });

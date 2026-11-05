@@ -104,7 +104,7 @@ async function start() {
   const testAPI = testMode && process.env.GIT_CLONER_TEST_API ? JSON.parse(process.env.GIT_CLONER_TEST_API) : null;
   const testMounts = testMode && process.env.GIT_CLONER_TEST_MOUNTS ? JSON.parse(process.env.GIT_CLONER_TEST_MOUNTS) : null;
   runtime = await new Runtime({
-    directory: app.getPath('userData'), safeStorage, version: app.getVersion(), applyOS, notifyUpdate, notifyBackup, notificationsAvailable: () => !testMode && Notification.isSupported(),
+    directory: app.getPath('userData'), safeStorage, writeWindowsShortcut: (file, options) => shell.writeShortcutLink(file, 'create', options), version: app.getVersion(), applyOS, notifyUpdate, notifyBackup, notificationsAvailable: () => !testMode && Notification.isSupported(),
     environmentState: async () => ({ onBattery: powerMonitor.isOnBatteryPower() }),
     ...(testMounts ? {mountedRoots:async()=>testMounts} : {}),
     ...(testRepositories ? { fetchImpl: async url => {

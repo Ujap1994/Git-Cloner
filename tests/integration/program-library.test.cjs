@@ -85,11 +85,14 @@ test('shortcut file collisions and backup directories remain protected', async t
   assert(quoteExec('/test/$value`x"%file').includes('%%file')); assert(quoteExec('/test/$value').includes('\\\\$value')); assert.throws(() => quoteExec('/test/unsafe\npath'));
 
 });
-test('native Windows creates a real .lnk using structured path data without launching its target', { skip: process.platform !== 'win32' }, async t => {
-  const f = await suite(t), record = await f.publish(1), installed = await f.installer.install({ source: f.source, record, git: f.git }), desktop = path.join(f.root, "Links O'Brien $literal"); await fs.mkdir(desktop); f.source.installation.shortcut = { enabled: true, destination: desktop };
-  const shortcuts = await new ProgramShortcuts().sync({ source: f.source, installation: installed }); assert.equal(shortcuts.count, 2);
-  const script = '$s=(New-Object -ComObject WScript.Shell).CreateShortcut([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:GIT_CLONER_TEST_LINK))); [Console]::Write($s.TargetPath)';
-  const { stdout } = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { env: { ...process.env, GIT_CLONER_TEST_LINK: Buffer.from(path.join(desktop, shortcuts.files[0])).toString('base64') } }); assert.equal(stdout.trim().toLowerCase(), installed.programs[0].executable.toLowerCase());
+test('native Windows writes and reads real LNK files through Electron without launching targets', { skip: process.platform !== 'win32', timeout: 90000 }, async t => {
+  const f = await repository(t), desktop = path.join(f.root, "Links O'Brien $literal"); await fs.mkdir(desktop);
+  const config = defaults(); config.checkUpdates = false;
+  const application = await require('../e2e/helpers.cjs').launch({ config }); t.after(() => application.close());
+  const options = { platform: 'win32', run, writeWindowsShortcut: (file, values) => application.application.evaluate(({ shell }, data) => shell.writeShortcutLink(data.file, 'create', data.values), { file, values }) };
+  const programs = [{ key: 'native-one', name: 'Native fixture one', executable: process.execPath }, { key: 'native-two', name: 'Native fixture two', executable: process.execPath }];
+  const shortcuts = await syncAt(desktop, 'native-test', programs, options); assert.equal(shortcuts.count, 2);
+  for (const file of shortcuts.files) { const target = await application.application.evaluate(({ shell }, file) => shell.readShortcutLink(file).target, path.join(desktop, file)); assert.equal(target.toLowerCase(), process.execPath.toLowerCase()); }
 });
 test('download history persists measured values, masks encrypted asset names and bounds queries and retention', async t => {
   const f = await repository(t), history = new DownloadHistory(path.join(f.root, 'download-history.json'));

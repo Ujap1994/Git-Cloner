@@ -290,7 +290,7 @@ All examples are anonymous, such as `example-owner/program-suite`, a backup fold
 
 Open **Sources → Edit source → Automatically install this program**, enable the program installation and select its folder. Enable **Create program shortcuts**, choose the desktop suggested by the operating system or another existing folder, save the source and run **Check now**. Shortcuts must be outside backup folders and the concrete managed installation.
 
-macOS creates Finder symlinks to `.app` bundles, Windows creates real `.lnk` files using built-in PowerShell, and Linux creates `.desktop` launchers. No downloaded program is launched during creation. Some Linux desktops require explicitly allowing a desktop launcher before its first use.
+macOS creates Finder symlinks to `.app` bundles, Windows creates real `.lnk` files using the native Electron API, and Linux creates `.desktop` launchers. No downloaded program is launched during creation. Some Linux desktops require explicitly allowing a desktop launcher before its first use.
 
 Shortcuts follow managed program updates. Folder changes create the new links before removing unchanged owned old links. Unrelated or user-modified files remain untouched and produce a warning. Keep the hidden ownership folder alongside the shortcuts. Disabling shortcuts and running another check removes unchanged owned shortcuts; disabling the entire installation or source retains existing programs and shortcuts. Old program copies at previous destinations are retained.
 

@@ -19,16 +19,14 @@ async function stamp(file) {
   if (!stat.isFile() || stat.nlink !== 1) throw new Error('Eine fremde Programmverknüpfung bleibt erhalten.');
   return 'file:' + await hashFile(file);
 }
-async function createLink(file, target, name, platform, run) {
+async function createLink(file, target, name, platform, writeWindowsShortcut) {
   if (platform === 'darwin') return fs.symlink(target, file, 'dir');
   if (platform === 'win32') {
-    // Shell-link persistence is unreliable in hidden staging directories. Let
-    // Windows write in its private temp folder, then stage the completed file.
+    if (!writeWindowsShortcut) throw new Error('Windows-Verknüpfungen benötigen die native Electron-Anwendung.');
     const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'gc-link-'));
     try {
       const staged = path.join(temporary, 'program.lnk');
-      const script = '$ErrorActionPreference="Stop"; $d=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:GIT_CLONER_SHORTCUT_DATA))|ConvertFrom-Json; try { $s=(New-Object -ComObject WScript.Shell).CreateShortcut([string]$d.file); $s.TargetPath=[string]$d.target; $s.WorkingDirectory=[string]$d.directory; $s.Description=[string]$d.name; $s.Save() } catch { throw ("Windows shortcut creation failed (HRESULT " + $_.Exception.HResult + "): " + $_.Exception.Message) }';
-      await run('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { timeout: 30000, windowsHide: true, env: { ...process.env, GIT_CLONER_SHORTCUT_DATA: Buffer.from(JSON.stringify({ file: staged, target, directory: path.dirname(target), name })).toString('base64') } });
+      if (!await writeWindowsShortcut(staged, { target, workingDirectory: path.dirname(target), description: name })) throw new Error('Windows konnte die Programmverknüpfung nicht erstellen.');
       await fs.copyFile(staged, file, fs.constants.COPYFILE_EXCL);
     } finally { await fs.rm(temporary, { recursive: true, force: true }); }
     return;
@@ -36,7 +34,7 @@ async function createLink(file, target, name, platform, run) {
   const value = text => text.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
   await fs.writeFile(file, `[Desktop Entry]\nVersion=1.0\nType=Application\nName=${value(name)}\nExec=${quoteExec(target)}\nPath=${value(path.dirname(target))}\nTerminal=false\n`, { flag: 'wx', mode: 0o755 });
 }
-async function syncAt(destination, identity, programs, { platform, run, forbidden = [] }) {
+async function syncAt(destination, identity, programs, { platform, run, writeWindowsShortcut, forbidden = [] }) {
   const root = await fs.realpath(destination);
   for (const directory of forbidden) { const resolved = await fs.realpath(directory).catch(() => path.resolve(directory)); if (root === resolved || root.startsWith(resolved + path.sep)) throw new Error('Verknüpfungen bitte außerhalb der Sicherungs- und Programmablage speichern.'); }
   const metadata = path.join(root, '.git-cloner-shortcuts'); let created = false;
@@ -72,7 +70,7 @@ async function syncAt(destination, identity, programs, { platform, run, forbidde
       if (previous?.target === program.executable && actual === previous.stamp) continue;
       const stage = randomUUID() + extension, staged = path.join(metadata, stage);
       try {
-        await createLink(staged, program.executable, program.name, platform, run);
+        await createLink(staged, program.executable, program.name, platform, writeWindowsShortcut);
         const signature = await stamp(staged); if (!signature) throw new Error('Die Programmverknüpfung konnte nicht erstellt werden.');
         record.pending = { stage, prior: actual, entry: { file: name, target: program.executable, stamp: signature } }; await writeJson(file, record); await recover();
       } catch (error) { if (!record.pending) await fs.unlink(staged).catch(() => {}); throw error; }
@@ -82,7 +80,7 @@ async function syncAt(destination, identity, programs, { platform, run, forbidde
   } finally { await release(); }
 }
 class ProgramShortcuts {
-  constructor({ platform = process.platform, run = promisify(execFile) } = {}) { Object.assign(this, { platform, run }); }
+  constructor({ platform = process.platform, run = promisify(execFile), writeWindowsShortcut } = {}) { Object.assign(this, { platform, run, writeWindowsShortcut }); }
   async sync({ source, installation, previous }) {
     const identity = `${providerKey(source)}:${source.value.toLowerCase()}`, settings = source.installation?.shortcut, old = previous?.shortcuts?.destination;
     let current = null;
