@@ -135,6 +135,7 @@ The overview adds elapsed time, approximate remaining time, measured downloads, 
 | Drive missing/identity mismatch | Connect the original drive or deliberately configure a new destination. |
 | Existing foreign folder | Choose a new target or move your own data safely. The app will not overwrite it. |
 | GitHub 401/403 | Check token validity, permissions, organization SSO and rate limits. |
+| Waiting for API limit | The queue resumes automatically after the displayed release time and keeps finished repositories. A read token under Settings → Accounts raises the limit; Resume retries immediately. |
 | Missing LFS | Install Git LFS or disable the option. The previous successful backup stays intact. |
 | Password error | Enter this archive's original password, including the old password after a recent change if applicable. |
 | No automatic check | Confirm enabled sources, saved times, awake computer, running app or enabled native worker. |

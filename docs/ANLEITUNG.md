@@ -155,6 +155,8 @@ Optional **Unabhängige OS-Zeitplanung** einschalten: Native installierte Pakete
 
 Öffentliche Quellen funktionieren ohne Anmeldung. GitHub erlaubt anonym typischerweise 60 API-Anfragen pro Stunde. Private Repositories oder größere Mengen benötigen passende Leserechte.
 
+Ist das API-Kontingent aufgebraucht, pausiert die Warteschlange mit **Wartet auf API-Limit · automatische Fortsetzung** und zeigt den voraussichtlichen Freigabezeitpunkt. Bereits gesicherte Repositories bleiben erledigt. Nach der Freigabe setzt die App automatisch fort; vorher stellt sie keine neuen automatischen Anfragen. Nach dem Hinterlegen eines Lesetokens kann **Fortsetzen** sofort gewählt werden.
+
 Unter **Einstellungen → Konten** lassen sich mehrere benannte Zugänge anlegen. Jede Quelle wählt ihren Zugang in den erweiterten Einstellungen.
 
 ### Personal Access Token
@@ -210,6 +212,7 @@ Der Diagnoseexport entfernt Konto-/Repository-Namen, Pfade, Commit-IDs und rohe 
 | Fremder Ordner blockiert Ziel | Neuen Zielordner wählen oder vorhandene Daten selbst sicher verschieben. |
 | Platzmangel | Platz für den alten und neuen Stand sowie Reserve freigeben; Metadaten/LFS können größer als die Schätzung sein. |
 | GitHub 401 / 403 | Gültigkeit, Repository-Freigabe, Org-SSO und API-Limit prüfen. |
+| Wartet auf API-Limit | Freigabezeitpunkt abwarten; die Warteschlange setzt automatisch fort und behält erledigte Repositories. Ein Lesetoken unter Einstellungen → Konten erhöht das Limit, danach sofort **Fortsetzen** möglich. |
 | LFS fehlt | Git LFS installieren oder die Option abschalten; vorhandener erfolgreicher Stand bleibt erhalten. |
 | Passwort fehlt/falsch | Das Passwort dieses Archivs eingeben. Nach einem Wechsel kann für ältere Archive noch das alte gelten. |
 | Kein automatischer Lauf | Quelle und Zeitplan aktiviert/gespeichert? Rechner wach? App im Hintergrund oder OS-Worker aktiv? |

@@ -22,11 +22,12 @@ const { networkName, restriction } = require('./core/network-rules.cjs');
 const { dashboard } = require('./core/metrics.cjs');
 const { RestoreBrowser } = require('./core/selective-restore.cjs');
 const { ChangesPreview } = require('./core/changes.cjs');
-const { rememberHints, findRelocations, persistRelocations, recoverRelocations } = require('./core/relocation.cjs');
+const { rememberHints, findRelocations, persistRelocations, recoverRelocations, targets: relocationTargets, markerAt, mountedRoots: systemRoots } = require('./core/relocation.cjs');
 const {HostedClient}=require('./core/hosted-client.cjs');
 const {providerSpec,providerKey,parseHostedSource}=require('./core/provider-spec.cjs');
 const {queryHistory,exportHistory,historyDetails}=require('./core/history.cjs');
 const {spaceReady}=require('./core/space-wait.cjs');
+const {rateReady}=require('./core/rate-limit.cjs');
 const {rotationInventory,rotatePasswords,recoverRotations}=require('./core/key-rotation.cjs');
 const {inspectRecommendations}=require('./core/recommendations.cjs');
 const { organizeConfig, prepareBulk, configSignature, RepositoryBrowser } = require('./core/source-workspace.cjs');
@@ -195,7 +196,7 @@ class Runtime extends EventEmitter {
       tokenConfigured: Boolean(this.vault.tokens.default), secureStorage: this.vault.available(),
       accounts: [{ id: 'default', label: 'Standard', configured: Boolean(this.vault.tokens.default) }, ...this.config.accounts.map(account => ({ ...account, configured: Boolean(this.vault.tokens[account.id]) }))],
       encryptionReady: Boolean(this.vault.archivePassword), encryptionRemembered: this.vault.rememberPassword, device: this.device,
-      queue: this.backup.state.queue ? { id: this.backup.state.queue.id, total: this.backup.state.queue.jobs.length, unresolved: Boolean(this.backup.state.queue.unresolved), completed: this.backup.state.queue.completed.length, pauseReason: this.backup.state.queue.pauseReason, message: this.backup.state.queue.message, elapsedMs: this.backup.state.queue.elapsedMs, receivedBytes: this.backup.state.queue.receivedBytes } : null,
+      queue: this.backup.state.queue ? { id: this.backup.state.queue.id, total: this.backup.state.queue.jobs.length, unresolved: Boolean(this.backup.state.queue.unresolved), completed: this.backup.state.queue.completed.length, pauseReason: this.backup.state.queue.pauseReason, rateLimitUntil: this.backup.state.queue.rateLimitUntil ?? null, message: this.backup.state.queue.message, elapsedMs: this.backup.state.queue.elapsedMs, receivedBytes: this.backup.state.queue.receivedBytes } : null,
       metrics: this.metricsSnapshot, environment: this.environment, driveRecovery: this.driveRecovery ?? null,
       rotation:this.rotation??null, releaseFormats: FILE_TYPES, releaseArchitectures: ARCHITECTURES,
       dataRevision: this.dataRevision, configRevision: this.configRevision
@@ -205,10 +206,12 @@ class Runtime extends EventEmitter {
     if (this.operation || this.saving) return { busy: true };
     if(!this.backup.busy&&Object.values(this.backup.state.repositories).some(record=>record.rekeyPending))await this.withOperation('recovering-archives',async()=>{});
     if(options.resume&&this.backup.state.queue?.pauseReason==='space'&&!await spaceReady(this.backup.state.queue))return{paused:true,reason:'space'};
+    if(options.resume&&!options.manual&&this.backup.state.queue?.pauseReason==='rate'&&!rateReady(this.backup.state.queue,this.now()))return{paused:true,reason:'rate',until:this.backup.state.queue.rateLimitUntil};
     if (!this.backup.busy && this.config.autoRelocate) await this.locateDrives({automatic:true});
     const config = structuredClone(this.config);
     config.backup.encryptionKeyId = this.vault.encryptionKeyId;
-    return this.backup.run(config, options);
+    const runOptions = { ...options }; delete runOptions.manual;
+    return this.backup.run(config, runOptions);
   }
   async scheduledRun() {
     if (this.backup.state.queue) return this.backup.state.queue.pauseReason === 'user' || this.backup.state.queue.pauseReason === 'restart' || this.backup.state.queue.pauseReason === 'error' ? { paused: true } : this.resume();
@@ -228,11 +231,26 @@ class Runtime extends EventEmitter {
     return restriction(execution,this.environment);
   }
   async policyTick() {
-    try { if (Date.now() - this.lastDisksAt >= 60000) await this.refreshDisks(); if (this.changes.current?.expiresAt <= Date.now()) await this.closeChanges(); if (this.config.autoRelocate && !this.busy() && !this.saving && Date.now() - (this.lastLocationCheck ?? 0) >= 60000) await this.locateDrives({automatic:true}); await this.updates.notifyAvailable(); const q = this.backup.state.queue; if (q && !this.busy() && !['user','restart','error'].includes(q.pauseReason) && !await this.checkRules(this.config.execution)&&(q.pauseReason!=='space'||await spaceReady(q))) await this.resume(); this.changed(); }
+    try {
+      const disks = this.diskSignature(); if (Date.now() - this.lastDisksAt >= 60000) await this.refreshDisks(); if (this.changes.current?.expiresAt <= Date.now()) await this.closeChanges();
+      if (this.config.autoRelocate && !this.busy() && !this.saving && Date.now() - (this.lastLocationCheck ?? 0) >= 60000) { this.lastLocationCheck = Date.now(); if (await this.relocationPending()) await this.locateDrives({automatic:true}).catch(error => { this.relocationKey = null; throw error; }); }
+      await this.updates.notifyAvailable(); const q = this.backup.state.queue; if (q && !this.busy() && !['user','restart','error'].includes(q.pauseReason) && !await this.checkRules(this.config.execution)&&(q.pauseReason!=='rate'||rateReady(q,this.now()))&&(q.pauseReason!=='space'||await spaceReady(q))) await this.resume();
+      // Idle ticks only notify the window when visible values changed or a periodic dashboard refresh is due.
+      if (disks !== this.diskSignature() || Date.now() - (this.lastIdleChange ?? 0) >= 300000) { this.lastIdleChange = Date.now(); this.changed(); }
+    }
     catch (error) { this.notice = error.message; this.changed(); }
   }
+  diskSignature() { return JSON.stringify(this.disks.map(d => [d.destination,d.reachable,d.freeBytes == null ? null : Math.round(d.freeBytes / 67108864)])); }
+  async relocationPending() {
+    const missing = [];
+    for (const target of relocationTargets(this.config)) if (target.volumeId && target.volumeHint && this.config.sources.find(s => s.id === target.sourceId)?.enabled && await markerAt(target.destination) !== target.volumeId) missing.push(target.targetId);
+    if (!missing.length) { this.relocationKey = null; return false; }
+    const key = JSON.stringify([missing,[...await (this.mountedRoots ?? systemRoots)()].sort()]);
+    if (key === this.relocationKey) return false;
+    this.relocationKey = key; return true;
+  }
   pause() { return this.backup.pause(); }
-  resume() { return this.run({ resume: true }); }
+  resume(options = {}) { return this.run({ ...options, resume: true }); }
   discard() { return this.backup.discard(); }
   preview(input) { return this.withOperation('previewing',() => previewConfig(input,source => this.sourceClient(source).withTransfer(null,input.execution?.retries ?? 2))); }
   historyQuery(options){return queryHistory(this.backup.state.history,options);}
