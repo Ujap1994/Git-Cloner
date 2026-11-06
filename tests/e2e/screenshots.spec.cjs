@@ -42,7 +42,7 @@ test('capture real application screenshots with empty first-run configuration',a
     await dark.page.screenshot({path:path.join(directory,'dark-english.png')});
   }finally{await dark.close();}
   // Explicit local fixture, not a claim that this release exists on GitHub.
-  const update=await launch({config,release:'v3.6.0'});
+  const update=await launch({config,release:'v'+require('semver').inc(require('../../package.json').version,'minor')});
   try{
     await update.application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1280,1040));
     await update.page.evaluate(()=>window.gitCloner.checkUpdates());

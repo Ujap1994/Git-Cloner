@@ -15,6 +15,7 @@ const { includesRepository } = require('./filters.cjs');
 const { hashFile, writeManifest, verifyDirectory, verificationDue, controlDirectory } = require('./integrity.cjs');
 const { encryptArchive, decryptArchive } = require('./archives.cjs');
 const { metadataPlan } = require('./metadata.cjs');
+const { programRelease } = require('./program-select.cjs');
 const { ReleaseReuse } = require('./release-reuse.cjs');
 const { ReleaseDownloads } = require('./release-downloads.cjs');
 const { releaseDirectoryName } = require('./release-layout.cjs');
@@ -89,7 +90,7 @@ async function syncRepository({ source, repository, git, github, options = defau
   onProgress({ fullName, status: 'checking' });
   const revision = await git.revision(url, opts.mode === 'mirror');
   if (!revision) return { fullName, destination: target, status: 'empty', message: 'Leeres Repository ohne Commit.', checkedAt: new Date().toISOString() };
-  plan ??= await metadataPlan(repository, opts.metadata, github, git, { releaseScope: opts.releaseScope, releaseArchitecture: opts.releaseArchitecture, releaseFileTypes: opts.releaseFileTypes });
+  plan ??= await metadataPlan(repository, opts.metadata, github, git, { releaseScope: opts.releaseScope, releaseArchitecture: opts.releaseArchitecture, releaseFileTypes: opts.releaseFileTypes, releaseProgram: programRelease(source) });
   if (current?.wikiRevision && plan.warning) throw new Error('Das Wiki konnte nicht aktualisiert werden. Die vorhandene Sicherung bleibt erhalten.');
   const fingerprint = backupFingerprint(opts);
   let repair = false;
@@ -271,8 +272,8 @@ class BackupService extends EventEmitter {
         try {
           if(prior?.rekeyPending)throw new Error('Der Passwortwechsel ist noch nicht abgeschlossen. Das Sicherungslaufwerk verbinden und den Assistenten erneut öffnen.');
           result = await retry(async () => {
-            const key = `${providerKey(job.source)}:${job.source.accountId}:${job.repository.full_name}:${JSON.stringify(options.metadata)}:${options.releaseScope}:${options.releaseArchitecture}:${JSON.stringify(options.releaseFileTypes)}`;
-            if (!plans.has(key)) plans.set(key, metadataPlan(job.repository, options.metadata, github, git, { releaseScope: options.releaseScope, releaseArchitecture: options.releaseArchitecture, releaseFileTypes: options.releaseFileTypes }).catch(error => { plans.delete(key); throw error; }));
+            const releaseProgram = programRelease(job.source), key = `${providerKey(job.source)}:${job.source.accountId}:${job.repository.full_name}:${JSON.stringify(options.metadata)}:${options.releaseScope}:${options.releaseArchitecture}:${JSON.stringify(options.releaseFileTypes)}:${JSON.stringify(releaseProgram)}`;
+            if (!plans.has(key)) plans.set(key, metadataPlan(job.repository, options.metadata, github, git, { releaseScope: options.releaseScope, releaseArchitecture: options.releaseArchitecture, releaseFileTypes: options.releaseFileTypes, releaseProgram }).catch(error => { plans.delete(key); throw error; }));
             return this.sync({ ...job, github, git, options, plan: await plans.get(key), passphrase: options.encryption ? await this.getPassphrase() : '', onProgress: update });
           }, { ...this.retryOptions, retries: q.config.execution.retries, onRetry: event => update({ status: 'retrying', attempt: event.attempt, retryAt: new Date(Date.now() + event.delay).toISOString() }) });
         } catch (error) {

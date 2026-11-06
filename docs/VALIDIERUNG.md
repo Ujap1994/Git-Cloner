@@ -1,6 +1,15 @@
 # Tatsächlich ausgeführte Prüfungen
 
-Stand: 6. November 2026, Git Cloner **3.5.1**. Prüfungen mit GitHub-Antworten aus Test-Fixtures und tatsächliche Plattformläufe werden getrennt ausgewiesen.
+Stand: 6. November 2026, Git Cloner **3.6.0**. Prüfungen mit GitHub-Antworten aus Test-Fixtures und tatsächliche Plattformläufe werden getrennt ausgewiesen.
+
+## Lokale Prüfung von Version 3.6.0
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Node 26, `npm run check` mit Git 2.51 | ESLint und **266 Tests erfolgreich**, keine Fehler; fünf native Mac-/Windows-Prüfungen unter Linux übersprungen. |
+| Echte Electron-GUI Linux/Xvfb | Release-, Installations-, Worker-, Update- und Screenshot-Spezifikationen: **21 Tests erfolgreich**. Simulierte neuere Releases für Update-Hinweise werden jetzt aus der Paketversion abgeleitet. |
+| Neue gezielte Tests | GitHub-Sekundärlimit ohne Kopfzeilen, API-Limit beim direkten und fortgesetzten Release-Download (GitHub und Forgejo) mit erhaltenem vorherigem Stand, OS-Worker wartet bis zur Freigabe und schließt die Warteschlange ab (ohne Warten bei zu langer Frist oder Abbruch), DMG-Mountpunkte aus `hdiutil -plist`, Lizenz-DMG über konvertierte Kopie, geöffnete Finder-Mounts bleiben erhalten, verständliche Signatur-/Abbildfehler, geschlossene Standardeingabe für Installationswerkzeuge, Rosetta-Rückfall und Sicherung nur der installierten Datei des neuesten Releases (mit Opt-out). |
+| Hinweis | Die DMG-Tests unter Linux verwenden simulierte macOS-Werkzeuge; echte DMG-Installationen prüft die CI auf macOS-Runnern. |
 
 ## Lokale Prüfung von Version 3.5.1
 

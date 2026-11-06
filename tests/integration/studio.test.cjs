@@ -86,6 +86,30 @@ test('an API limit pauses the queue, keeps finished jobs and waits for the reset
   limited=false;now=new Date(Date.parse(until)+1000);result=await runtime.resume();assert.equal(result.resultCount,3);assert.equal(result.errorCount,0);assert.equal(runtime.backup.state.queue,null);assert.equal(calls.get('demo/project'),1);assert.equal(calls.get('demo/second'),2);assert.equal(calls.get('demo/third'),1);
   const record=Object.values(runtime.backup.state.repositories).find(r=>r.fullName==='demo/second');assert.equal(record.status,'cloned');assert.equal(record.rateLimitUntil,undefined);
 });
+test('the scheduled worker waits for the API-limit reset itself and then completes the queue',async t=>{
+  const f=await repository(t);f.names=['demo/project','demo/second','demo/third'];f.source.kind='owner';f.source.value='demo';const config=f.config(),calls=new Map();config.execution.concurrency=1;let limited=true,until=new Date(Date.now()+3600000).toISOString();
+  const sync=async job=>{const name=job.repository.full_name;calls.set(name,(calls.get(name)||0)+1);if(name==='demo/second'&&limited){const error=new Error('GitHub-API-Limit erreicht (HTTP 403). Der Lauf wartet bis zur Freigabe.');Object.assign(error,{rateLimited:true,helpCode:'rate',rateLimitUntil:until});throw error;}return{fullName:name,destination:repositoryDestination(job.source,name),status:'cloned'};};
+  const service=new BackupService({git:f.git,github:f.github,state:{},saveState:async()=>{},sync});assert.equal((await service.run(config)).reason,'rate');
+  let now=new Date();const runtime=await f.runtime({config,state:structuredClone(service.state),now:()=>now});runtime.backup.sync=sync;const slept=[],waits=[];
+  const sleep=async ms=>{slept.push(ms);now=new Date(Number(now)+ms);limited=false;};
+  const result=await runtime.scheduledRunUntilSettled({sleep,onWait:value=>waits.push(value)});
+  assert.equal(result.resultCount,3);assert.equal(result.errorCount,0);assert.equal(runtime.backup.state.queue,null);assert.equal(slept.length,1);assert(slept[0]>=3590000&&slept[0]<=3605000);assert.equal(calls.get('demo/second'),2);assert.equal(waits.length,2);assert.equal(waits[1],null);
+  limited=true;until=new Date(Number(now)+3*3600000).toISOString();const later=await f.runtime({config,state:{...structuredClone(service.state),queue:{...structuredClone(service.state.queue),rateLimitUntil:until}},now:()=>now});later.backup.sync=sync;slept.length=0;
+  assert.equal((await later.scheduledRunUntilSettled({sleep})).reason,'rate');assert.equal(slept.length,0);
+  const stop=new AbortController();stop.abort();until=new Date(Number(now)+60000).toISOString();later.backup.state.queue.rateLimitUntil=until;
+  assert.equal((await later.scheduledRunUntilSettled({sleep,signal:stop.signal})).reason,'rate');assert.equal(slept.length,0);
+});
+test('an API limit during a release download keeps the previous backup and the partial download for later',async t=>{
+  const {GitHubClient}=require('../../app/core/github.cjs');
+  const f=await repository(t);f.options={...f.options,metadata:{...f.options.metadata,releases:true}};f.releases=[{id:1,tag_name:'v1',assets:[f.asset(11,'app-1.0.zip','first')]}];const first=await f.sync();
+  f.releases=[{id:2,tag_name:'v2',assets:[f.asset(21,'app-2.0.zip','second')]},f.releases[0]];const reset=String(Math.floor(Date.now()/1000)+1800);
+  const limitedClient=new GitHubClient({retryOptions:{retries:0},fetchImpl:async()=>new Response(JSON.stringify({message:'API rate limit exceeded'}),{status:403,headers:{'x-ratelimit-remaining':'0','x-ratelimit-reset':reset}})});
+  const original=f.github.downloadAsset;f.github.downloadAsset=(...args)=>limitedClient.downloadAsset(...args);
+  await assert.rejects(f.sync(),error=>error.rateLimited&&Date.parse(error.rateLimitUntil)===Number(reset)*1000);
+  assert.equal((await managed(first.destination,'demo/project')).releaseInfo.tag,'v1');
+  f.github.downloadAsset=original;const next=await f.sync();assert.equal(next.releaseInfo.tag,'v2');assert.equal(next.status,'updated');
+  assert.deepEqual((await fs.readdir(path.join(next.destination,'Git-Cloner-Releases'))).sort(),['.git-cloner-release.json','app-2.0.zip']);
+});
 test('an API limit while listing sources keeps the queue unresolved and an explicit resume may retry early',async t=>{
   const f=await repository(t);const config=f.config(),until=new Date(Date.now()+600000).toISOString();let limited=true;
   const github=source=>({repository:async name=>{if(limited){const error=new Error('GitHub-API-Limit erreicht (HTTP 429). Der Lauf wartet bis zur Freigabe.');Object.assign(error,{rateLimited:true,rateLimitUntil:until});throw error;}return f.github.repository(name);},repositories:owner=>f.github.repositories(owner),withTransfer(){return this;},source});

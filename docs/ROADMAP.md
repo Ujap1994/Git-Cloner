@@ -102,3 +102,7 @@ Weitere Detailansichten bleiben das separat dokumentierte Konzept. Die drei zule
 ## Wartung in Version 3.5.1
 
 API-Limits pausieren die Warteschlange bis zur Freigabe, statt die übrigen Repositories als Fehler abzuschließen. Mirrors funktionieren mit Git ab 2.56 (`safe.bareRepository=explicit`). Leerlauf-Aktualisierungen, versteckte Fenster und die automatische Laufwerkssuche verursachen weniger Arbeit.
+
+## Version 3.6.0
+
+API-Limits beim Release-Download und GitHub-Sekundärlimits ohne Kopfzeilen pausieren ebenfalls die Warteschlange. Der OS-Worker wartet kurze Freigabezeiten selbst ab und übergibt an ein geöffnetes App-Fenster. Die DMG-Installation liest echte Mountpunkte, öffnet Abbilder mit Lizenzdialog ohne Rückfrage, lässt Finder-Mounts geöffnet und erlaubt Intel-Programme über Rosetta 2 als Rückfall. Mit automatischer Installation bleibt nur die installierte Datei des neuesten Releases gespeichert.

@@ -155,7 +155,9 @@ Optional **Unabhängige OS-Zeitplanung** einschalten: Native installierte Pakete
 
 Öffentliche Quellen funktionieren ohne Anmeldung. GitHub erlaubt anonym typischerweise 60 API-Anfragen pro Stunde. Private Repositories oder größere Mengen benötigen passende Leserechte.
 
-Ist das API-Kontingent aufgebraucht, pausiert die Warteschlange mit **Wartet auf API-Limit · automatische Fortsetzung** und zeigt den voraussichtlichen Freigabezeitpunkt. Bereits gesicherte Repositories bleiben erledigt. Nach der Freigabe setzt die App automatisch fort; vorher stellt sie keine neuen automatischen Anfragen. Nach dem Hinterlegen eines Lesetokens kann **Fortsetzen** sofort gewählt werden.
+Ist das API-Kontingent aufgebraucht, pausiert die Warteschlange mit **Wartet auf API-Limit · automatische Fortsetzung** und zeigt den voraussichtlichen Freigabezeitpunkt. Bereits gesicherte Repositories bleiben erledigt. Nach der Freigabe setzt die App automatisch fort; vorher stellt sie keine neuen automatischen Anfragen. Nach dem Hinterlegen eines Lesetokens kann **Fortsetzen** sofort gewählt werden. Das gilt auch, wenn das Limit erst beim Herunterladen einer Release-Datei auftritt; bereits geladene Teile bleiben für die Fortsetzung erhalten.
+
+Während die App läuft – auch nur im Infobereich bzw. in der Menüleiste –, prüft sie alle 30 Sekunden und setzt nach dem Freigabezeitpunkt selbstständig fort. Der GUI-freie OS-Worker wartet ebenfalls selbst bis zur Freigabe, wenn diese höchstens etwa eine Stunde entfernt ist, und arbeitet die Warteschlange dann weiter ab. Längere Wartezeiten übernimmt der nächste geplante Lauf. Wird die App während eines Worker-Laufs geöffnet, erscheint das Fenster, sobald der Worker beendet ist; eine laufende Wartezeit wird dafür abgebrochen und von der App fortgeführt.
 
 Unter **Einstellungen → Konten** lassen sich mehrere benannte Zugänge anlegen. Jede Quelle wählt ihren Zugang in den erweiterten Einstellungen.
 
@@ -213,6 +215,7 @@ Der Diagnoseexport entfernt Konto-/Repository-Namen, Pfade, Commit-IDs und rohe 
 | Platzmangel | Platz für den alten und neuen Stand sowie Reserve freigeben; Metadaten/LFS können größer als die Schätzung sein. |
 | GitHub 401 / 403 | Gültigkeit, Repository-Freigabe, Org-SSO und API-Limit prüfen. |
 | Wartet auf API-Limit | Freigabezeitpunkt abwarten; die Warteschlange setzt automatisch fort und behält erledigte Repositories. Ein Lesetoken unter Einstellungen → Konten erhöht das Limit, danach sofort **Fortsetzen** möglich. |
+| DMG wird nicht installiert | Meldung in der Übersicht prüfen: Eine fehlende oder ungültige Signatur, ein Programm für eine andere CPU oder mehrere gleichwertige Pakete verhindern den Austausch. Im letzten Fall den **Release-Dateinamen** eingrenzen, etwa `*arm64.dmg`. |
 | LFS fehlt | Git LFS installieren oder die Option abschalten; vorhandener erfolgreicher Stand bleibt erhalten. |
 | Passwort fehlt/falsch | Das Passwort dieses Archivs eingeben. Nach einem Wechsel kann für ältere Archive noch das alte gelten. |
 | Kein automatischer Lauf | Quelle und Zeitplan aktiviert/gespeichert? Rechner wach? App im Hintergrund oder OS-Worker aktiv? |
@@ -325,7 +328,7 @@ Die App ordnet Pakete anhand ihrer Namen und Dateiendungen zu. Dateien ohne eind
 
 Die Einstellung kann unter **Sicherungsumfang dieser Quelle** für einzelne Quellen überschrieben werden. Ein Download wird in den neuen Sicherungsstand integriert. Die App prüft angegebene Dateigrößen und vorhandene SHA256-Digests beim Herunterladen; bei Fehlern bleibt der bisherige erfolgreiche Stand erhalten. Die Platzprüfung berücksichtigt bekannte Release-Dateigrößen zusätzlich zum Repository.
 
-Gesichert werden Dateien des neuesten offiziellen, stabilen Releases je Repository. Frühere Release-Metadaten können im JSON-Export enthalten sein, ihre alten Download-Dateien werden nicht zusätzlich aufgehoben. Die Auswahl bezieht sich auf deine Sicherungsquellen. Die Update-Prüfung für Git Cloner selbst informiert weiterhin nur und installiert keine Programmversion automatisch.
+Gesichert werden Dateien des neuesten offiziellen, stabilen Releases je Repository. Erscheint ein neues Release, ersetzt der neue Sicherungsstand die Dateien des älteren Releases; alte Download-Dateien werden nicht zusätzlich aufgehoben. Frühere Release-Metadaten können im JSON-Export enthalten sein. Mit automatischer Programminstallation bleibt standardmäßig nur die installierte Datei erhalten (siehe Abschnitt 35). Die Auswahl bezieht sich auf deine Sicherungsquellen. Die Update-Prüfung für Git Cloner selbst informiert weiterhin nur und installiert keine Programmversion automatisch.
 
 ![Release-Auswahl und automatisch erkanntes System](screenshots/release-filter.png)
 
@@ -533,13 +536,14 @@ Diese Option aktualisiert **das Programm aus deiner gewählten Quelle**, nicht G
 2. **Programm automatisch installieren** aufklappen und **Neueste Release-Version installieren und ersetzen** aktivieren. Dadurch werden eigene Sicherungsoptionen mit Release-Dateien aktiviert. Waren Release-Dateien zuvor aus, wird zunächst das eigene Betriebssystem gewählt. Bereits aktive Release-Filter bleiben erhalten.
 3. Einen bestehenden **Programm-Zielordner** getrennt von allen Sicherungsordnern wählen. Die App legt darin eine zugeordnete Ablage unter `Konto/Repository` an. Für andere Anbieter kommt eine eigene Anbieter-/Server-Zuordnung hinzu.
 4. Optional den **Release-Dateinamen** eingrenzen: zum Beispiel `*.dmg`, `*portable*.exe` oder `*.AppImage`. `*` und `?` sind möglich. Ohne Muster wird ein passend klassifiziertes unterstütztes Paket bevorzugt; bei gleichwertigen mehreren Kandidaten wird eine genauere Auswahl verlangt.
+   Standardmäßig bewahrt die Sicherung danach **nur die zu installierende Datei des neuesten Releases** auf, zum Beispiel genau ein DMG. Die übrigen Dateien dieses Releases und ältere Releases werden beim nächsten Lauf aus dem Sicherungsstand entfernt; bereits vorhandene passende Dateien werden dafür lokal übernommen statt neu geladen. Wer zusätzlich alle passenden Release-Dateien behalten möchte, aktiviert **Alle passenden Release-Dateien behalten**. Lässt sich keine eindeutige Programmdatei bestimmen, bleiben die gefilterten Dateien erhalten.
 5. Quelle speichern und **Jetzt prüfen** starten oder den nächsten geplanten Lauf abwarten.
 
 Nach der erfolgreichen Sicherung prüft die App die tatsächlichen Release-Dateien erneut und bereitet das Programm getrennt vor. Erst danach wird die vorhandene zugeordnete Programmkopie ersetzt. Ist Version und Inhalt bereits aktuell, bleibt die vorhandene Installation bestehen. Fehler erhalten den bisherigen Programmstand und erscheinen zusätzlich zum Sicherungsstatus sowie im Fehlerzähler, Verlauf und den eingestellten Fehlermeldungen. Die Übersicht zeigt den installierten Tag und bietet **Programmordner öffnen**. Programme werden durch die Installation nicht automatisch gestartet.
 
 | System | Unterstützter automatischer Installationsweg |
 | --- | --- |
-| macOS | Ein eindeutig erkennbares `.app`-Bundle aus DMG oder ZIP. Signatur, Bundle und tatsächliche Prozessorarchitektur werden geprüft. Ad-hoc-signierte Bundles sind möglich; eigene Signierzertifikate werden nicht eingerichtet. Laufende Mac-Programme werden später erneut versucht. |
+| macOS | Ein eindeutig erkennbares `.app`-Bundle aus DMG oder ZIP. Signatur, Bundle und tatsächliche Prozessorarchitektur werden geprüft. Ad-hoc-signierte Bundles sind möglich; eigene Signierzertifikate werden nicht eingerichtet. Laufende Mac-Programme werden später erneut versucht. DMGs mit Lizenzdialog werden ohne Rückfrage über eine schreibgeschützte Kopie geöffnet; mit dem Einschalten der Installation stimmst du den Bedingungen dieses Herausgebers zu. Ein bereits im Finder geöffnetes DMG wird gelesen und bleibt geöffnet. Auf Apple-Silicon-Macs werden reine Intel-Programme nur gewählt, wenn kein natives Paket vorhanden ist; sie laufen über Rosetta 2. |
 | Windows | Als Portable gekennzeichnete EXE oder ZIP mit einem eindeutig erkennbaren Hauptprogramm und Begleitdateien. PE-Kopf und tatsächliche Architektur werden geprüft. |
 | Linux | AppImage mit passendem ELF-/AppImage-Kopf und Prozessorarchitektur. Die Datei wird ausführbar in der zugeordneten Ablage gespeichert. |
 

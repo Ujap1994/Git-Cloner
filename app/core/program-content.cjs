@@ -6,6 +6,27 @@ const { assetType } = require('./release-assets.cjs');
 const { extractZip, validateTree } = require('./program-archives.cjs');
 const shortHash = value => createHash('sha256').update(value).digest('hex').slice(0, 12);
 const label = file => path.basename(file).replace(/\.(app|exe|AppImage)$/i, '');
+const XML = { lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' };
+const plistStrings = (xml, key) => [...String(xml).matchAll(new RegExp(`<key>${key}</key>\\s*<string>([^<]*)</string>`, 'g'))].map(match => match[1].replace(/&(lt|gt|quot|apos|amp);/g, (_value, name) => XML[name]));
+function toolMessage(error, file = '') { const line = String(error?.stderr || error?.message || '').split('\n').map(value => value.trim()).find(Boolean) ?? ''; return (file ? line.split(file + ': ').join('') : line).slice(0, 300); }
+async function verifySignature(run, file) {
+  try { await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', file], { timeout: 120000, maxBuffer: 1048576 }); }
+  catch (error) { throw new Error(`Die Signaturprüfung von ${path.basename(file)} ist fehlgeschlagen${toolMessage(error, file) ? ` (${toolMessage(error, file)})` : ''}. Unsignierte oder veränderte Programme werden nicht automatisch installiert.`); }
+}
+// Mount points come from hdiutil itself: an image that is already open in Finder is read where it is and left mounted.
+async function attachImage(file, temporary, run) {
+  const mounts = path.join(temporary, 'mount'); await fs.mkdir(mounts);
+  const attach = image => run('/usr/bin/hdiutil', ['attach', '-plist', '-readonly', '-nobrowse', '-noautoopen', '-verify', '-mountrandom', mounts, image], { timeout: 300000, maxBuffer: 4 * 1048576 });
+  let output;
+  try { output = await attach(file); }
+  catch (error) {
+    // Images with a license agreement wait for an interactive answer; a converted read-only copy opens without the prompt.
+    try { const converted = path.join(temporary, 'converted'); await run('/usr/bin/hdiutil', ['convert', '-quiet', '-format', 'UDTO', '-o', converted, file], { timeout: 900000, maxBuffer: 1048576 }); output = await attach(converted + '.cdr'); }
+    catch (_converted) { throw new Error(`Das DMG konnte nicht geöffnet werden${toolMessage(error) ? `: ${toolMessage(error)}` : ''}.`); }
+  }
+  const roots = [...new Set(plistStrings(output?.stdout, 'mount-point'))], prefixes = [path.resolve(mounts) + path.sep, await fs.realpath(mounts) + path.sep];
+  return { roots, owned: roots.filter(root => prefixes.some(prefix => root.startsWith(prefix))) };
+}
 
 async function candidatesIn(root, platform) {
   const candidates = []; let visited = 0;
@@ -40,29 +61,30 @@ async function validateBinary(file, platform, arch) {
 async function validateCandidate(candidate, { platform, arch, run }) {
   if (platform !== 'darwin') return validateBinary(candidate.file, platform, arch);
   await validateTree(candidate.file);
-  await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', candidate.file], { timeout: 120000, maxBuffer: 1048576 });
+  await verifySignature(run, candidate.file);
   const { stdout } = await run('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleExecutable', path.join(candidate.file, 'Contents', 'Info.plist')], { timeout: 10000 });
   const name = stdout.trim(); if (!name || path.basename(name) !== name || /[\\/\0]/.test(name)) throw new Error('Ungültiges macOS-Programmbundle.');
   const binary = path.join(candidate.file, 'Contents', 'MacOS', name), stat = await fs.lstat(binary);
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('Das macOS-Programm enthält keine gültige ausführbare Datei.');
-  const { stdout: architectures } = await run('/usr/bin/lipo', ['-archs', binary], { timeout: 10000 });
-  if (!architectures.trim().split(/\s+/).includes(arch === 'x64' ? 'x86_64' : arch)) throw new Error('Das macOS-Programm passt nicht zur Prozessorarchitektur.');
+  const { stdout: architectures } = await run('/usr/bin/lipo', ['-archs', binary], { timeout: 10000 }), accepted = arch === 'x64' ? ['x86_64'] : arch === 'arm64' ? ['arm64', 'x86_64'] : [arch];
+  if (!architectures.trim().split(/\s+/).some(value => accepted.includes(value))) throw new Error('Das macOS-Programm passt nicht zur Prozessorarchitektur.');
 }
 async function withContent(asset, options, callback) {
   const { platform, run } = options, type = assetType(asset.name);
   if (platform === 'linux' || platform === 'win32' && type === 'exe') return callback({ direct: true, candidates: [{ file: asset.file, key: platform === 'linux' ? 'application.AppImage' : 'application.exe', name: label(asset.name) }] });
-  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'gc-program-')); await fs.chmod(temporary, 0o700); let mounted;
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'gc-program-')); await fs.chmod(temporary, 0o700); let image;
   try {
-    let root;
     if (platform === 'darwin' && type === 'dmg') {
-      mounted = path.join(temporary, 'mount'); await fs.mkdir(mounted);
-      await run('/usr/bin/hdiutil', ['attach', '-readonly', '-nobrowse', '-noautoopen', '-verify', '-mountpoint', mounted, asset.file], { timeout: 300000, maxBuffer: 1048576 }); root = mounted;
-    } else {
-      root = path.join(temporary, 'extracted'); const stat = await fs.statfs(temporary);
-      await extractZip(asset.file, root, { platform, maxBytes: Math.min(20 * 1024 ** 3, Math.max(0, Number(stat.bavail) * Number(stat.bsize) - 64 * 1048576)) });
+      image = await attachImage(asset.file, temporary, run);
+      if (!image.roots.length) throw new Error('Das DMG enthält kein lesbares Laufwerk.');
+      const candidates = [];
+      for (const [index, root] of image.roots.entries()) for (const item of await candidatesIn(root, platform)) candidates.push(image.roots.length > 1 ? { ...item, key: `volume-${index + 1}/${item.key}` } : item);
+      return await callback({ root: image.roots[0], candidates, direct: false });
     }
+    const root = path.join(temporary, 'extracted'), stat = await fs.statfs(temporary);
+    await extractZip(asset.file, root, { platform, maxBytes: Math.min(20 * 1024 ** 3, Math.max(0, Number(stat.bavail) * Number(stat.bsize) - 64 * 1048576)) });
     return await callback({ root, candidates: await candidatesIn(root, platform), direct: false });
-  } finally { if (mounted) await run('/usr/bin/hdiutil', ['detach', '-force', mounted], { timeout: 60000 }).catch(() => {}); await fs.rm(temporary, { recursive: true, force: true }); }
+  } finally { for (const root of image?.owned ?? []) await run('/usr/bin/hdiutil', ['detach', '-force', root], { timeout: 60000 }).catch(() => {}); await fs.rm(temporary, { recursive: true, force: true }); }
 }
 async function inspectPrograms(asset, options) {
   return withContent(asset, options, async ({ candidates }) => {
@@ -87,7 +109,7 @@ async function preparePrograms(asset, output, keys, options) {
         const basename = path.basename(item.file), duplicate = selected.some(other => other !== item && path.basename(other.file).toLowerCase() === basename.toLowerCase());
         const folder = duplicate ? 'app-' + shortHash(item.key) : '', parent = path.join(output, folder); if (folder) await fs.mkdir(parent);
         const executable = path.join(folder, basename); await fs.cp(item.file, path.join(output, executable), { recursive: true, verbatimSymlinks: true, errorOnExist: true, force: false });
-        await options.run('/usr/bin/codesign', ['--verify', '--deep', '--strict', path.join(output, executable)], { timeout: 120000, maxBuffer: 1048576 }); result.push({ key: item.key, name: item.name, executable });
+        await verifySignature(options.run, path.join(output, executable)); result.push({ key: item.key, name: item.name, executable });
       }
       return result;
     }
@@ -97,4 +119,4 @@ async function preparePrograms(asset, output, keys, options) {
     return selected.map(item => { const parent = parents.find(parent => item.file.startsWith(parent + path.sep)); return { key: item.key, name: item.name, executable: path.join(folders.get(parent), path.relative(parent, item.file)) }; });
   });
 }
-module.exports = { preparePrograms, inspectPrograms };
+module.exports = { preparePrograms, inspectPrograms, attachImage };

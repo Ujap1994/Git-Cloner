@@ -5,6 +5,7 @@ const { promisify } = require('node:util');
 const { readJson, writeJson } = require('./store.cjs');
 const { safeDirectory } = require('./destinations.cjs');
 const { acquireLease } = require('./lease.cjs');
+const { responseRateLimit } = require('./rate-limit.cjs');
 
 const deriveKey = promisify(scrypt), CHUNK_BYTES = 4 * 1048576;
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -149,7 +150,7 @@ class ReleaseDownloads {
       return { bytes, sha256 };
     } catch (error) { await output?.close(); if (owned) await fs.rm(file, { force: true }); if (error.code === 'CACHE_INTEGRITY') { await this.reset(entry); error.retryable = true; } throw error; }
   }
-  async download({ identity, file, expectedSize, expectedDigest, expectedName = '', request, transfer, onProgress = () => {}, onMeasure = () => {} }) {
+  async download({ identity, file, expectedSize, expectedDigest, expectedName = '', rateLabel = 'Release-Server', request, transfer, onProgress = () => {}, onMeasure = () => {} }) {
     const entry = await this.entry(identity);
     onMeasure({ cacheChunks: entry.meta.chunks.map(({ id, bytes }) => ({ id, bytes })) });
     try {
@@ -172,7 +173,7 @@ class ReleaseDownloads {
           if (++restarts > 1) throw downloadError('Der Server akzeptiert keine sichere Fortsetzung.');
           await this.reset(entry); offset = 0; resumedBytes = 0; continue;
         }
-        if (!response.ok || !response.body) { const error = downloadError('Release-Datei konnte nicht geladen werden.', [429,500,502,503,504].includes(response.status)); error.helpCode = [401,403].includes(response.status) ? 'authentication' : 'network'; error.retryAfterMs = Number(response.headers?.get('retry-after') || 0) * 1000; throw error; }
+        if (!response.ok || !response.body) { const limited = await responseRateLimit(response, { label: rateLabel }); if (limited) throw limited; const error = downloadError('Release-Datei konnte nicht geladen werden.', [429,500,502,503,504].includes(response.status)); error.helpCode = [401,403].includes(response.status) ? 'authentication' : 'network'; error.retryAfterMs = Number(response.headers?.get('retry-after') || 0) * 1000; throw error; }
         if (/^text\/html/i.test(response.headers?.get('content-type') ?? '') && !/\.html?$/i.test(expectedName)) { await response.body.cancel(); throw new Error('Der Server liefert eine HTML-Anmeldeseite statt der Release-Datei.'); }
         if (response.status === 200 && offset) { await this.reset(entry); offset = 0; resumedBytes = 0; }
         const encoding = response.headers?.get('content-encoding'), encoded = Boolean(encoding && encoding.toLowerCase() !== 'identity');

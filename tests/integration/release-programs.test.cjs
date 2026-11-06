@@ -76,3 +76,18 @@ test('runtime automatically installs an explicitly enabled repository after a su
 test('imported settings retain installation preferences but require local opt-in again', async t=>{
  const f=await repository(t),{exportSettings,importSettings}=require('../../app/core/transfer.cjs'),config=f.config();config.backup.metadata.releases=true;config.sources[0].installation={enabled:true,destination:path.join(f.root,'programs'),pattern:'*.AppImage'};const imported=importSettings(exportSettings(config));assert.equal(imported.sources[0].installation.enabled,false);assert.equal(imported.sources[0].installation.pattern,'*.AppImage');
 });
+test('automatic installation keeps only the program file of the newest release unless all files are requested', async t => {
+  const { selectProgram } = require('../../app/core/program-select.cjs');
+  const f = await repository(t), programs = path.join(f.root, 'programs'); await fs.mkdir(programs);
+  f.options = { ...f.options, metadata: { ...f.options.metadata, releases: true } };
+  const names = version => [`app-${version}-macos-arm64.dmg`, `app-${version}-macos-x64.dmg`, `app-${version}-macos-universal.zip`, `app-${version}-windows-x64-portable.exe`, `app-${version}-windows-arm64-portable.exe`, `app-${version}-linux-x86_64.AppImage`, `app-${version}-linux-arm64.AppImage`, 'SHA256SUMS.txt'];
+  const release = (id, version) => ({ id, tag_name: 'v' + version, assets: names(version).map((name, index) => f.asset(id * 100 + index, name, `${version}:${name}`)) });
+  const stored = async record => (await fs.readdir(path.join(record.destination, 'Git-Cloner-Releases'))).filter(name => !name.startsWith('.')).sort();
+  f.releases = [release(1, '1.0')]; const all = await f.sync(); assert.equal((await stored(all)).length, 8);
+  f.source.installation = { enabled: true, destination: programs, pattern: '' };
+  const expected = version => selectProgram(names(version).map((name, id) => ({ id, name }))).name;
+  const single = await f.sync(); assert.equal(single.status, 'updated'); assert.deepEqual(await stored(single), [expected('1.0')]); assert.equal(single.releaseInfo.fileCount, 1);
+  const downloads = f.downloads.length; f.releases = [release(2, '2.0'), ...f.releases]; const newer = await f.sync();
+  assert.deepEqual(await stored(newer), [expected('2.0')]); assert.equal(newer.releaseInfo.tag, 'v2.0'); assert.equal(f.downloads.length, downloads + 1);
+  f.source.installation.keepAllReleaseFiles = true; const kept = await f.sync(); assert.equal((await stored(kept)).length, 8);
+});

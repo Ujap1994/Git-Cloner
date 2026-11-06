@@ -81,3 +81,19 @@ test('bare mirrors are addressed with an explicit Git directory', async t => {
   assert.deepEqual(explicitBare(['-C', work, 'fsck']), ['-C', work, 'fsck']);
   assert.deepEqual(explicitBare(['clone', '--mirror', 'x', bare]), ['clone', '--mirror', 'x', bare]);
 });
+test('secondary limits without headers and limited release downloads pause instead of failing', async t => {
+  const fs = require('node:fs/promises'), path = require('node:path'), os = require('node:os');
+  const { HostedClient } = require('../../app/core/hosted-client.cjs');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'gc-rate-')); t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const body = message => JSON.stringify({ message });
+  const secondary = new GitHubClient({ retryOptions: { retries: 0 }, fetchImpl: async () => new Response(body('You have exceeded a secondary rate limit. Please wait a few minutes before you try again.'), { status: 403 }) });
+  await assert.rejects(secondary.repository('demo/project'), error => error.rateLimited && error.retryAfterMs === 60000 && error.helpCode === 'rate');
+  const denied = new GitHubClient({ retryOptions: { retries: 0 }, fetchImpl: async () => new Response(body('Resource not accessible by integration'), { status: 403 }) });
+  await assert.rejects(denied.repository('demo/project'), error => !error.rateLimited && /GitHub-Zugriff begrenzt/.test(error.message));
+  const reset = String(Math.floor(Date.now() / 1000) + 1800), file = path.join(root, 'asset.dmg');
+  const assets = new GitHubClient({ retryOptions: { retries: 0 }, fetchImpl: async () => new Response(body('API rate limit exceeded'), { status: 403, headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': reset } }) });
+  await assert.rejects(assets.downloadAsset('demo/project', 7, file), error => error.rateLimited && !error.retryable && Date.parse(error.rateLimitUntil) === Number(reset) * 1000);
+  await assert.rejects(fs.stat(file), { code: 'ENOENT' });
+  const hosted = new HostedClient({ provider: 'forgejo', server: 'https://git.example.org', retryOptions: { retries: 0 }, fetchImpl: async () => new Response('Too Many Requests', { status: 429, headers: { 'retry-after': '900' } }) });
+  await assert.rejects(hosted.downloadAsset('demo/project', 1, file, { url: 'https://git.example.org/demo/project/releases/download/v1/app.dmg' }), error => error.rateLimited && /Forgejo-API-Limit/.test(error.message) && error.retryAfterMs === 900000);
+});
