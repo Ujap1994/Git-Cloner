@@ -5,6 +5,7 @@ const { createHash } = require('node:crypto');
 const { lookup } = require('node:dns/promises');
 const { isIP } = require('node:net');
 const { retry } = require('./retry.cjs');
+const { rateLimitError } = require('./rate-limit.cjs');
 const { providerSpec,parseHostedSource,cloneURL } = require('./provider-spec.cjs');
 function privateAddress(value) {
   const ip=value.toLowerCase().replace(/^\[|\]$/g,'');
@@ -28,7 +29,7 @@ class HostedClient {
     const response=await this.fetchImpl(url,{headers:{...this.headers(url),Accept:'application/json',...(cached?.etag?{'If-None-Match':cached.etag}:{})},redirect:'error',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(30000)]):AbortSignal.timeout(30000)});
     if(response.status===304&&cached)return structuredClone(cached.data);
     if(response.status===404&&allow404)return null;
-    if(!response.ok){const error=new Error([401,403].includes(response.status)?'Zugriff nicht erlaubt. Token und Repository-Berechtigungen prüfen.':response.status===404?'Git-Quelle nicht gefunden oder keine Zugriffsberechtigung.':`Der Git-Server antwortet mit HTTP ${response.status}.`);error.helpCode=[401,403].includes(response.status)?'authentication':response.status===429?'rate':'network';error.retryable=[429,500,502,503,504].includes(response.status);error.retryAfterMs=Number(response.headers?.get('retry-after')||0)*1000;throw error;}
+    if(!response.ok){const limited=rateLimitError(response,{label:this.provider==='gitlab'?'GitLab':'Forgejo'});if(limited)throw limited;const error=new Error([401,403].includes(response.status)?'Zugriff nicht erlaubt. Token und Repository-Berechtigungen prüfen.':response.status===404?'Git-Quelle nicht gefunden oder keine Zugriffsberechtigung.':`Der Git-Server antwortet mit HTTP ${response.status}.`);error.helpCode=[401,403].includes(response.status)?'authentication':response.status===429?'rate':'network';error.retryable=[429,500,502,503,504].includes(response.status);error.retryAfterMs=Number(response.headers?.get('retry-after')||0)*1000;throw error;}
     const data=await response.json(),etag=response.headers?.get('etag'),next=response.headers?.get('x-next-page'),link=response.headers?.get('link'),total=response.headers?.get('x-total-count');
     this.pagination.set(endpoint,{next:next!=null?Boolean(next):link!=null?/rel="?next"?/.test(link):null,total:total==null?null:Number(total)});
     if(this.pagination.size>2000)this.pagination.delete(this.pagination.keys().next().value);
