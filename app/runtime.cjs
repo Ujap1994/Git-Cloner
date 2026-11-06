@@ -234,7 +234,7 @@ class Runtime extends EventEmitter {
     try {
       const disks = this.diskSignature(); if (Date.now() - this.lastDisksAt >= 60000) await this.refreshDisks(); if (this.changes.current?.expiresAt <= Date.now()) await this.closeChanges();
       if (this.config.autoRelocate && !this.busy() && !this.saving && Date.now() - (this.lastLocationCheck ?? 0) >= 60000) { this.lastLocationCheck = Date.now(); if (await this.relocationPending()) await this.locateDrives({automatic:true}).catch(error => { this.relocationKey = null; throw error; }); }
-      await this.updates.notifyAvailable(); const q = this.backup.state.queue; if (q && !this.busy() && !['user','restart','error'].includes(q.pauseReason) && !await this.checkRules(this.config.execution)&&(q.pauseReason!=='rate'||rateReady(q,this.now()))&&(q.pauseReason!=='space'||await spaceReady(q))) await this.resume();
+      await this.updates.notifyAvailable(); const q = this.backup.state.queue; if (q && !this.busy() && !['user','restart','error'].includes(q.pauseReason) && (q.pauseReason!=='rate'||rateReady(q,this.now())) && !await this.checkRules(this.config.execution)&&(q.pauseReason!=='space'||await spaceReady(q))) await this.resume();
       // Idle ticks only notify the window when visible values changed or a periodic dashboard refresh is due.
       if (disks !== this.diskSignature() || Date.now() - (this.lastIdleChange ?? 0) >= 300000) { this.lastIdleChange = Date.now(); this.changed(); }
     }
