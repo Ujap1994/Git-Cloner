@@ -1,7 +1,5 @@
 name: Flatpak build check
 on:
-  push:
-    branches: [fix/flatpak-release]
   workflow_dispatch:
 
 permissions:

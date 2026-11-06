@@ -1,5 +1,6 @@
 const { parseSource } = require('./config.cjs');
 const { retry } = require('./retry.cjs');
+const { rateLimitError } = require('./rate-limit.cjs');
 
 class GitHubClient {
   constructor({ token = '', fetchImpl = fetch, retryOptions = {}, cacheLimit = 16 * 1048576 } = {}) { Object.assign(this, { token, fetchImpl, retryOptions, cacheLimit }); this.cache = new Map(); this.cacheStats = {bytes:0}; this.pagination = new Map(); }
@@ -18,7 +19,8 @@ class GitHubClient {
     if (response.status === 304 && cached) return structuredClone(cached.data);
     if (allow404 && response.status === 404) return null;
     if (!response.ok) {
-      if ([429,500,502,503,504].includes(response.status) || response.status === 403 && (response.headers?.get('retry-after') || response.headers?.get('x-ratelimit-remaining') === '0')) {
+      const limited = rateLimitError(response, { label: 'GitHub' }); if (limited) throw limited;
+      if ([500,502,503,504].includes(response.status)) {
         const error = new Error(`GitHub antwortet vorübergehend mit HTTP ${response.status}.`); error.retryable = true;
         const after = response.headers?.get('retry-after'); error.retryAfterMs = after ? (Number(after) * 1000 || Date.parse(after) - Date.now()) : 0;
         throw error;

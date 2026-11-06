@@ -98,3 +98,7 @@ Weitere Detailansichten bleiben das separat dokumentierte Konzept. Die drei zule
 1. Optionale eigene Programmverknüpfungen mit aktualisierten Zielen, geschützter Benutzerbearbeitung und Wiederanlauf vorbereiteter Änderungen.
 2. Auswahl von ein bis 64 kompatiblen Programmen in einer bereits gesicherten Release-Datei, gemeinsamer Austausch und Erhalt der alten Installation bei fehlenden oder ungültigen Mitgliedern.
 3. Begrenzter Download-Verlauf mit tatsächlichen Nutzdaten, geprüfter Abrufersparnis und entfernten Cache-Dateibytes. Physische Blockersparnis und vermeintlich gemessene Zeitgewinne werden nicht behauptet.
+
+## Wartung in Version 3.5.1
+
+API-Limits pausieren die Warteschlange bis zur Freigabe, statt die übrigen Repositories als Fehler abzuschließen. Mirrors funktionieren mit Git ab 2.56 (`safe.bareRepository=explicit`). Leerlauf-Aktualisierungen, versteckte Fenster und die automatische Laufwerkssuche verursachen weniger Arbeit.

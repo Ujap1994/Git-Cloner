@@ -5,6 +5,7 @@ const { pipeline } = require('node:stream/promises');
 const path = require('node:path');
 const os = require('node:os');
 const { randomUUID, createHash } = require('node:crypto');
+const { explicitBare } = require('./git.cjs');
 const { managed } = require('./backup.cjs');
 const { decryptArchive } = require('./archives.cjs');
 const { hashFile, verifyDirectory, controlDirectory } = require('./integrity.cjs');
@@ -26,7 +27,7 @@ async function safeFile(root, name) {
   return path.join(root,...name.split('/'));
 }
 async function gitTree(directory) {
-  const child = spawn('git',['-c','core.hooksPath=','-C',directory,'ls-tree','-r','-l','-z','HEAD'],{windowsHide:true,stdio:['ignore','pipe','ignore']});
+  const child = spawn('git',explicitBare(['-c','core.hooksPath=','-C',directory,'ls-tree','-r','-l','-z','HEAD']),{windowsHide:true,stdio:['ignore','pipe','ignore']});
   const ended = new Promise((resolve,reject) => { child.once('error',reject); child.once('exit',code => code === 0 ? resolve() : reject(new Error('Git-Dateiliste konnte nicht gelesen werden.'))); });
   ended.catch(() => {});
   const entries = []; let rest = '';
@@ -45,7 +46,7 @@ async function gitTree(directory) {
   } catch (error) { child.kill(); await ended.catch(() => {}); throw error; }
 }
 async function exportBlob(directory, entry, file) {
-  const child = spawn('git',['-c','core.hooksPath=','-C',directory,'cat-file','blob',entry.object],{windowsHide:true,stdio:['ignore','pipe','ignore']});
+  const child = spawn('git',explicitBare(['-c','core.hooksPath=','-C',directory,'cat-file','blob',entry.object]),{windowsHide:true,stdio:['ignore','pipe','ignore']});
   const ended = new Promise((resolve,reject) => { child.once('error',reject); child.once('exit',code => code === 0 ? resolve() : reject(new Error('Git-Datei konnte nicht exportiert werden.'))); }); ended.catch(() => {});
   try { await pipeline(child.stdout,createWriteStream(file,{flags:'wx',mode:0o600})); await ended; }
   catch (error) { child.kill(); await ended.catch(() => {}); throw error; }

@@ -47,3 +47,37 @@ test('release comparison uses semantic version order', async () => {
   github.request=async()=>null; assert.equal((await checkForUpdates('1.0.0',github)).status,'unpublished');
   github.request=async()=>({tag_name:'invalid'}); await assert.rejects(checkForUpdates('1.0.0',github));
 });
+test('API limits report their reset time and only short waits are retried in place', async () => {
+  const { rateLimitError, rateReady } = require('../../app/core/rate-limit.cjs');
+  const headers = values => ({ get: name => values[name.toLowerCase()] ?? null });
+  const now = Date.parse('2026-11-06T12:00:00Z');
+  const primary = rateLimitError({ status: 403, headers: headers({ 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(now / 1000 + 1800) }) }, { now });
+  assert.equal(primary.rateLimited, true); assert.equal(primary.retryable, false); assert.equal(primary.rateLimitUntil, '2026-11-06T12:30:00.000Z'); assert.equal(primary.helpCode, 'rate');
+  const secondary = rateLimitError({ status: 403, headers: headers({ 'retry-after': '20' }) }, { now });
+  assert.equal(secondary.retryable, true); assert.equal(secondary.retryAfterMs, 20000);
+  assert.equal(rateLimitError({ status: 429, headers: headers({ 'ratelimit-reset': String(now / 1000 + 120) }) }, { now, label: 'GitLab' }).rateLimitUntil, '2026-11-06T12:02:00.000Z');
+  assert.equal(rateLimitError({ status: 403, headers: headers({ 'x-ratelimit-remaining': '12' }) }, { now }), null);
+  assert.equal(rateReady({ rateLimitUntil: '2026-11-06T12:30:00.000Z' }, now), false); assert.equal(rateReady({ rateLimitUntil: '2026-11-06T12:30:00.000Z' }, now + 1800000), true); assert.equal(rateReady({}, now), true);
+  let calls = 0;
+  const api = new GitHubClient({ retryOptions: { sleep: async () => {} }, fetchImpl: async () => { calls++; return { ok: false, status: 403, headers: headers({ 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 3600) }) }; } });
+  await assert.rejects(api.repository('demo/project'), error => error.rateLimited && /API-Limit/.test(error.message)); assert.equal(calls, 1);
+});
+test('stored API-limit messages from older runs are classified as rate limits in help and redacted exports', () => {
+  const { errorCode } = require('../../app/core/error-help.cjs');
+  const { redactLogs } = require('../../app/core/transfer.cjs');
+  const stored = { fullName: 'private/name', status: 'error', message: 'GitHub antwortet vorübergehend mit HTTP 403.', helpCode: 'authentication' };
+  assert.equal(errorCode(stored), 'rate'); assert.equal(errorCode({ message: 'GitHub-Token ist ungültig oder abgelaufen.' }), 'authentication');
+  const exported = redactLogs([{ startedAt: 'a', finishedAt: 'b', results: [stored] }]), text = JSON.stringify(exported);
+  assert.equal(exported.runs[0].results[0].diagnosis, 'rate'); assert(!text.includes('private/name')); assert(!text.includes('vorübergehend'));
+});
+test('bare mirrors are addressed with an explicit Git directory', async t => {
+  const fs = require('node:fs/promises'), path = require('node:path'), os = require('node:os');
+  const { explicitBare } = require('../../app/core/git.cjs');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'gc-bare-')); t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const bare = path.join(root, 'mirror.git'), work = path.join(root, 'work');
+  for (const dir of [path.join(bare, 'objects'), path.join(bare, 'refs'), path.join(work, '.git')]) await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(bare, 'HEAD'), 'ref: refs/heads/main\n');
+  assert.deepEqual(explicitBare(['-C', bare, 'fsck']), ['-C', bare, '--git-dir=.', 'fsck']);
+  assert.deepEqual(explicitBare(['-C', work, 'fsck']), ['-C', work, 'fsck']);
+  assert.deepEqual(explicitBare(['clone', '--mirror', 'x', bare]), ['clone', '--mirror', 'x', bare]);
+});

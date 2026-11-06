@@ -1,6 +1,14 @@
 # Tatsächlich ausgeführte Prüfungen
 
-Stand: 5. November 2026, Git Cloner **3.5.0**. Prüfungen mit GitHub-Antworten aus Test-Fixtures und tatsächliche Plattformläufe werden getrennt ausgewiesen.
+Stand: 6. November 2026, Git Cloner **3.5.1**. Prüfungen mit GitHub-Antworten aus Test-Fixtures und tatsächliche Plattformläufe werden getrennt ausgewiesen.
+
+## Lokale Prüfung von Version 3.5.1
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Node 24, `npm run check` mit Git 2.56 | ESLint und **259 Tests erfolgreich**, keine Fehler; fünf native Mac-/Windows-Prüfungen unter Linux übersprungen. Vor der Korrektur scheiterten hier zehn Mirror-Tests an `safe.bareRepository=explicit`. |
+| Echte Electron-GUI Linux/Xvfb | **61 Tests erfolgreich**, einschließlich der neuen Warteanzeige für API-Limits. |
+| Neue gezielte Tests | API-Limit mit Freigabezeit (GitHub-/GitLab-Header), keine Wiederholungsanfragen vor der Freigabe, erhaltene erledigte Jobs, Fortsetzen nach der Freigabe, Limit beim Lesen der Quellen, Diagnose alter gespeicherter Meldungen im Export, ausdrückliches Git-Verzeichnis für Mirrors und Leerlauf ohne wiederholte Fensteraktualisierung oder Laufwerkssuche. |
 
 ## Lokale Prüfung von Version 3.5
 

@@ -44,6 +44,9 @@ function broadcast() {
   broadcastTimer = setTimeout(() => {
     broadcastTimer = null;
     if (!mainWindow || mainWindow.isDestroyed()) return;
+    tray?.setToolTip(runtime.busy() ? text('Git Cloner · Sicherung läuft', 'Git Cloner · Backup running') : 'Git Cloner');
+    // A hidden or minimized window receives the accumulated state once it becomes visible again.
+    if (!mainWindow.isVisible() || mainWindow.isMinimized()) return;
     const snapshot = state();
     if (lastData === snapshot.dataRevision) delete snapshot.repositories;
     else lastData = snapshot.dataRevision;
@@ -52,7 +55,6 @@ function broadcast() {
     if (lastConfig === snapshot.configRevision) delete snapshot.config;
     else lastConfig = snapshot.configRevision;
     mainWindow.webContents.send('state:changed', snapshot);
-    tray?.setToolTip(runtime.busy() ? text('Git Cloner · Sicherung läuft', 'Git Cloner · Backup running') : 'Git Cloner');
   }, 120);
 }
 function handle(channel, fn) {
@@ -130,6 +132,7 @@ async function start() {
   runtime.on('change', broadcast);
   mainWindow = new BrowserWindow({ width: 1280, height: 900, minWidth: 960, minHeight: 720, title: 'Git Cloner', backgroundColor: '#f6f7f9', icon: path.join(__dirname, '../build/icon.png'), show: false, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true } });
   mainWindow.removeMenu();
+  for (const event of ['show', 'restore']) mainWindow.on(event, broadcast);
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', event => event.preventDefault());
   mainWindow.webContents.on('will-attach-webview', event => event.preventDefault());
@@ -144,7 +147,7 @@ async function start() {
   });
   handle('updates:check', () => runtime.checkUpdates());
   handle('backup:pause', () => runtime.pause());
-  handle('backup:resume', () => { if (runtime.busy()) throw new Error('Bitte den laufenden Vorgang abwarten.'); void runtime.resume().catch(error => { runtime.notice = error.message; broadcast(); }); return { started: true }; });
+  handle('backup:resume', () => { if (runtime.busy()) throw new Error('Bitte den laufenden Vorgang abwarten.'); void runtime.resume({ manual: true }).catch(error => { runtime.notice = error.message; broadcast(); }); return { started: true }; });
   handle('backup:discard', () => runtime.discard());
   handle('backup:preview', input => runtime.preview(input));
   handle('changes:open', options => runtime.openChanges(options));

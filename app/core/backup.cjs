@@ -184,7 +184,7 @@ async function resolveJobs(sources, github, { onlyTargets = null, onlySources = 
       }
     } catch (error) {
       if (/verschachtelt|denselben|Reservierte|Zu viele Sicherungsziele/.test(error.message)) throw error;
-      errors.push({ fullName: source.value, sourceId: source.id, status: 'error', message: error.message, helpCode:errorCode(error) });
+      errors.push({ fullName: source.value, sourceId: source.id, status: 'error', message: error.message, helpCode:errorCode(error), ...(error.rateLimited ? { rateLimitUntil: error.rateLimitUntil } : {}) });
     }
   }
   return { jobs, errors, excluded };
@@ -194,6 +194,10 @@ function serialJob(job) { const serial = { ...job }; delete serial.github; retur
 function heavy(job, config) {
   const options = effectiveBackup(config, job.source);
   return job.repository.size == null || job.repository.size > (config.execution?.smallRepoMB ?? 50) * 1024 || options.mode === 'mirror' || options.lfs || options.submodules || options.encryption || Object.values(options.metadata).some(Boolean);
+}
+function limitQueue(queue, untils) {
+  const latest = Math.max(Date.parse(queue.rateLimitUntil ?? '') || 0, ...untils.map(value => Date.parse(value) || 0));
+  queue.rateLimitUntil = new Date(latest || Date.now() + 60000).toISOString(); queue.pauseReason = 'rate'; queue.message = 'Warte auf die Freigabe des API-Limits. Erledigte Sicherungen bleiben erhalten.';
 }
 class BackupService extends EventEmitter {
   constructor({ github, git, saveState, state = {}, getGit, getPassphrase = async () => '', acquireLock = null, gate = async () => null, sync = syncRepository, transportFactory = createTransport, retryOptions = {} }) {
@@ -237,18 +241,20 @@ class BackupService extends EventEmitter {
       // Execution rules may be relaxed while paused; backup content remains fixed.
       q.config.execution = structuredClone(config.execution || defaults().execution);
       if (config.backup?.encryptionKeyId) q.config.backup.encryptionKeyId = config.backup.encryptionKeyId;
-      q.pauseReason = null; delete q.message;
+      q.pauseReason = null; delete q.message; delete q.rateLimitUntil;
       if (q.unresolved) {
         const blocked = this.pauseReason || await this.gate(q.config.execution);
         if (blocked) { this.pauseReason = blocked; q.pauseReason = blocked; return { paused: true, reason: blocked }; }
         const resolver = source => { const client = typeof this.github === 'function' ? this.github(source) : this.github; return client.withTransfer ? client.withTransfer(null,q.config.execution.retries) : client; };
         const { jobs, errors } = await resolveJobs(q.config.sources,resolver,{onlyTargets:q.onlyTargets,onlySources:q.scheduledSources ? Object.keys(q.scheduledSources) : null});
+        const limited = errors.filter(error => error.rateLimitUntil);
+        if (limited.length) { this.pauseReason = 'rate'; limitQueue(q, limited.map(error => error.rateLimitUntil)); return { paused: true, reason: 'rate' }; }
         q.jobs = jobs.map(serialJob); q.results.push(...errors); q.unresolved = false;
       }
       await this.saveState(this.state);
       const completedIds = new Set(q.completed), pending = q.jobs.filter(job => !completedIds.has(jobId(job))), active = runningTasks, volumes = new Map(), plans = new Map();
       const volumeKeys = new Map(await Promise.all([...new Set(pending.map(job => job.source.destination))].map(async destination => { try { return [destination,`device:${(await fs.stat(destination)).dev}`]; } catch (_error) { return [destination,`path:${path.resolve(destination)}`]; } })));
-      const failedForSpace=new Set();
+      const failedForSpace=new Set(), rateBlocked=new Set(), rateKey = job => `${providerKey(job.source)}:${job.source.accountId ?? 'default'}`;
       let exclusive = false, lastSaved = Date.now(), lastEmission = 0;
       if (pending.length) this.transport = await this.transportFactory({ bandwidthKBps: q.config.execution.bandwidthKBps, onBytes: () => { if (Date.now() - lastEmission > 500) { lastEmission = Date.now(); this.updateProgress(); } } });
       const perform = async job => {
@@ -270,6 +276,10 @@ class BackupService extends EventEmitter {
             return this.sync({ ...job, github, git, options, plan: await plans.get(key), passphrase: options.encryption ? await this.getPassphrase() : '', onProgress: update });
           }, { ...this.retryOptions, retries: q.config.execution.retries, onRetry: event => update({ status: 'retrying', attempt: event.attempt, retryAt: new Date(Date.now() + event.delay).toISOString() }) });
         } catch (error) {
+          if(error.rateLimited){
+            rateBlocked.add(rateKey(job));limitQueue(q,[error.rateLimitUntil]);
+            const previous=this.state.repositories[id]??{};this.state.repositories[id]={...previous,id,fullName:job.repository.full_name,destination:repositoryDestination(job.source,job.repository.full_name),sourceId:job.sourceId,targetId:job.targetId,...(providerSpec(job.source).provider!=='github'?providerSpec(job.source):{}),status:'waiting',helpCode:'rate',message:error.message,rateLimitUntil:q.rateLimitUntil};pending.push(job);this.activeJobs.delete(id);this.emit('data');this.updateProgress();return;
+          }
           if(error.code==='ENOSPC'){
             const root=error.space?.root||(error.diskPath&&path.resolve(error.diskPath).startsWith(path.resolve(os.tmpdir())+path.sep)&&options.encryption?os.tmpdir():job.source.destination);
             let available=0;try{const stat=await fs.statfs(root,{bigint:true});available=Number(stat.bavail*stat.bsize);}catch(_error){/* Remain paused when a disk disappears. */}
@@ -286,13 +296,13 @@ class BackupService extends EventEmitter {
         const legacy = this.state.repositories[result.fullName];
         const previous = this.state.repositories[id] || (legacy?.destination === result.destination ? legacy : {}) || {};
         if (legacy?.destination === result.destination) delete this.state.repositories[result.fullName];
-        this.state.repositories[id] = { ...previous, message: undefined, warning: undefined, helpCode:undefined, ...result };
+        this.state.repositories[id] = { ...previous, message: undefined, warning: undefined, helpCode:undefined, rateLimitUntil:undefined, ...result };
         this.activeJobs.delete(id); this.emit('data'); this.updateProgress();
       };
       while (pending.length || active.size) {
         if (!this.pauseReason) this.pauseReason = await this.gate(q.config.execution);
         while (!this.pauseReason && !exclusive && active.size < q.config.execution.concurrency && pending.length) {
-          const index = pending.findIndex(job => !failedForSpace.has(jobId(job)) && (volumes.get(volumeKeys.get(job.source.destination)) || 0) < 2 && (!heavy(job, q.config) || active.size === 0));
+          const index = pending.findIndex(job => !failedForSpace.has(jobId(job)) && !rateBlocked.has(rateKey(job)) && (volumes.get(volumeKeys.get(job.source.destination)) || 0) < 2 && (!heavy(job, q.config) || active.size === 0));
           if (index < 0) break;
           const job = pending.splice(index,1)[0], volume = volumeKeys.get(job.source.destination), isHeavy = heavy(job,q.config);
           volumes.set(volume,(volumes.get(volume) || 0) + 1); if (isHeavy) exclusive = true;
@@ -304,7 +314,7 @@ class BackupService extends EventEmitter {
         await Promise.race(active);
         if (q.completed.length % 20 === 0 || Date.now() - lastSaved > 10000) { await this.saveState(this.state); lastSaved = Date.now(); }
       }
-      if (pending.length) q.pauseReason = this.pauseReason || (failedForSpace.size?'space':'user');
+      if (pending.length) { q.pauseReason = this.pauseReason || (rateBlocked.size?'rate':failedForSpace.size?'space':'user'); if (q.pauseReason === 'rate') q.message = 'Warte auf die Freigabe des API-Limits. Erledigte Sicherungen bleiben erhalten.'; else delete q.rateLimitUntil; }
       else {
         const failed=result=>result.status==='error'||result.installation?.status==='error'||result.installation?.shortcuts?.status==='error';
         const errors = q.results.filter(failed), details = q.results.length > 500 ? [...errors, ...q.results.filter(r => !failed(r))].slice(0,500) : q.results;

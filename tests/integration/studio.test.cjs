@@ -75,3 +75,26 @@ test('unlocking an existing archive authenticates the password without replacing
  await assert.rejects(runtime.setPassword(NEW,false),/Passwort/);assert.equal(runtime.vault.archivePassword,'');assert.equal(runtime.vault.encryptionKeyId,key);assert.equal(await hashFile(path.join(f.record.destination,'backup.gcb')),before);
  await runtime.setPassword(OLD,false);assert.equal(runtime.vault.passwordFor(f.record),OLD);assert.equal(runtime.vault.encryptionKeyId,key);
 });
+test('an API limit pauses the queue, keeps finished jobs and waits for the reset before automatic resume',async t=>{
+  const f=await repository(t);f.names=['demo/project','demo/second','demo/third'];f.source.kind='owner';f.source.value='demo';const config=f.config(),calls=new Map();config.execution.concurrency=1;let limited=true;const until=new Date(Date.now()+3600000).toISOString();
+  const sync=async job=>{const name=job.repository.full_name;calls.set(name,(calls.get(name)||0)+1);if(name==='demo/second'&&limited){const error=new Error('GitHub-API-Limit erreicht (HTTP 403). Der Lauf wartet bis zur Freigabe.');Object.assign(error,{rateLimited:true,helpCode:'rate',rateLimitUntil:until});throw error;}return{fullName:name,destination:repositoryDestination(job.source,name),status:'cloned'};};
+  const service=new BackupService({git:f.git,github:f.github,state:{},saveState:value=>writeJson(path.join(f.root,'queue.json'),value),sync});
+  let result=await service.run(config);assert.equal(result.reason,'rate');assert.equal(service.state.queue.rateLimitUntil,until);assert.equal(service.state.queue.completed.length,1);assert.equal(service.state.history.length,0);assert.equal(calls.get('demo/third'),undefined);
+  const waiting=Object.values(service.state.repositories).find(r=>r.fullName==='demo/second');assert.equal(waiting.status,'waiting');assert.equal(waiting.helpCode,'rate');
+  let now=new Date();const runtime=await f.runtime({config,state:service.state,now:()=>now});runtime.backup.sync=sync;f.requests=[];
+  assert.equal((await runtime.resume()).reason,'rate');assert.equal(runtime.snapshot().queue.rateLimitUntil,until);await runtime.scheduledRun();assert.equal(f.requests.length,0);assert.equal(calls.get('demo/second'),1);
+  limited=false;now=new Date(Date.parse(until)+1000);result=await runtime.resume();assert.equal(result.resultCount,3);assert.equal(result.errorCount,0);assert.equal(runtime.backup.state.queue,null);assert.equal(calls.get('demo/project'),1);assert.equal(calls.get('demo/second'),2);assert.equal(calls.get('demo/third'),1);
+  const record=Object.values(runtime.backup.state.repositories).find(r=>r.fullName==='demo/second');assert.equal(record.status,'cloned');assert.equal(record.rateLimitUntil,undefined);
+});
+test('an API limit while listing sources keeps the queue unresolved and an explicit resume may retry early',async t=>{
+  const f=await repository(t);const config=f.config(),until=new Date(Date.now()+600000).toISOString();let limited=true;
+  const github=source=>({repository:async name=>{if(limited){const error=new Error('GitHub-API-Limit erreicht (HTTP 429). Der Lauf wartet bis zur Freigabe.');Object.assign(error,{rateLimited:true,rateLimitUntil:until});throw error;}return f.github.repository(name);},repositories:owner=>f.github.repositories(owner),withTransfer(){return this;},source});
+  const service=new BackupService({git:f.git,github,state:{},saveState:async()=>{},sync:async job=>({fullName:job.repository.full_name,destination:repositoryDestination(job.source,job.repository.full_name),status:'cloned'})});
+  const result=await service.run(config);assert.equal(result.reason,'rate');assert.equal(service.state.queue.unresolved,true);assert.equal(service.state.queue.rateLimitUntil,until);assert.equal(service.state.queue.results.length,0);
+  limited=false;const done=await service.run(config,{resume:true});assert.equal(done.resultCount,1);assert.equal(done.errorCount,0);
+});
+test('idle policy ticks avoid repeated window updates and drive searches while all drives are present',async t=>{
+  const f=await repository(t),config=f.config();config.autoRelocate=true;let roots=0;const runtime=await f.runtime({config,mountedRoots:async()=>{roots++;return[];}});
+  await runtime.policyTick();let changes=0;runtime.on('change',()=>changes++);runtime.lastDisksAt=0;runtime.lastLocationCheck=0;await runtime.policyTick();runtime.lastLocationCheck=0;await runtime.policyTick();
+  assert.equal(changes,0);assert.equal(roots,0);assert.equal(runtime.operation,null);
+});

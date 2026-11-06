@@ -2,6 +2,16 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { createHash } = require('node:crypto');
 const runFile = promisify(execFile);
+const fs = require('node:fs');
+const path = require('node:path');
+function bareRepository(directory) {
+  try { return !fs.existsSync(path.join(directory, '.git')) && fs.statSync(path.join(directory, 'HEAD')).isFile() && fs.statSync(path.join(directory, 'objects')).isDirectory() && fs.statSync(path.join(directory, 'refs')).isDirectory(); } catch (_error) { return false; }
+}
+// Newer Git releases default to safe.bareRepository=explicit; mirrors are therefore addressed with an explicit Git directory.
+function explicitBare(args) {
+  const index = args.indexOf('-C');
+  return index >= 0 && index + 1 < args.length && !args.includes('--git-dir=.') && bareRepository(args[index + 1]) ? [...args.slice(0, index + 2), '--git-dir=.', ...args.slice(index + 2)] : args;
+}
 
 class Git {
   constructor({ token = '', exec = runFile, proxy = '', server = 'https://github.com', username = 'x-access-token' } = {}) { Object.assign(this, { token, exec, proxy, server, username }); }
@@ -19,7 +29,7 @@ class Git {
       config.push('-c', 'credential.helper=');
     }
     try {
-      const result = await this.exec('git', [...config, ...args], { timeout: 15 * 60 * 1000, maxBuffer: 4 * 1024 * 1024, windowsHide: true, ...executionOptions, env });
+      const result = await this.exec('git', [...config, ...explicitBare(args)], { timeout: 15 * 60 * 1000, maxBuffer: 4 * 1024 * 1024, windowsHide: true, ...executionOptions, env });
       return rawOutput ? result.stdout : result.stdout.trim();
     } catch (error) {
       if (error.code === 'ENOENT') throw new Error('Git ist nicht installiert oder nicht im PATH. Bitte Git installieren und die App neu starten.');
@@ -69,4 +79,4 @@ class Git {
   }
 }
 
-module.exports = { Git };
+module.exports = { Git, explicitBare };
