@@ -5,7 +5,7 @@ const { createHash } = require('node:crypto');
 const { lookup } = require('node:dns/promises');
 const { isIP } = require('node:net');
 const { retry } = require('./retry.cjs');
-const { rateLimitError } = require('./rate-limit.cjs');
+const { responseRateLimit } = require('./rate-limit.cjs');
 const { providerSpec,parseHostedSource,cloneURL } = require('./provider-spec.cjs');
 function privateAddress(value) {
   const ip=value.toLowerCase().replace(/^\[|\]$/g,'');
@@ -21,6 +21,7 @@ class HostedClient {
     const target=new URL(url),base=new URL(this.server),bound=target.origin===base.origin&&(target.pathname===base.pathname||target.pathname.startsWith(base.pathname.replace(/\/$/,'')+'/'));
     return {'User-Agent':'Git-Cloner',...(this.token&&bound?(this.provider==='gitlab'?{'PRIVATE-TOKEN':this.token}:{Authorization:download&&this.username&&!target.pathname.startsWith(new URL(this.apiBase).pathname+'/')?`Basic ${Buffer.from(`${this.username}:${this.token}`).toString('base64')}`:`token ${this.token}`}):{})};
   }
+  label() {return this.provider==='gitlab'?'GitLab':'Forgejo';}
   withTransfer(transfer,retries=2) {const client=Object.create(this);client.transfer=transfer;client.retryOptions={...this.retryOptions,retries};return client;}
   request(endpoint,options={}) {return retry(()=>this.requestOnce(endpoint,options),this.retryOptions);}
   async requestOnce(endpoint,{allow404=false,signal}={}) {
@@ -29,7 +30,7 @@ class HostedClient {
     const response=await this.fetchImpl(url,{headers:{...this.headers(url),Accept:'application/json',...(cached?.etag?{'If-None-Match':cached.etag}:{})},redirect:'error',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(30000)]):AbortSignal.timeout(30000)});
     if(response.status===304&&cached)return structuredClone(cached.data);
     if(response.status===404&&allow404)return null;
-    if(!response.ok){const limited=rateLimitError(response,{label:this.provider==='gitlab'?'GitLab':'Forgejo'});if(limited)throw limited;const error=new Error([401,403].includes(response.status)?'Zugriff nicht erlaubt. Token und Repository-Berechtigungen prüfen.':response.status===404?'Git-Quelle nicht gefunden oder keine Zugriffsberechtigung.':`Der Git-Server antwortet mit HTTP ${response.status}.`);error.helpCode=[401,403].includes(response.status)?'authentication':response.status===429?'rate':'network';error.retryable=[429,500,502,503,504].includes(response.status);error.retryAfterMs=Number(response.headers?.get('retry-after')||0)*1000;throw error;}
+    if(!response.ok){const limited=await responseRateLimit(response,{label:this.label()});if(limited)throw limited;const error=new Error([401,403].includes(response.status)?'Zugriff nicht erlaubt. Token und Repository-Berechtigungen prüfen.':response.status===404?'Git-Quelle nicht gefunden oder keine Zugriffsberechtigung.':`Der Git-Server antwortet mit HTTP ${response.status}.`);error.helpCode=[401,403].includes(response.status)?'authentication':response.status===429?'rate':'network';error.retryable=[429,500,502,503,504].includes(response.status);error.retryAfterMs=Number(response.headers?.get('retry-after')||0)*1000;throw error;}
     const data=await response.json(),etag=response.headers?.get('etag'),next=response.headers?.get('x-next-page'),link=response.headers?.get('link'),total=response.headers?.get('x-total-count');
     this.pagination.set(endpoint,{next:next!=null?Boolean(next):link!=null?/rel="?next"?/.test(link):null,total:total==null?null:Number(total)});
     if(this.pagination.size>2000)this.pagination.delete(this.pagination.keys().next().value);
@@ -126,9 +127,9 @@ class HostedClient {
   async downloadURL(value,file,{expectedSize,expectedDigest,expectedName='',resume,onMeasure=()=>{}}={}) {
     if(expectedSize!=null&&(!Number.isSafeInteger(expectedSize)||expectedSize<0))throw new Error('Ungültige Release-Dateigröße.');
     const timeout=Math.min(86400000,Math.max(600000,this.transfer?.budget.bytesPerSecond&&expectedSize?expectedSize/this.transfer.budget.bytesPerSecond*1500:0));
-    if(resume)return resume.cache.download({identity:resume.identity,file,expectedSize,expectedDigest,expectedName,transfer:this.transfer,onProgress:resume.onProgress,onMeasure:resume.onMeasure||onMeasure,request:range=>this.assetResponse(value,{...range,timeout,identity:true})});
+    if(resume)return resume.cache.download({identity:resume.identity,file,expectedSize,expectedDigest,expectedName,rateLabel:this.label(),transfer:this.transfer,onProgress:resume.onProgress,onMeasure:resume.onMeasure||onMeasure,request:range=>this.assetResponse(value,{...range,timeout,identity:true})});
     const response=await this.assetResponse(value,{timeout});
-    if(!response.ok||!response.body){const error=new Error('Release-Datei konnte nicht geladen werden.');error.retryable=[429,500,502,503,504].includes(response.status);error.helpCode=[401,403].includes(response.status)?'authentication':'network';throw error;}
+    if(!response.ok||!response.body){const limited=await responseRateLimit(response,{label:this.label()});if(limited)throw limited;const error=new Error('Release-Datei konnte nicht geladen werden.');error.retryable=[429,500,502,503,504].includes(response.status);error.helpCode=[401,403].includes(response.status)?'authentication':'network';throw error;}
     if(/^text\/html/i.test(response.headers?.get('content-type')??'')&&!/\.html?$/i.test(expectedName)){await response.body.cancel();const error=new Error('Der Server liefert eine HTML-Anmeldeseite statt der Release-Datei. Token und Download-Berechtigungen prüfen.');error.helpCode='authentication';throw error;}
     const hash=createHash('sha256');let bytes=0,owned=false;
     const meter=new Transform({transform(chunk,_encoding,done){bytes+=chunk.length;onMeasure({networkBytes:chunk.length});hash.update(chunk);done(expectedSize!=null&&bytes>expectedSize?new Error('Release-Datei ist größer als angegeben.'):null,chunk);}}),output=fs.createWriteStream(file,{flags:'wx',mode:0o600});output.once('open',()=>{owned=true;});

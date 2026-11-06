@@ -11,27 +11,29 @@ const { Git } = require('../../app/core/git.cjs');
 const { prepareDestination } = require('../../app/core/destinations.cjs');
 const { syncRepository } = require('../../app/core/backup.cjs');
 const execute = promisify(execFile);
+// Simulated releases are always newer than the version under test.
+const NEXT = require('semver').inc(require('../../package.json').version, 'minor'), LATER = require('semver').inc(NEXT, 'minor');
 
 test('ignored releases stay hidden after restart and the next release shows a new banner',async()=>{
-  let f=await launch({release:'v3.6.0'});
+  let f=await launch({release:'v'+NEXT});
   try {
     await f.page.evaluate(()=>window.gitCloner.checkUpdates());
-    await expect(f.page.locator('#update-banner')).toContainText('3.6.0');
+    await expect(f.page.locator('#update-banner')).toContainText(NEXT);
     await f.page.locator('#update-banner').getByRole('button',{name:'Diese Version überspringen'}).click();
     await expect(f.page.locator('#update-banner')).toBeEmpty();
     const directory=f.directory;await f.close({preserve:true});
-    f=await launch({directory,release:'v3.6.0'});await f.page.evaluate(()=>window.gitCloner.checkUpdates());
+    f=await launch({directory,release:'v'+NEXT});await f.page.evaluate(()=>window.gitCloner.checkUpdates());
     await expect(f.page.locator('#update-banner')).toBeEmpty();expect((await f.page.evaluate(()=>window.gitCloner.getState())).update.status).toBe('ignored');
-    await f.close({preserve:true});f=await launch({directory,release:'v3.7.0'});await f.page.evaluate(()=>window.gitCloner.checkUpdates());
-    await expect(f.page.locator('#update-banner')).toContainText('3.7.0');
+    await f.close({preserve:true});f=await launch({directory,release:'v'+LATER});await f.page.evaluate(()=>window.gitCloner.checkUpdates());
+    await expect(f.page.locator('#update-banner')).toContainText(LATER);
   } finally {await f.close();}
 });
 test('a skipped release can be explicitly shown again',async()=>{
-  const f=await launch({release:'v3.6.0'});
+  const f=await launch({release:'v'+NEXT});
   try{
     await f.page.evaluate(()=>window.gitCloner.checkUpdates());await f.page.locator('#update-banner').getByRole('button',{name:'Diese Version überspringen'}).click();
     await f.page.getByRole('button',{name:'Einstellungen',exact:true}).click();await f.page.getByRole('button',{name:'Übersprungene Version zurücksetzen'}).click();
-    await expect(f.page.locator('#update-banner')).toContainText('3.6.0');
+    await expect(f.page.locator('#update-banner')).toContainText(NEXT);
   }finally{await f.close();}
 });
 test('English, dark mode and large text persist with aligned controls and no horizontal overflow',async()=>{

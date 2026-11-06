@@ -20,6 +20,7 @@ try { const saved = JSON.parse(require('node:fs').readFileSync(path.join(app.get
 app.commandLine.appendSwitch('lang', locale);
 const indexFile = path.join(__dirname, 'renderer', 'index.html'), indexUrl = pathToFileURL(indexFile).href;
 let runtime, mainWindow, tray, quitting = false, broadcastTimer, lastData = -1, lastConfig = -1, lastHistory = '', pendingWorker = false;
+let guiRequested = false; const workerStop = new AbortController();
 const selectedArchives = new Set();
 const pendingNotifications = new Set();
 const text = (de, en) => runtime?.config.appearance.language === 'en' ? en : de;
@@ -28,9 +29,12 @@ if (!app.requestSingleInstanceLock({ worker })) app.quit();
 else {
   app.on('second-instance', (_event, args, _cwd, data) => {
     if (data?.worker || args.includes('--scheduled-worker')) {
+      // A running worker already performs the scheduled run, including any wait for an API-limit reset.
+      if (worker) return;
       if (runtime) void runtime.scheduledRun().catch(error => { runtime.notice = error.message; broadcast(); });
       else pendingWorker = true;
-    } else showWindow();
+    } else if (worker) { guiRequested = true; workerStop.abort(); }
+    else showWindow();
   });
   app.whenReady().then(start).catch(async error => {
     if (worker) { await workerLog({ event: 'failed' }); app.exit(1); }
@@ -63,6 +67,8 @@ function handle(channel, fn) {
     return fn(...args);
   });
 }
+// The worker holds the single-instance lock, so an opened app window is started once the worker has stopped.
+function openRequestedWindow() { if (guiRequested) app.relaunch({ args: process.argv.slice(1).filter(arg => arg !== '--scheduled-worker') }); }
 async function workerLog(entry) {
   const file = path.join(app.getPath('userData'), 'worker.log');
   try {
@@ -123,10 +129,10 @@ async function start() {
   if (worker) {
     app.dock?.hide();
     try {
-      const result = await runtime.scheduledRun();
+      const result = await runtime.scheduledRunUntilSettled({ signal: workerStop.signal, onWait: until => { if (until) void workerLog({ event: 'waiting-for-rate-limit', until }); } });
       await workerLog({ event: result.skipped ? 'not-due' : result.busy ? 'busy' : result.paused ? 'paused' : 'complete', results: result.resultCount ?? result.results?.length ?? 0, errors: result.errorCount ?? result.results?.filter(r => r.status === 'error').length ?? 0 });
-      await runtime.stop(); await Promise.allSettled([...pendingNotifications]); quitting = true; app.exit((result.errorCount??0)>0 ? 1 : 0);
-    } catch (_error) { await workerLog({ event: 'failed' }); quitting = true; app.exit(1); }
+      await runtime.stop(); await Promise.allSettled([...pendingNotifications]); openRequestedWindow(); quitting = true; app.exit((result.errorCount??0)>0 ? 1 : 0);
+    } catch (_error) { await workerLog({ event: 'failed' }); openRequestedWindow(); quitting = true; app.exit(1); }
     return;
   }
   runtime.on('change', broadcast);

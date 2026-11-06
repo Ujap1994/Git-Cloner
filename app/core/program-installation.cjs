@@ -7,23 +7,15 @@ const { readJson, writeJson } = require('./store.cjs');
 const { safeDirectory, checkSpace } = require('./destinations.cjs');
 const { hashFile } = require('./integrity.cjs');
 const { repositoryParts, providerKey } = require('./provider-spec.cjs');
-const { wildcard } = require('./filters.cjs');
-const { assetPlatform, assetArchitecture, assetType } = require('./release-assets.cjs');
+const { selectProgram } = require('./program-select.cjs');
 const { RestoreBrowser } = require('./selective-restore.cjs');
 const { RELEASE_OWNER } = require('./release-layout.cjs');
 const { preparePrograms, inspectPrograms } = require('./program-content.cjs');
 const { acquireLease } = require('./lease.cjs');
 const { validateInstallation } = require('./program-options.cjs');
-const execute = promisify(execFile), MARKER = '.git-cloner-program.json';
-function selectProgram(files, platform = process.platform, arch = process.arch, pattern = '') {
-  const allowed = platform === 'darwin' ? ['dmg', 'zip'] : platform === 'win32' ? ['exe', 'zip'] : platform === 'linux' ? ['appimage'] : [];
-  const candidates = files.filter(file => !/\.(sha(?:256|512)?|sig|asc|checksum)$/i.test(file.name) && (!pattern || wildcard(pattern, file.name)) && assetPlatform(file.name).platforms.includes(platform) && (!assetArchitecture(file.name).length || assetArchitecture(file.name).includes(arch)) && allowed.includes(assetType(file.name)) && (platform !== 'win32' || assetType(file.name) === 'zip' || /portable/i.test(file.name)));
-  const score = file => allowed.indexOf(assetType(file.name)) * 10 + (assetArchitecture(file.name).length === 1 ? 0 : assetArchitecture(file.name).length ? 1 : 2);
-  candidates.sort((a, b) => score(a) - score(b));
-  if (!candidates.length) throw new Error('Kein installierbares Programm für dieses System gefunden. Unterstützt: macOS DMG/App-ZIP, Windows Portable-EXE/ZIP, Linux AppImage.');
-  if (candidates[1] && score(candidates[0]) === score(candidates[1])) throw new Error('Mehrere Programme passen. Bitte den Release-Dateinamen in der Quelle genauer eingrenzen.');
-  return candidates[0];
-}
+const runFile = promisify(execFile), MARKER = '.git-cloner-program.json';
+// Installer tools never need input; a closed stdin makes interactive prompts fail at once instead of waiting for the timeout.
+function execute(file, args, options) { const pending = runFile(file, args, options); pending.child?.stdin?.end(); return pending; }
 async function owned(directory, identity) {
   const stat = await fs.lstat(directory); if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Ein fremder Programmordner bleibt erhalten.');
   const file = path.join(directory, MARKER), info = await fs.lstat(file); if (!info.isFile() || info.isSymbolicLink()) throw new Error('Unbekannte Programmzuordnung.');

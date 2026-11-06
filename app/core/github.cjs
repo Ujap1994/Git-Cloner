@@ -1,6 +1,6 @@
 const { parseSource } = require('./config.cjs');
 const { retry } = require('./retry.cjs');
-const { rateLimitError } = require('./rate-limit.cjs');
+const { responseRateLimit } = require('./rate-limit.cjs');
 
 class GitHubClient {
   constructor({ token = '', fetchImpl = fetch, retryOptions = {}, cacheLimit = 16 * 1048576 } = {}) { Object.assign(this, { token, fetchImpl, retryOptions, cacheLimit }); this.cache = new Map(); this.cacheStats = {bytes:0}; this.pagination = new Map(); }
@@ -19,7 +19,7 @@ class GitHubClient {
     if (response.status === 304 && cached) return structuredClone(cached.data);
     if (allow404 && response.status === 404) return null;
     if (!response.ok) {
-      const limited = rateLimitError(response, { label: 'GitHub' }); if (limited) throw limited;
+      const limited = await responseRateLimit(response, { label: 'GitHub' }); if (limited) throw limited;
       if ([500,502,503,504].includes(response.status)) {
         const error = new Error(`GitHub antwortet vorübergehend mit HTTP ${response.status}.`); error.retryable = true;
         const after = response.headers?.get('retry-after'); error.retryAfterMs = after ? (Number(after) * 1000 || Date.parse(after) - Date.now()) : 0;
@@ -127,9 +127,9 @@ class GitHubClient {
     if (!Number.isSafeInteger(id) || id < 1) throw new Error('Ungültiges Release-Asset.');
     if (expectedSize != null && (!Number.isSafeInteger(expectedSize) || expectedSize < 0)) throw new Error('Ungültige Größe einer Release-Datei.');
     const timeout = Math.min(86400000, Math.max(600000, this.transfer?.budget.bytesPerSecond && expectedSize ? expectedSize / this.transfer.budget.bytesPerSecond * 1500 : 0));
-    if (resume) return resume.cache.download({ identity: resume.identity, file, expectedSize, expectedDigest, expectedName, transfer: this.transfer, onProgress: resume.onProgress, onMeasure: resume.onMeasure || onMeasure, request: range => this.assetResponse(fullName, id, { ...range, timeout, identity: true }) });
+    if (resume) return resume.cache.download({ identity: resume.identity, file, expectedSize, expectedDigest, expectedName, rateLabel: 'GitHub', transfer: this.transfer, onProgress: resume.onProgress, onMeasure: resume.onMeasure || onMeasure, request: range => this.assetResponse(fullName, id, { ...range, timeout, identity: true }) });
     const response = await this.assetResponse(fullName, id, { timeout });
-    if (!response.ok || !response.body) { const error = new Error('Release-Datei konnte nicht geladen werden.'); error.retryable = [429,500,502,503,504].includes(response.status); throw error; }
+    if (!response.ok || !response.body) { const limited = await responseRateLimit(response, { label: 'GitHub' }); if (limited) throw limited; const error = new Error('Release-Datei konnte nicht geladen werden.'); error.retryable = [429,500,502,503,504].includes(response.status); throw error; }
     let bytes = 0; const hash = createHash('sha256');
     const meter = new Transform({ transform(chunk,_encoding,done) { bytes += chunk.length; onMeasure({ networkBytes: chunk.length }); hash.update(chunk); if (Number.isSafeInteger(expectedSize) && bytes > expectedSize) done(new Error('Release-Datei ist größer als von GitHub angegeben.')); else done(null,chunk); } });
     const stages = [Readable.fromWeb(response.body),meter]; if (this.transfer) stages.push(this.transfer.budget.stream());

@@ -8,7 +8,8 @@ const {writeJson}=require('./store.cjs');
 const {selectReleaseAssets}=require('./release-assets.cjs');
 const {cloneURL}=require('./provider-spec.cjs');
 const {createReleaseDirectory}=require('./release-layout.cjs');
-async function hostedMetadataPlan(repository,options,client,git,{releaseScope='all',platform=process.platform,releaseArchitecture='all',releaseFileTypes=[],arch=process.arch}={}){
+const {narrowToProgram}=require('./program-select.cjs');
+async function hostedMetadataPlan(repository,options,client,git,{releaseScope='all',platform=process.platform,releaseArchitecture='all',releaseFileTypes=[],arch=process.arch,releaseProgram=null}={}){
   const base=client.projectPath(repository.full_name),lab=client.provider==='gitlab',data={};
   if(options.issues)data.issues=await client.collection(`${base}/issues${lab?'?scope=all&state=all':'?state=all&type=issues'}`);
   if(options.pullRequests)data.pullRequests=await client.collection(`${base}/${lab?'merge_requests?scope=all&state=all':'pulls?state=all'}`);
@@ -20,10 +21,10 @@ async function hostedMetadataPlan(repository,options,client,git,{releaseScope='a
     if(lab&&url){const parsed=new URL(url,client.server+'/'),server=new URL(client.server),download=parsed.pathname.indexOf('/-/releases/'),uploads=parsed.pathname.indexOf('/uploads/');if(parsed.origin===server.origin&&download>=0&&parsed.pathname.includes('/downloads/',download)){url=`${client.apiBase}${base}/releases/${encodeURIComponent(release.tag_name)}/downloads/${parsed.pathname.split('/downloads/').slice(1).join('/downloads/')}`;}else if(parsed.origin===server.origin&&uploads>=0){url=`${client.apiBase}${base}/uploads/${parsed.pathname.slice(uploads+9)}`;}}
     return{...asset,browser_download_url:url};
   });
-  const selection=selectReleaseAssets(normalized,releaseScope,platform,{releaseArchitecture,releaseFileTypes,arch}),estimatedBytes=selection.selected.reduce((sum,a)=>sum+(Number.isSafeInteger(a.size)&&a.size>=0?a.size:0),0);
+  const selection=narrowToProgram(selectReleaseAssets(normalized,releaseScope,platform,{releaseArchitecture,releaseFileTypes,arch}),options.releases?releaseProgram:null,platform,arch),estimatedBytes=selection.selected.reduce((sum,a)=>sum+(Number.isSafeInteger(a.size)&&a.size>=0?a.size:0),0);
   let wikiRevision=null,warning=null;
   if(options.wiki&&repository.has_wiki!==false)try{wikiRevision=await git.revision(cloneURL(client,repository.full_name,true),true);}catch(_error){warning='Wiki nicht vorhanden oder nicht zugänglich.';}
-  const digest=createHash('sha256').update(JSON.stringify({provider:client.provider,server:client.server,data:stableReleaseData(data),wikiRevision,warning,...(options.releases?{releaseLayout:3,identities:selection.selected.map(assetIdentity),releaseArchitecture,releaseFileTypes,arch:releaseArchitecture==='system'?arch:null,release:release?.tag_name,ids:selection.selected.map(a=>a.id),scope:releaseScope,platform:releaseScope==='system'?platform:null}:{})})).digest('hex');
+  const digest=createHash('sha256').update(JSON.stringify({provider:client.provider,server:client.server,data:stableReleaseData(data),wikiRevision,warning,...(options.releases?{releaseLayout:3,identities:selection.selected.map(assetIdentity),releaseArchitecture,releaseFileTypes,arch:releaseArchitecture==='system'?arch:null,release:release?.tag_name,ids:selection.selected.map(a=>a.id),scope:releaseScope,platform:releaseScope==='system'?platform:null,...(releaseProgram?{program:releaseProgram.pattern}:{})}:{})})).digest('hex');
   const releaseInfo=release?{architecture:selection.architecture,fileTypes:releaseFileTypes,tag:release.tag_name,scope:releaseScope,platform,fileCount:selection.selected.length,bytes:estimatedBytes,excludedCount:selection.excluded.length,unknownSizes:selection.selected.filter(a=>!Number.isSafeInteger(a.size)).length}:null;
   return{digest,warning,wikiRevision,estimatedBytes,releaseInfo,downloadCount:selection.selected.length,releaseWarning:assets.length&&!selection.selected.length?'Keine Release-Dateien passen zu den gewählten Filtern. Betriebssystem, Architektur und Dateitypen prüfen.':null,
     async apply(directory,mode,{downloads,onProgress,reuse,onDownload}={}){

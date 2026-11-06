@@ -28,6 +28,7 @@ const {providerSpec,providerKey,parseHostedSource}=require('./core/provider-spec
 const {queryHistory,exportHistory,historyDetails}=require('./core/history.cjs');
 const {spaceReady}=require('./core/space-wait.cjs');
 const {rateReady}=require('./core/rate-limit.cjs');
+const { setTimeout: sleepFor } = require('node:timers/promises');
 const {rotationInventory,rotatePasswords,recoverRotations}=require('./core/key-rotation.cjs');
 const {inspectRecommendations}=require('./core/recommendations.cjs');
 const { organizeConfig, prepareBulk, configSignature, RepositoryBrowser } = require('./core/source-workspace.cjs');
@@ -218,6 +219,20 @@ class Runtime extends EventEmitter {
     const plan = dueSources(this.config,this.backup.state);
     if (plan.scheduledAt) return this.run({ scheduledAt: plan.scheduledAt, scheduledSources: plan.sources });
     return { skipped: true };
+  }
+  // The OS worker has no policy timer, so it waits for a short API-limit reset itself instead of stopping until the next scheduled time.
+  async scheduledRunUntilSettled({ sleep = sleepFor, maxWaitMs = 65 * 60000, maxRounds = 48, signal, onWait = () => {} } = {}) {
+    let result = await this.scheduledRun();
+    for (let round = 0; round < maxRounds && result?.paused && result.reason === 'rate' && !signal?.aborted; round++) {
+      const until = Date.parse(this.backup.state.queue?.rateLimitUntil ?? ''), delayMs = Math.max(1000, (Number.isFinite(until) ? until - Number(this.now()) : 60000) + 2000);
+      if (delayMs > maxWaitMs) break;
+      onWait(new Date(Date.now() + delayMs).toISOString());
+      try { await sleep(delayMs, undefined, { signal }); }
+      catch (error) { if (error.name === 'AbortError') break; throw error; }
+      finally { onWait(null); }
+      result = await this.resume();
+    }
+    return result;
   }
   start() { this.scheduler.start(); this.drives.start(); this.configureUpdates(); if (this.config.checkUpdates) void this.checkUpdates(); this.policyTimer = setInterval(() => void this.policyTick(),30000); this.policyTimer.unref?.(); }
   async stop() { this.scheduler.stop(); this.drives.stop(); clearInterval(this.updateTimer); clearInterval(this.policyTimer); this.deviceFlow.cancel(); this.repositoryBrowser.close(); await this.closeChanges(); await this.browser.closeAll(); }
