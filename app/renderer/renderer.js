@@ -1,328 +1,1371 @@
-const api = window.gitCloner, icon = window.gitClonerIcon;
-const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]);
-let appState, draft, view = 'overview', settingsTab = 'general', editingSource = null, sourceDraft, importDraft;
-let lastNavigation='', lastBanner='', lastAppearance='', lastHistory='';
-let query = '', statusFilter = 'all', pageIndex = 0, toastTimer, restoreRecord = '', restoreArchive = '', verifyRecord = null;
+const api = window.gitCloner,
+  icon = window.gitClonerIcon;
+const esc = value =>
+  String(value ?? '').replace(
+    /[&<>"']/g,
+    c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+  );
+let appState,
+  draft,
+  view = 'overview',
+  settingsTab = 'general',
+  editingSource = null,
+  sourceDraft,
+  importDraft;
+let lastNavigation = '',
+  lastBanner = '',
+  lastAppearance = '',
+  lastHistory = '';
+let query = '',
+  statusFilter = 'all',
+  pageIndex = 0,
+  toastTimer,
+  restoreRecord = '',
+  restoreArchive = '',
+  verifyRecord = null;
 let configSaves = Promise.resolve();
-const t = (de, en) => appState?.config.appearance.language === 'en' ? en : de;
-const labels = () => ({ overview: t('Übersicht','Overview'), sources: t('Quellen','Sources'), schedule: t('Zeitplan','Schedule'), restore: t('Wiederherstellen','Restore'), history: t('Verlauf','History'), settings: t('Einstellungen','Settings'), docs: t('Dokumentation','Documentation') });
-const features = window.createGitClonerFeatures({api,t,esc,field,button,panel,icon,toast,attempt,getState:()=>appState,getDraft:()=>draft,saveConfig,sourceValue,switchView,openSource,sourceExtras:b=>enhancements.releaseFields(b,true),restoreInput:()=>({recordId:restoreRecord,archive:restoreArchive,passphrase:document.getElementById('restore-password')?.value||''})});
-const enhancements = window.createGitClonerEnhancements({api,t,esc,field,button,panel,icon,toast,attempt,errorText,bytes:features.bytes,getState:()=>appState,getDraft:()=>draft,getSourceDraft:()=>sourceDraft});
-const studio=window.createGitClonerStudio({api,t,esc,field,button,panel,icon,heading,date,statusLabel,toast,attempt,getState:()=>appState,getSourceDraft:()=>sourceDraft,saveConfig,getView:()=>view});
-const workspace=window.createGitClonerWorkspace({api,t,esc,field,button,panel,heading,icon,toggle,toast,attempt,studio,enhancements,getState:()=>appState,getView:()=>view,getSourceDraft:()=>sourceDraft,mutate:configAction});
-const programLibrary=window.createGitClonerProgramLibrary({api,t,esc,field,button,bytes:features.bytes,getState:()=>appState,getSourceDraft:()=>sourceDraft});
-const releaseTools=window.createGitClonerReleaseTools({api,t,esc,field,button,panel,icon,toast,attempt,programLibrary,bytes:features.bytes,getState:()=>appState,getDraft:()=>draft,getSourceDraft:()=>sourceDraft});window.gitClonerReleaseTools=releaseTools;
-function date(value, onlyTime = false) { return value ? new Intl.DateTimeFormat(t('de-DE','en-GB'), onlyTime ? { hour:'2-digit',minute:'2-digit' } : {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(value)) : '—'; }
+const t = (de, en) => (appState?.config.appearance.language === 'en' ? en : de);
+const labels = () => ({
+  overview: t('Übersicht', 'Overview'),
+  sources: t('Quellen', 'Sources'),
+  schedule: t('Zeitplan', 'Schedule'),
+  restore: t('Wiederherstellen', 'Restore'),
+  history: t('Verlauf', 'History'),
+  settings: t('Einstellungen', 'Settings'),
+  docs: t('Dokumentation', 'Documentation')
+});
+const features = window.createGitClonerFeatures({
+  api,
+  t,
+  esc,
+  field,
+  button,
+  panel,
+  icon,
+  toast,
+  attempt,
+  getState: () => appState,
+  getDraft: () => draft,
+  saveConfig,
+  sourceValue,
+  switchView,
+  openSource,
+  sourceExtras: b => enhancements.releaseFields(b, true),
+  restoreInput: () => ({
+    recordId: restoreRecord,
+    archive: restoreArchive,
+    passphrase: document.getElementById('restore-password')?.value || ''
+  })
+});
+const enhancements = window.createGitClonerEnhancements({
+  api,
+  t,
+  esc,
+  field,
+  button,
+  panel,
+  icon,
+  toast,
+  attempt,
+  errorText,
+  bytes: features.bytes,
+  getState: () => appState,
+  getDraft: () => draft,
+  getSourceDraft: () => sourceDraft
+});
+const studio = window.createGitClonerStudio({
+  api,
+  t,
+  esc,
+  field,
+  button,
+  panel,
+  icon,
+  heading,
+  date,
+  statusLabel,
+  toast,
+  attempt,
+  getState: () => appState,
+  getSourceDraft: () => sourceDraft,
+  saveConfig,
+  getView: () => view
+});
+const workspace = window.createGitClonerWorkspace({
+  api,
+  t,
+  esc,
+  field,
+  button,
+  panel,
+  heading,
+  icon,
+  toggle,
+  toast,
+  attempt,
+  studio,
+  enhancements,
+  getState: () => appState,
+  getView: () => view,
+  getSourceDraft: () => sourceDraft,
+  mutate: configAction
+});
+const programLibrary = window.createGitClonerProgramLibrary({
+  api,
+  t,
+  esc,
+  field,
+  button,
+  bytes: features.bytes,
+  getState: () => appState,
+  getSourceDraft: () => sourceDraft
+});
+const releaseTools = window.createGitClonerReleaseTools({
+  api,
+  t,
+  esc,
+  field,
+  button,
+  panel,
+  icon,
+  toast,
+  attempt,
+  programLibrary,
+  bytes: features.bytes,
+  getState: () => appState,
+  getDraft: () => draft,
+  getSourceDraft: () => sourceDraft
+});
+window.gitClonerReleaseTools = releaseTools;
+function date(value, onlyTime = false) {
+  return value
+    ? new Intl.DateTimeFormat(
+        t('de-DE', 'en-GB'),
+        onlyTime
+          ? { hour: '2-digit', minute: '2-digit' }
+          : { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }
+      ).format(new Date(value))
+    : '—';
+}
 function errorText(value) {
-  const message = value.replace(/^Error invoking remote method '[^']+': Error: /,'');
-  if (t('de','en') === 'de') return message;
+  const message = value.replace(/^Error invoking remote method '[^']+': Error: /, '');
+  if (t('de', 'en') === 'de') return message;
   const errors = {
-    'Bitte den laufenden Vorgang abwarten.':'Please wait for the running operation.',
-    'Bitte zuerst eine Quelle hinzufügen und aktivieren.':'Add and enable a source first.',
-    'Für jede Prüfung eine eigene, gültige Uhrzeit eintragen.':'Enter a separate, valid time for every check.',
-    'Bitte einen absoluten Zielordner auswählen.':'Choose an absolute destination folder.',
-    'Diese Quelle ist bereits eingetragen.':'This source has already been added.',
-    'Falsches Passwort oder beschädigtes Archiv.':'Incorrect password or damaged archive.',
-    'Bitte zuerst das Archivpasswort setzen oder entsperren.':'Set or unlock the archive password first.',
-    'Die Integritätsprüfung hat fehlende oder veränderte Dateien erkannt.':'Integrity verification detected missing or modified files.',
-    'Kein sicherer Schlüsselspeicher verfügbar.':'No secure key store is available.',
-    'Die unabhängige Zeitplanung benötigt eine installierte native App.':'Independent scheduling requires an installed native application.',
-    'Der Zielordner existiert bereits. Es werden keine Dateien überschrieben.':'The destination already exists. No files will be overwritten.'
+    'Bitte den laufenden Vorgang abwarten.': 'Please wait for the running operation.',
+    'Bitte zuerst eine Quelle hinzufügen und aktivieren.': 'Add and enable a source first.',
+    'Für jede Prüfung eine eigene, gültige Uhrzeit eintragen.': 'Enter a separate, valid time for every check.',
+    'Bitte einen absoluten Zielordner auswählen.': 'Choose an absolute destination folder.',
+    'Diese Quelle ist bereits eingetragen.': 'This source has already been added.',
+    'Falsches Passwort oder beschädigtes Archiv.': 'Incorrect password or damaged archive.',
+    'Bitte zuerst das Archivpasswort setzen oder entsperren.': 'Set or unlock the archive password first.',
+    'Die Integritätsprüfung hat fehlende oder veränderte Dateien erkannt.':
+      'Integrity verification detected missing or modified files.',
+    'Kein sicherer Schlüsselspeicher verfügbar.': 'No secure key store is available.',
+    'Die unabhängige Zeitplanung benötigt eine installierte native App.':
+      'Independent scheduling requires an installed native application.',
+    'Der Zielordner existiert bereits. Es werden keine Dateien überschrieben.':
+      'The destination already exists. No files will be overwritten.'
   };
   return errors[message] || message;
 }
 function toast(message, error = false) {
-  const node = document.getElementById('toast'); clearTimeout(toastTimer); node.textContent = error ? errorText(message) : message; node.className = `toast${error?' error':''}`; node.hidden = false;if(error){studio.rememberError(message);node.innerHTML=esc(errorText(message))+` <button type="button" class="text-button" data-action="error-help">${t('Fehlerhilfe','Troubleshoot')}</button>`;}
-  toastTimer = setTimeout(() => { node.hidden = true; }, error ? 8000 : 3500);
+  const node = document.getElementById('toast');
+  clearTimeout(toastTimer);
+  node.textContent = error ? errorText(message) : message;
+  node.className = `toast${error ? ' error' : ''}`;
+  node.hidden = false;
+  if (error) {
+    studio.rememberError(message);
+    node.innerHTML =
+      esc(errorText(message)) +
+      ` <button type="button" class="text-button" data-action="error-help">${t('Fehlerhilfe', 'Troubleshoot')}</button>`;
+  }
+  toastTimer = setTimeout(
+    () => {
+      node.hidden = true;
+    },
+    error ? 8000 : 3500
+  );
 }
-async function attempt(fn) { try { await fn(); } catch (error) { toast(error.message,true); } }
-function button(label, action, symbol = '', variant = 'primary', disabled = false, extra = '') { return `<button${/\btype=/.test(extra)?'':' type="button"'} class="button ${variant}" data-action="${action}"${disabled?' disabled':''} ${extra}>${symbol?icon(symbol):''}${label}</button>`; }
-function heading(title, subtitle, actions = '') { return `<div class="page-heading"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="heading-buttons">${actions}</div></div>`; }
-function toggle(name, checked, label, extra = '') { return `<label class="toggle"><input type="checkbox" name="${name}" aria-label="${esc(label)}" ${checked?'checked':''} ${extra}></label>`; }
-function row(title, description, control) { return `<div class="setting-row"><div><h3>${title}</h3><p>${description}</p></div>${control}</div>`; }
-function option(value, current, label) { return `<option value="${value}"${value===current?' selected':''}>${label}</option>`; }
-function field(label, id, control, help = '') { return `<div class="field"><label for="${id}">${label}</label>${control}${help?`<p class="field-help">${help}</p>`:''}</div>`; }
-function panel(title, content, actions = '') { return `<section class="panel"><div class="panel-heading"><h2>${title}</h2>${actions}</div>${content}</section>`; }
+async function attempt(fn) {
+  try {
+    await fn();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+function button(label, action, symbol = '', variant = 'primary', disabled = false, extra = '') {
+  return `<button${/\btype=/.test(extra) ? '' : ' type="button"'} class="button ${variant}" data-action="${action}"${disabled ? ' disabled' : ''} ${extra}>${symbol ? icon(symbol) : ''}${label}</button>`;
+}
+function heading(title, subtitle, actions = '') {
+  return `<div class="page-heading"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="heading-buttons">${actions}</div></div>`;
+}
+function toggle(name, checked, label, extra = '') {
+  return `<label class="toggle"><input type="checkbox" name="${name}" aria-label="${esc(label)}" ${checked ? 'checked' : ''} ${extra}></label>`;
+}
+function row(title, description, control) {
+  return `<div class="setting-row"><div><h3>${title}</h3><p>${description}</p></div>${control}</div>`;
+}
+function option(value, current, label) {
+  return `<option value="${value}"${value === current ? ' selected' : ''}>${label}</option>`;
+}
+function field(label, id, control, help = '') {
+  return `<div class="field"><label for="${id}">${label}</label>${control}${help ? `<p class="field-help">${help}</p>` : ''}</div>`;
+}
+function panel(title, content, actions = '') {
+  return `<section class="panel"><div class="panel-heading"><h2>${title}</h2>${actions}</div>${content}</section>`;
+}
 function applyAppearance() {
   const appearance = appState.config.appearance;
-  const resolved = appearance.theme === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light') : appearance.theme;
+  const resolved =
+    appearance.theme === 'system'
+      ? matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light'
+      : appearance.theme;
   const signature = `${appearance.language}:${resolved}:${appearance.fontScale}:${appearance.highContrast}`;
-  if(signature===lastAppearance)return;lastAppearance=signature;
-  document.documentElement.dataset.contrast=appearance.highContrast?'high':'normal';document.documentElement.lang=appearance.language;document.documentElement.dataset.theme=resolved;document.documentElement.dataset.scale=String(appearance.fontScale);
+  if (signature === lastAppearance) return;
+  lastAppearance = signature;
+  document.documentElement.dataset.contrast = appearance.highContrast ? 'high' : 'normal';
+  document.documentElement.lang = appearance.language;
+  document.documentElement.dataset.theme = resolved;
+  document.documentElement.dataset.scale = String(appearance.fontScale);
 }
 function renderChrome() {
   applyAppearance();
-  document.getElementById('brand-tagline').textContent = t('Dein Code. Gut aufgehoben.','Your code. Safely stored.');
-  document.getElementById('nav-caption').textContent = t('ARBEITSPLATZ','WORKSPACE');
-  const navigationKey=`${view}:${appState.config.appearance.language}:${appState.config.sources.length}`;
-  if(navigationKey!==lastNavigation){lastNavigation=navigationKey;
-  document.getElementById('navigation').innerHTML = Object.entries(labels()).map(([key,label]) => `<button class="nav-link ${view===key?'active':''}" data-view="${key}" ${view===key?'aria-current="page"':''}>${icon(({overview:'grid',sources:'folder',schedule:'clock',restore:'history',history:'file',settings:'settings',docs:'book'})[key])}<span>${label}</span>${key==='sources'&&appState.config.sources.length?`<span class="nav-count" aria-hidden="true">${appState.config.sources.length}</span>`:''}</button>`).join('');
+  document.getElementById('brand-tagline').textContent = t('Dein Code. Gut aufgehoben.', 'Your code. Safely stored.');
+  document.getElementById('nav-caption').textContent = t('ARBEITSPLATZ', 'WORKSPACE');
+  const navigationKey = `${view}:${appState.config.appearance.language}:${appState.config.sources.length}`;
+  if (navigationKey !== lastNavigation) {
+    lastNavigation = navigationKey;
+    document.getElementById('navigation').innerHTML = Object.entries(labels())
+      .map(
+        ([key, label]) =>
+          `<button class="nav-link ${view === key ? 'active' : ''}" data-view="${key}" ${view === key ? 'aria-current="page"' : ''}>${icon({ overview: 'grid', sources: 'folder', schedule: 'clock', restore: 'history', history: 'file', settings: 'settings', docs: 'book' }[key])}<span>${label}</span>${key === 'sources' && appState.config.sources.length ? `<span class="nav-count" aria-hidden="true">${appState.config.sources.length}</span>` : ''}</button>`
+      )
+      .join('');
   }
-  document.getElementById('sidebar-note').innerHTML = `<strong><span class="privacy-dot"></span>${t('Auf deinem Laufwerk.','On your own drive.')}</strong><p>${t('Keine Telemetrie. Kein eigener Cloud-Speicher. Deine Daten bleiben bei dir.','No telemetry. No backup cloud. Your data stays with you.')}</p>`;
-  document.getElementById('breadcrumb-root').textContent = t('Arbeitsplatz','Workspace'); document.getElementById('breadcrumb-current').textContent = labels()[view];
-  document.getElementById('runtime-status').innerHTML = `<span class="privacy-dot"></span>${appState.busy?t('Vorgang läuft','Operation running'):t('Bereit für deine Sicherung','Ready for your backup')}`;
+  document.getElementById('sidebar-note').innerHTML =
+    `<strong><span class="privacy-dot"></span>${t('Auf deinem Laufwerk.', 'On your own drive.')}</strong><p>${t('Keine Telemetrie. Kein eigener Cloud-Speicher. Deine Daten bleiben bei dir.', 'No telemetry. No backup cloud. Your data stays with you.')}</p>`;
+  document.getElementById('breadcrumb-root').textContent = t('Arbeitsplatz', 'Workspace');
+  document.getElementById('breadcrumb-current').textContent = labels()[view];
+  document.getElementById('runtime-status').innerHTML =
+    `<span class="privacy-dot"></span>${appState.busy ? t('Vorgang läuft', 'Operation running') : t('Bereit für deine Sicherung', 'Ready for your backup')}`;
   document.getElementById('version-label').textContent = `Git Cloner ${appState.update.currentVersion}`;
-  const states = {idle:t('Versionsprüfung bereit','Ready to check for updates'),checking:t('Version wird geprüft …','Checking version …'),current:t('Auf dem neuesten Stand','Up to date'),available:t('Neue Version verfügbar','New version available'),ignored:t('Diese Version übersprungen','This version is skipped'),unpublished:t('Noch kein offizielles Release','No official release yet'),waiting:t('Versionsprüfung wartet auf API-Limit','Version check waits for API limit'),error:t('Versionsprüfung fehlgeschlagen','Version check failed')};
+  const states = {
+    idle: t('Versionsprüfung bereit', 'Ready to check for updates'),
+    checking: t('Version wird geprüft …', 'Checking version …'),
+    current: t('Auf dem neuesten Stand', 'Up to date'),
+    available: t('Neue Version verfügbar', 'New version available'),
+    ignored: t('Diese Version übersprungen', 'This version is skipped'),
+    unpublished: t('Noch kein offizielles Release', 'No official release yet'),
+    waiting: t('Versionsprüfung wartet auf API-Limit', 'Version check waits for API limit'),
+    error: t('Versionsprüfung fehlgeschlagen', 'Version check failed')
+  };
   document.getElementById('version-status').textContent = states[appState.update.status];
-  document.getElementById('footer-privacy').innerHTML = `<span class="privacy-dot"></span>${t('Lokal gesichert · Direkt vom Git-Server','Stored locally · Directly from your Git server')}`;
-  document.getElementById('footer-schedule').textContent = `${t('Ortszeit','Local time')} · ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
+  document.getElementById('footer-privacy').innerHTML =
+    `<span class="privacy-dot"></span>${t('Lokal gesichert · Direkt vom Git-Server', 'Stored locally · Directly from your Git server')}`;
+  document.getElementById('footer-schedule').textContent =
+    `${t('Ortszeit', 'Local time')} · ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
   const update = appState.update;
-  const bannerKey=`${appState.config.appearance.language}:${update.status}:${update.currentVersion}:${update.latestVersion}`;
-  if(bannerKey!==lastBanner){lastBanner=bannerKey;
-  document.getElementById('update-banner').innerHTML = update.status === 'available' ? `<div class="update-banner"><div>${icon('download')}<span><strong>${t('Neue Version verfügbar','A new version is available')}: ${esc(update.latestVersion)}</strong><small>${t('Du verwendest','You are running')} ${esc(update.currentVersion)}. ${t('Die Installation erfolgt manuell.','Installation is manual.')}</small></span></div><div class="heading-buttons"><button class="button secondary" data-link="releases">${t('Release öffnen','Open release')}</button>${button(t('Diese Version überspringen','Skip this version'),'ignore-update','','secondary')}</div></div>` : '';
+  const bannerKey = `${appState.config.appearance.language}:${update.status}:${update.currentVersion}:${update.latestVersion}`;
+  if (bannerKey !== lastBanner) {
+    lastBanner = bannerKey;
+    document.getElementById('update-banner').innerHTML =
+      update.status === 'available'
+        ? `<div class="update-banner"><div>${icon('download')}<span><strong>${t('Neue Version verfügbar', 'A new version is available')}: ${esc(update.latestVersion)}</strong><small>${t('Du verwendest', 'You are running')} ${esc(update.currentVersion)}. ${t('Die Installation erfolgt manuell.', 'Installation is manual.')}</small></span></div><div class="heading-buttons"><button class="button secondary" data-link="releases">${t('Release öffnen', 'Open release')}</button>${button(t('Diese Version überspringen', 'Skip this version'), 'ignore-update', '', 'secondary')}</div></div>`
+        : '';
   }
 }
 function statusLabel(status) {
-  const values = {cloned:t('Gesichert','Backed up'),updated:t('Aktualisiert','Updated'),unchanged:t('Aktuell','Current'),repaired:t('Repariert','Repaired'),error:t('Fehler','Error'),waiting:t('Wartet auf Speicher','Waiting for space'),empty:t('Leer','Empty')};
-  return `<span class="label ${status==='error'?'error':status==='empty'?'neutral':''}">${esc(values[status]||status)}</span>`;
+  const values = {
+    cloned: t('Gesichert', 'Backed up'),
+    updated: t('Aktualisiert', 'Updated'),
+    unchanged: t('Aktuell', 'Current'),
+    repaired: t('Repariert', 'Repaired'),
+    error: t('Fehler', 'Error'),
+    waiting: t('Wartet auf Speicher', 'Waiting for space'),
+    empty: t('Leer', 'Empty')
+  };
+  return `<span class="label ${status === 'error' ? 'error' : status === 'empty' ? 'neutral' : ''}">${esc(values[status] || status)}</span>`;
 }
-function progressMarkup(){ return features.progressMarkup(); }
-function noticeMarkup(){return appState.notice?`<div class="notice">${esc(errorText(appState.notice))}${!appState.gitVersion?'<button class="text-button" data-link="git">Git herunterladen / Get Git</button>':''}</div>`:'';}
-function updateOverview(changed){
-  features.updateProgress();features.updateMetrics();
-  const notice=document.getElementById('overview-notice');if(notice&&notice.innerHTML!==noticeMarkup())notice.innerHTML=noticeMarkup();
-  const count=document.getElementById('stat-repo-count');if(count)count.textContent=new Set(appState.repositories.filter(r=>r.commit).map(r=>r.fullName)).size;
-  const next=document.getElementById('stat-next');if(next)next.textContent=appState.nextRun?date(appState.nextRun,true):'—';
-  const last=document.getElementById('stat-last');if(last)last.textContent=appState.history[0]?date(appState.history[0].finishedAt,true):'—';
-  const detail=document.getElementById('stat-last-detail');if(detail)detail.textContent=appState.history[0]?`${appState.history[0].errorCount??appState.history[0].results.filter(r=>r.status==='error').length} ${t('Fehler','errors')}`:t('Bereit, wenn du es bist','Ready when you are');
-  for(const button of document.querySelectorAll('#main-content [data-action="backup"]'))button.disabled=appState.busy||Boolean(appState.queue)||!appState.config.sources.some(s=>s.enabled);
-  for(const button of document.querySelectorAll('#main-content [data-action="add-source"]'))button.disabled=appState.busy||Boolean(appState.queue);
-  for(const button of document.querySelectorAll('#main-content [data-verify],#main-content [data-restore],#main-content [data-restore-releases],#main-content [data-changes]'))button.disabled=appState.busy;
-  if(changed){const list=document.getElementById('repository-list');if(list)list.innerHTML=repositoryTable();else if(appState.repositories.length)renderView();}
-  const signature=`${appState.history.length}:${appState.history[0]?.finishedAt}`;
-  if(signature!==lastHistory){lastHistory=signature;const history=document.getElementById('overview-history');if(history)history.innerHTML=appState.history.length?panel(`${icon('history')} ${t('Letzte Durchläufe','Recent runs')}`,historyList(),button(t('Geschwärztes Protokoll exportieren','Export redacted log'),'export-logs','download','secondary')):'';}
+function progressMarkup() {
+  return features.progressMarkup();
+}
+function noticeMarkup() {
+  return appState.notice
+    ? `<div class="notice">${esc(errorText(appState.notice))}${!appState.gitVersion ? '<button class="text-button" data-link="git">Git herunterladen / Get Git</button>' : ''}</div>`
+    : '';
+}
+function updateOverview(changed) {
+  features.updateProgress();
+  features.updateMetrics();
+  const notice = document.getElementById('overview-notice');
+  if (notice && notice.innerHTML !== noticeMarkup()) notice.innerHTML = noticeMarkup();
+  const count = document.getElementById('stat-repo-count');
+  if (count) count.textContent = new Set(appState.repositories.filter(r => r.commit).map(r => r.fullName)).size;
+  const next = document.getElementById('stat-next');
+  if (next) next.textContent = appState.nextRun ? date(appState.nextRun, true) : '—';
+  const last = document.getElementById('stat-last');
+  if (last) last.textContent = appState.history[0] ? date(appState.history[0].finishedAt, true) : '—';
+  const detail = document.getElementById('stat-last-detail');
+  if (detail)
+    detail.textContent = appState.history[0]
+      ? `${appState.history[0].errorCount ?? appState.history[0].results.filter(r => r.status === 'error').length} ${t('Fehler', 'errors')}`
+      : t('Bereit, wenn du es bist', 'Ready when you are');
+  for (const button of document.querySelectorAll('#main-content [data-action="backup"]'))
+    button.disabled = appState.busy || Boolean(appState.queue) || !appState.config.sources.some(s => s.enabled);
+  for (const button of document.querySelectorAll('#main-content [data-action="add-source"]'))
+    button.disabled = appState.busy || Boolean(appState.queue);
+  for (const button of document.querySelectorAll(
+    '#main-content [data-verify],#main-content [data-restore],#main-content [data-restore-releases],#main-content [data-changes]'
+  ))
+    button.disabled = appState.busy;
+  if (changed) {
+    const list = document.getElementById('repository-list');
+    if (list) list.innerHTML = repositoryTable();
+    else if (appState.repositories.length) renderView();
+  }
+  const signature = `${appState.history.length}:${appState.history[0]?.finishedAt}`;
+  if (signature !== lastHistory) {
+    lastHistory = signature;
+    const history = document.getElementById('overview-history');
+    if (history)
+      history.innerHTML = appState.history.length
+        ? panel(
+            `${icon('history')} ${t('Letzte Durchläufe', 'Recent runs')}`,
+            historyList(),
+            button(
+              t('Geschwärztes Protokoll exportieren', 'Export redacted log'),
+              'export-logs',
+              'download',
+              'secondary'
+            )
+          )
+        : '';
+  }
 }
 function records() {
-  return appState.repositories.filter(record => (!query || `${record.fullName} ${record.destination} ${record.provider||'github'} ${record.server||'github.com'}`.toLowerCase().includes(query.toLowerCase())) && (statusFilter==='all' || (statusFilter==='encrypted'?record.encrypted:statusFilter==='mirror'?record.mode==='mirror':statusFilter==='error'?(record.status==='error'||record.verificationStatus==='error'||record.installation?.status==='error'||record.installation?.shortcuts?.status==='error'):record.status===statusFilter))).sort((a,b)=>a.fullName.localeCompare(b.fullName));
+  return appState.repositories
+    .filter(
+      record =>
+        (!query ||
+          `${record.fullName} ${record.destination} ${record.provider || 'github'} ${record.server || 'github.com'}`
+            .toLowerCase()
+            .includes(query.toLowerCase())) &&
+        (statusFilter === 'all' ||
+          (statusFilter === 'encrypted'
+            ? record.encrypted
+            : statusFilter === 'mirror'
+              ? record.mode === 'mirror'
+              : statusFilter === 'error'
+                ? record.status === 'error' ||
+                  record.verificationStatus === 'error' ||
+                  record.installation?.status === 'error' ||
+                  record.installation?.shortcuts?.status === 'error'
+                : record.status === statusFilter))
+    )
+    .sort((a, b) => a.fullName.localeCompare(b.fullName));
 }
 function repositoryTable() {
-  const all = records(), size = 75; pageIndex = Math.min(pageIndex,Math.max(0,Math.ceil(all.length/size)-1));
-  const visible = all.slice(pageIndex*size,(pageIndex+1)*size);
-  if (!visible.length) return `<div class="empty-small">${t('Keine passenden Sicherungen gefunden.','No matching backups found.')}</div>`;
-  return `<div class="table-wrap"><table class="table"><thead><tr><th scope="col">${t('REPOSITORY / SPEICHERORT','REPOSITORY / DESTINATION')}</th><th scope="col">STATUS</th><th scope="col">${t('PRÜFUNG','CHECKED')}</th><th scope="col">${t('AKTIONEN','ACTIONS')}</th></tr></thead><tbody>${visible.map(record=>`<tr><td><div class="repo-cell"><span class="repo-avatar">${icon(record.encrypted?'shield':'branch')}</span><div><div class="repo-name">${esc(record.fullName)}</div><div class="repo-detail">${esc(record.destination)}</div><div class="repo-detail">${record.encrypted?t('Verschlüsselt · ','Encrypted · '):''}${record.mode==='mirror'?'Mirror':t('Arbeitskopie','Working copy')}${record.commit?` · ${esc(record.commit.slice(0,7))}`:''}</div></div></div>${record.releaseInfo?`<div class="repo-detail">${esc(record.releaseInfo.tag)} · ${record.releaseInfo.fileCount} ${t('Release-Dateien','release assets')}${record.releaseInfo.scope==='system'?` · ${esc(({darwin:'macOS',win32:'Windows',linux:'Linux'})[record.releaseInfo.platform]||record.releaseInfo.platform)}`:''}</div>${record.releaseInfo.fileCount?`<div class="repo-detail release-location">${record.encrypted?t('Im verschlüsselten Archiv · über Wiederherstellung öffnen','Inside the encrypted archive · open through Restore'):record.releaseInfo.assetDirectory?esc(record.releaseInfo.assetDirectory)+'/':t('Ältere Ablage · mit der nächsten Prüfung in den sichtbaren Ordner übernehmen','Legacy location · moved to the visible folder on the next check')}</div>`:''}`:''}${record.message?`<div class="inline-error">${esc(errorText(record.message))}</div>`:''}${record.message?studio.helpButton(record):''}${studio.sourceBadge(record)}${record.warning?`<div class="inline-warning">${esc(record.warning)}</div>`:''}${record.installation?`<div class="repo-detail program-status ${record.installation.status==='error'?'inline-error':''}">${record.installation.status==='error'?t('Programminstallation fehlgeschlagen','Program installation failed'):record.installation.status==='waiting'?t('Programminstallation wartet','Program installation waiting'):record.installation.programs?.length>1?`${record.installation.programs.length} ${t('Programme installiert','programs installed')}`:t('Programm installiert','Program installed')} ${esc(record.installation.tag||'')}${record.installation.destination?` · ${esc(record.installation.destination)}`:''}${record.installation.destination?` <button class="text-button" data-open-program="${esc(record.id)}" aria-label="${t('Programmordner öffnen','Open program folder')}">${icon('external')}</button>`:''}</div>`:''}</td><td>${statusLabel(record.status)}${record.verificationStatus==='ok'?`<small class="verified">✓ ${t('Geprüft','Verified')}</small>`:record.verificationStatus==='error'?`<small class="inline-error">${t('Integrität fehlerhaft','Integrity failed')}</small>`:''}</td><td class="nowrap">${date(record.checkedAt)}</td><td><div class="actions"><button class="icon-button" data-open-source="${esc(record.id)}" aria-label="${t('Ordner öffnen','Open folder')}">${icon('folder')}</button><button class="icon-button" data-changes="${esc(record.id)}" aria-label="${t('Änderungen ansehen','Review changes')}"${appState.busy||!record.commit?' disabled':''}>${icon('file')}</button><button class="icon-button" data-verify="${esc(record.id)}" aria-label="${t('Integrität prüfen','Verify integrity')}"${appState.busy?' disabled':''}>${icon('shield')}</button>${record.releaseInfo?.fileCount?`${!record.encrypted&&record.releaseInfo.assetDirectory?`<button class="icon-button" data-open-releases="${esc(record.id)}" aria-label="${t('Release-Ordner öffnen','Open release folder')}" title="${t('Release-Ordner öffnen','Open release folder')}">${icon('external')}</button>`:''}<button class="icon-button" data-restore-releases="${esc(record.id)}" aria-label="${t('Release-Dateien wiederherstellen','Restore release assets')}"${appState.busy?' disabled':''}>${icon('download')}</button>`:''}<button class="icon-button" data-restore="${esc(record.id)}" aria-label="${t('Diese Sicherung wiederherstellen','Restore this backup')}"${appState.busy?' disabled':''}>${icon('history')}</button></div></td></tr>`).join('')}</tbody></table></div><div class="pagination"><span>${all.length} ${t('Sicherungen','backups')}</span><div>${button('‹','previous-page','','secondary',pageIndex===0)}<span>${pageIndex+1} / ${Math.ceil(all.length/size)}</span>${button('›','next-page','','secondary',(pageIndex+1)*size>=all.length)}</div></div>`;
+  const all = records(),
+    size = 75;
+  pageIndex = Math.min(pageIndex, Math.max(0, Math.ceil(all.length / size) - 1));
+  const visible = all.slice(pageIndex * size, (pageIndex + 1) * size);
+  if (!visible.length)
+    return `<div class="empty-small">${t('Keine passenden Sicherungen gefunden.', 'No matching backups found.')}</div>`;
+  return `<div class="table-wrap"><table class="table"><thead><tr><th scope="col">${t('REPOSITORY / SPEICHERORT', 'REPOSITORY / DESTINATION')}</th><th scope="col">STATUS</th><th scope="col">${t('PRÜFUNG', 'CHECKED')}</th><th scope="col">${t('AKTIONEN', 'ACTIONS')}</th></tr></thead><tbody>${visible.map(record => `<tr><td><div class="repo-cell"><span class="repo-avatar">${icon(record.encrypted ? 'shield' : 'branch')}</span><div><div class="repo-name">${esc(record.fullName)}</div><div class="repo-detail">${esc(record.destination)}</div><div class="repo-detail">${record.encrypted ? t('Verschlüsselt · ', 'Encrypted · ') : ''}${record.mode === 'mirror' ? 'Mirror' : t('Arbeitskopie', 'Working copy')}${record.commit ? ` · ${esc(record.commit.slice(0, 7))}` : ''}</div></div></div>${record.releaseInfo ? `<div class="repo-detail">${esc(record.releaseInfo.tag)} · ${record.releaseInfo.fileCount} ${t('Release-Dateien', 'release assets')}${record.releaseInfo.scope === 'system' ? ` · ${esc({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' }[record.releaseInfo.platform] || record.releaseInfo.platform)}` : ''}</div>${record.releaseInfo.fileCount ? `<div class="repo-detail release-location">${record.encrypted ? t('Im verschlüsselten Archiv · über Wiederherstellung öffnen', 'Inside the encrypted archive · open through Restore') : record.releaseInfo.assetDirectory ? esc(record.releaseInfo.assetDirectory) + '/' : t('Ältere Ablage · mit der nächsten Prüfung in den sichtbaren Ordner übernehmen', 'Legacy location · moved to the visible folder on the next check')}</div>` : ''}` : ''}${record.message ? `<div class="inline-error">${esc(errorText(record.message))}</div>` : ''}${record.message ? studio.helpButton(record) : ''}${studio.sourceBadge(record)}${record.warning ? `<div class="inline-warning">${esc(record.warning)}</div>` : ''}${record.installation ? `<div class="repo-detail program-status ${record.installation.status === 'error' ? 'inline-error' : ''}">${record.installation.status === 'error' ? t('Programminstallation fehlgeschlagen', 'Program installation failed') : record.installation.status === 'waiting' ? t('Programminstallation wartet', 'Program installation waiting') : record.installation.programs?.length > 1 ? `${record.installation.programs.length} ${t('Programme installiert', 'programs installed')}` : t('Programm installiert', 'Program installed')} ${esc(record.installation.tag || '')}${record.installation.destination ? ` · ${esc(record.installation.destination)}` : ''}${record.installation.destination ? ` <button class="text-button" data-open-program="${esc(record.id)}" aria-label="${t('Programmordner öffnen', 'Open program folder')}">${icon('external')}</button>` : ''}</div>` : ''}</td><td>${statusLabel(record.status)}${record.verificationStatus === 'ok' ? `<small class="verified">✓ ${t('Geprüft', 'Verified')}</small>` : record.verificationStatus === 'error' ? `<small class="inline-error">${t('Integrität fehlerhaft', 'Integrity failed')}</small>` : ''}</td><td class="nowrap">${date(record.checkedAt)}</td><td><div class="actions"><button class="icon-button" data-open-source="${esc(record.id)}" aria-label="${t('Ordner öffnen', 'Open folder')}">${icon('folder')}</button><button class="icon-button" data-changes="${esc(record.id)}" aria-label="${t('Änderungen ansehen', 'Review changes')}"${appState.busy || !record.commit ? ' disabled' : ''}>${icon('file')}</button><button class="icon-button" data-verify="${esc(record.id)}" aria-label="${t('Integrität prüfen', 'Verify integrity')}"${appState.busy ? ' disabled' : ''}>${icon('shield')}</button>${record.releaseInfo?.fileCount ? `${!record.encrypted && record.releaseInfo.assetDirectory ? `<button class="icon-button" data-open-releases="${esc(record.id)}" aria-label="${t('Release-Ordner öffnen', 'Open release folder')}" title="${t('Release-Ordner öffnen', 'Open release folder')}">${icon('external')}</button>` : ''}<button class="icon-button" data-restore-releases="${esc(record.id)}" aria-label="${t('Release-Dateien wiederherstellen', 'Restore release assets')}"${appState.busy ? ' disabled' : ''}>${icon('download')}</button>` : ''}<button class="icon-button" data-restore="${esc(record.id)}" aria-label="${t('Diese Sicherung wiederherstellen', 'Restore this backup')}"${appState.busy ? ' disabled' : ''}>${icon('history')}</button></div></td></tr>`).join('')}</tbody></table></div><div class="pagination"><span>${all.length} ${t('Sicherungen', 'backups')}</span><div>${button('‹', 'previous-page', '', 'secondary', pageIndex === 0)}<span>${pageIndex + 1} / ${Math.ceil(all.length / size)}</span>${button('›', 'next-page', '', 'secondary', (pageIndex + 1) * size >= all.length)}</div></div>`;
 }
 function historyList() {
-  return appState.history.slice(0,10).map(run=>{
-    const errors = run.errorCount ?? run.results.filter(r=>r.status==='error').length;
-    return `<div class="history-item"><div class="history-header"><strong>${date(run.finishedAt)} · ${run.trigger==='schedule'?t('Zeitplan','Scheduled'):run.trigger==='drive'?t('Laufwerk verbunden','Drive connected'):t('Manuell','Manual')}</strong><span class="label ${errors?'error':''}">${run.resultCount??run.results.length} ${t('Ergebnisse','results')} · ${errors} ${t('Fehler','errors')}</span></div><details><summary>${t('Details anzeigen','Show details')}</summary>${run.results.map(r=>`<div>${esc(r.fullName)} · ${r.message?esc(errorText(r.message)):statusLabel(r.status)}</div>`).join('')}${run.truncatedResults?`<p>${run.truncatedResults} ${t('weitere Ergebnisse: siehe Statusübersicht.','additional results: see the status overview.')}</p>`:''}</details></div>`;
-  }).join('');
+  return appState.history
+    .slice(0, 10)
+    .map(run => {
+      const errors = run.errorCount ?? run.results.filter(r => r.status === 'error').length;
+      return `<div class="history-item"><div class="history-header"><strong>${date(run.finishedAt)} · ${run.trigger === 'schedule' ? t('Zeitplan', 'Scheduled') : run.trigger === 'drive' ? t('Laufwerk verbunden', 'Drive connected') : t('Manuell', 'Manual')}</strong><span class="label ${errors ? 'error' : ''}">${run.resultCount ?? run.results.length} ${t('Ergebnisse', 'results')} · ${errors} ${t('Fehler', 'errors')}</span></div><details><summary>${t('Details anzeigen', 'Show details')}</summary>${run.results.map(r => `<div>${esc(r.fullName)} · ${r.message ? esc(errorText(r.message)) : statusLabel(r.status)}</div>`).join('')}${run.truncatedResults ? `<p>${run.truncatedResults} ${t('weitere Ergebnisse: siehe Statusübersicht.', 'additional results: see the status overview.')}</p>` : ''}</details></div>`;
+    })
+    .join('');
 }
 function overview() {
-  const active = appState.config.sources.filter(s=>s.enabled), last=appState.history[0], next=appState.nextRun;
-  return heading(t('Alles an einem sicheren Ort.','Everything in one safe place.'),t('Deine Repositories. Automatisch gesichert. Auf deinem eigenen Laufwerk.','Your repositories. Automatically backed up. On your own drive.'),button(t('Jetzt prüfen','Check now'),'backup','refresh','secondary',!active.length||appState.busy||Boolean(appState.queue))+button(t('Quelle hinzufügen','Add source'),'add-source','plus','primary',appState.busy||Boolean(appState.queue))+button(t('Probelauf','Dry run'),'preview-current','','secondary',!active.length||appState.busy))+
-    `<div id="overview-notice">${noticeMarkup()}</div>`+
-    `<div class="stats"><div class="stat"><span class="stat-label">${t('Gesicherte Repositories','Backed-up repositories')}</span><span class="stat-icon">${icon('folder')}</span><strong class="stat-value" id="stat-repo-count">${new Set(appState.repositories.filter(r=>r.commit).map(r=>r.fullName)).size}</strong><small id="stat-source-detail">${active.length} ${t('aktive Quellen','active sources')} · ${appState.repositories.filter(r=>r.commit).length} ${t('Ziele','copies')}</small></div><div class="stat"><span class="stat-label">${t('Nächste Prüfung','Next check')}</span><span class="stat-icon">${icon('clock')}</span><strong class="stat-value" id="stat-next">${next?date(next,true):'—'}</strong><small id="stat-next-detail">${next?date(next):t('Wartet auf deine erste Quelle','Waiting for your first source')}</small></div><div class="stat"><span class="stat-label">${t('Letzte Prüfung','Last check')}</span><span class="stat-icon">${icon('shield')}</span><strong class="stat-value" id="stat-last">${last?date(last.finishedAt,true):'—'}</strong><small id="stat-last-detail">${last?`${last.errorCount??last.results.filter(r=>r.status==='error').length} ${t('Fehler','errors')}`:t('Bereit, wenn du es bist','Ready when you are')}</small></div></div>`+
-    panel(`${icon('folder')} ${t('Deine Repositories','Your repositories')}`, `<div id="backup-progress">${progressMarkup()}</div>${appState.repositories.length?`<div class="list-toolbar"><input id="repository-search" type="search" aria-label="${t('Sicherungen durchsuchen','Search backups')}" placeholder="${t('Repository oder Speicherort suchen …','Search repository or destination …')}" value="${esc(query)}"><select id="repository-filter" aria-label="${t('Status filtern','Filter status')}">${option('all',statusFilter,t('Alle Sicherungen','All backups'))}${option('error',statusFilter,t('Mit Fehlern','With errors'))}${option('unchanged',statusFilter,t('Aktuell','Current'))}${option('mirror',statusFilter,'Mirror')}${option('encrypted',statusFilter,t('Verschlüsselt','Encrypted'))}</select></div><div id="repository-list">${repositoryTable()}</div>`:`<div class="empty-state"><div class="empty-illustration">${icon('folder')}</div><h3>${t('Dein Code verdient einen sicheren Platz.','Your code deserves a safe place.')}</h3><p>${t('Füge ein GitHub-Konto oder einzelne Repositories hinzu und wähle einen Ordner auf deiner Festplatte.','Add a GitHub account or individual repositories and choose a folder on your drive.')}</p>${button(t('Einrichtung starten','Start setup'),'setup-wizard','plus','primary',appState.busy||Boolean(appState.queue))}</div>`}<div class="panel-bottom">${icon('shield')}${t('Ein erfolgreicher Stand je Ziel. Austausch erst nach erfolgreicher Prüfung.','One successful version per destination. Replaced only after verification.')}</div>`, `<span class="label neutral">${t('Nur der aktuelle Stand','Latest backup only')}</span>`)+
-    `<div class="two-columns">${panel(`${icon('clock')} ${t('Dein Sicherungsplan','Your backup schedule')}`,`<div class="panel-body"><h3>${appState.config.schedule.enabled?`${appState.config.schedule.checksPerDay} × ${t('täglich','daily')}`:t('Pausiert','Paused')}</h3><div class="times-tags">${appState.config.schedule.times.map(time=>`<span class="time-tag">${icon('clock')}${time}</span>`).join('')}</div>${enhancements.scheduleNotice()}<p class="field-help">${appState.config.systemSchedule?t('System-Zeitplanung aktiv','Independent OS scheduling enabled'):t('Im Hintergrund oder bei geöffneter App','While the app is open or running in the background')}</p></div>`,`<button class="text-button" data-view="schedule">${t('Anpassen','Edit')} ${icon('arrow')}</button>`)}${panel(`${icon('info')} ${t('Gut zu wissen','Good to know')}`,`<div class="panel-body"><h3>${t('Festplatte dran. Alles im Blick.','Plug in your drive. Stay informed.')}</h3><p>${t('Ein fehlendes Laufwerk bleibt unangetastet. Prüfe Sicherungen regelmäßig und stelle sie bei Bedarf an einem neuen Ort wieder her.','An unavailable drive is left untouched. Verify backups regularly and restore to a new location when needed.')}</p><button class="text-button" data-view="restore">${t('Zur Wiederherstellung','Open restore assistant')} ${icon('arrow')}</button></div>`)}</div>`+
-    `<div id="overview-history">${appState.history.length?panel(`${icon('history')} ${t('Letzte Durchläufe','Recent runs')}`,historyList(),button(t('Geschwärztes Protokoll exportieren','Export redacted log'),'export-logs','download','secondary')):''}</div>`+features.metricsMarkup();
+  const active = appState.config.sources.filter(s => s.enabled),
+    last = appState.history[0],
+    next = appState.nextRun;
+  return (
+    heading(
+      t('Alles an einem sicheren Ort.', 'Everything in one safe place.'),
+      t(
+        'Deine Repositories. Automatisch gesichert. Auf deinem eigenen Laufwerk.',
+        'Your repositories. Automatically backed up. On your own drive.'
+      ),
+      button(
+        t('Jetzt prüfen', 'Check now'),
+        'backup',
+        'refresh',
+        'secondary',
+        !active.length || appState.busy || Boolean(appState.queue)
+      ) +
+        button(
+          t('Quelle hinzufügen', 'Add source'),
+          'add-source',
+          'plus',
+          'primary',
+          appState.busy || Boolean(appState.queue)
+        ) +
+        button(t('Probelauf', 'Dry run'), 'preview-current', '', 'secondary', !active.length || appState.busy)
+    ) +
+    `<div id="overview-notice">${noticeMarkup()}</div>` +
+    `<div class="stats"><div class="stat"><span class="stat-label">${t('Gesicherte Repositories', 'Backed-up repositories')}</span><span class="stat-icon">${icon('folder')}</span><strong class="stat-value" id="stat-repo-count">${new Set(appState.repositories.filter(r => r.commit).map(r => r.fullName)).size}</strong><small id="stat-source-detail">${active.length} ${t('aktive Quellen', 'active sources')} · ${appState.repositories.filter(r => r.commit).length} ${t('Ziele', 'copies')}</small></div><div class="stat"><span class="stat-label">${t('Nächste Prüfung', 'Next check')}</span><span class="stat-icon">${icon('clock')}</span><strong class="stat-value" id="stat-next">${next ? date(next, true) : '—'}</strong><small id="stat-next-detail">${next ? date(next) : t('Wartet auf deine erste Quelle', 'Waiting for your first source')}</small></div><div class="stat"><span class="stat-label">${t('Letzte Prüfung', 'Last check')}</span><span class="stat-icon">${icon('shield')}</span><strong class="stat-value" id="stat-last">${last ? date(last.finishedAt, true) : '—'}</strong><small id="stat-last-detail">${last ? `${last.errorCount ?? last.results.filter(r => r.status === 'error').length} ${t('Fehler', 'errors')}` : t('Bereit, wenn du es bist', 'Ready when you are')}</small></div></div>` +
+    panel(
+      `${icon('folder')} ${t('Deine Repositories', 'Your repositories')}`,
+      `<div id="backup-progress">${progressMarkup()}</div>${appState.repositories.length ? `<div class="list-toolbar"><input id="repository-search" type="search" aria-label="${t('Sicherungen durchsuchen', 'Search backups')}" placeholder="${t('Repository oder Speicherort suchen …', 'Search repository or destination …')}" value="${esc(query)}"><select id="repository-filter" aria-label="${t('Status filtern', 'Filter status')}">${option('all', statusFilter, t('Alle Sicherungen', 'All backups'))}${option('error', statusFilter, t('Mit Fehlern', 'With errors'))}${option('unchanged', statusFilter, t('Aktuell', 'Current'))}${option('mirror', statusFilter, 'Mirror')}${option('encrypted', statusFilter, t('Verschlüsselt', 'Encrypted'))}</select></div><div id="repository-list">${repositoryTable()}</div>` : `<div class="empty-state"><div class="empty-illustration">${icon('folder')}</div><h3>${t('Dein Code verdient einen sicheren Platz.', 'Your code deserves a safe place.')}</h3><p>${t('Füge ein GitHub-Konto oder einzelne Repositories hinzu und wähle einen Ordner auf deiner Festplatte.', 'Add a GitHub account or individual repositories and choose a folder on your drive.')}</p>${button(t('Einrichtung starten', 'Start setup'), 'setup-wizard', 'plus', 'primary', appState.busy || Boolean(appState.queue))}</div>`}<div class="panel-bottom">${icon('shield')}${t('Ein erfolgreicher Stand je Ziel. Austausch erst nach erfolgreicher Prüfung.', 'One successful version per destination. Replaced only after verification.')}</div>`,
+      `<span class="label neutral">${t('Nur der aktuelle Stand', 'Latest backup only')}</span>`
+    ) +
+    `<div class="two-columns">${panel(`${icon('clock')} ${t('Dein Sicherungsplan', 'Your backup schedule')}`, `<div class="panel-body"><h3>${appState.config.schedule.enabled ? `${appState.config.schedule.checksPerDay} × ${t('täglich', 'daily')}` : t('Pausiert', 'Paused')}</h3><div class="times-tags">${appState.config.schedule.times.map(time => `<span class="time-tag">${icon('clock')}${time}</span>`).join('')}</div>${enhancements.scheduleNotice()}<p class="field-help">${appState.config.systemSchedule ? t('System-Zeitplanung aktiv', 'Independent OS scheduling enabled') : t('Im Hintergrund oder bei geöffneter App', 'While the app is open or running in the background')}</p></div>`, `<button class="text-button" data-view="schedule">${t('Anpassen', 'Edit')} ${icon('arrow')}</button>`)}${panel(`${icon('info')} ${t('Gut zu wissen', 'Good to know')}`, `<div class="panel-body"><h3>${t('Festplatte dran. Alles im Blick.', 'Plug in your drive. Stay informed.')}</h3><p>${t('Ein fehlendes Laufwerk bleibt unangetastet. Prüfe Sicherungen regelmäßig und stelle sie bei Bedarf an einem neuen Ort wieder her.', 'An unavailable drive is left untouched. Verify backups regularly and restore to a new location when needed.')}</p><button class="text-button" data-view="restore">${t('Zur Wiederherstellung', 'Open restore assistant')} ${icon('arrow')}</button></div>`)}</div>` +
+    `<div id="overview-history">${appState.history.length ? panel(`${icon('history')} ${t('Letzte Durchläufe', 'Recent runs')}`, historyList(), button(t('Geschwärztes Protokoll exportieren', 'Export redacted log'), 'export-logs', 'download', 'secondary')) : ''}</div>` +
+    features.metricsMarkup()
+  );
 }
-function sourcesView() { return workspace.view(); }
-function timeInputs(times) { return times.map((time,i)=>field(`${t('Prüfung','Check')} ${String(i+1).padStart(2,'0')}`,`time-${i}`,`<input type="time" id="time-${i}" data-time-index="${i}" value="${time}" required>`)).join(''); }
+function sourcesView() {
+  return workspace.view();
+}
+function timeInputs(times) {
+  return times
+    .map((time, i) =>
+      field(
+        `${t('Prüfung', 'Check')} ${String(i + 1).padStart(2, '0')}`,
+        `time-${i}`,
+        `<input type="time" id="time-${i}" data-time-index="${i}" value="${time}" required>`
+      )
+    )
+    .join('');
+}
 function scheduleView() {
-  return heading(t('Dein Rhythmus. Dein Zeitplan.','Your rhythm. Your schedule.'),t('Prüfzeiten, Laufwerkserkennung und Hintergrundbetrieb an einem Ort.','Check times, drive detection and background operation in one place.'))+
-    `<form id="schedule-form">${panel(`${icon('clock')} ${t('Automatische Prüfungen','Automatic checks')}`,`<div class="panel-body"><div class="schedule-form-grid"><div><div class="field-heading">${t('Prüfungen pro Tag','Checks per day')}</div>${field(t('Häufigkeit','Frequency'),'checks-per-day',`<select id="checks-per-day">${Array.from({length:24},(_,i)=>option(String(i+1),String(draft.schedule.checksPerDay),`${i+1} × ${t('täglich','daily')}`)).join('')}</select>`)}<p class="field-help">${t('Für jede Prüfung eine eigene Uhrzeit.','Choose a separate time for each check.')}</p></div><div><div class="field-heading">${t('Prüfuhrzeiten','Check times')}</div><div class="time-inputs" id="time-inputs">${timeInputs(draft.schedule.times)}</div></div></div><div class="info-box">${icon('clock')}<p>${t('Lokale Zeitzone','Local time zone')}: <strong>${esc(Intl.DateTimeFormat().resolvedOptions().timeZone)}</strong>. ${t('Nach dem Aufwachen wird die letzte verpasste Prüfung des aktuellen Tages nachgeholt. Der Rechner muss wach sein.','After waking up, the latest missed check of the current day is caught up. The computer must be awake.')}</p></div></div>`,toggle('schedule-enabled',draft.schedule.enabled,t('Automatische Prüfungen aktivieren','Enable automatic checks')))}
-    ${panel(t('Hintergrund und Laufwerke','Background and drives'),
-      row(t('Auch im Hintergrund weitermachen','Keep running in the background'),t('Beim Schließen bleibt die App im Infobereich oder in der Menüleiste aktiv.','Closing the window keeps the app running in the system tray or menu bar.'),toggle('closeToTray',draft.closeToTray,t('Beim Schließen im Hintergrund weiterlaufen','Keep running when closed')))+
-      row(t('Beim Verbinden eines Laufwerks prüfen','Check when a drive connects'),t('Erkennt konfigurierte Laufwerke innerhalb von etwa 30 Sekunden. Mehrere Quellen auf derselben Platte werden gemeinsam geprüft.','Detects configured drives within about 30 seconds. Shared destination folders are checked together.'),toggle('onDriveConnect',draft.onDriveConnect,t('Beim Verbinden prüfen','Check on drive connection')))+
-      row(t('Unabhängige System-Zeitplanung','Independent OS scheduling'),t('Startet Prüfungen auch bei beendeter GUI: launchd, Aufgabenplanung oder systemd. Nur für installierte native Pakete.','Runs checks with the GUI closed using launchd, Task Scheduler or systemd. Available in installed native packages.'),toggle('systemSchedule',draft.systemSchedule,t('Unabhängige Zeitplanung aktivieren','Enable independent scheduling'),appState.nativeScheduleSupported?'':'disabled')))}
-    ${enhancements.driveSettings()}<div class="save-row"><span>${t('Durchläufe sind gegen parallele Ausführung gesperrt.','Concurrent runs are prevented by a process lock.')}</span><button type="submit" class="button primary"${appState.busy?' disabled':''}>${icon('check')}${t('Zeitplan speichern','Save schedule')}</button></div></form>`;
+  return (
+    heading(
+      t('Dein Rhythmus. Dein Zeitplan.', 'Your rhythm. Your schedule.'),
+      t(
+        'Prüfzeiten, Laufwerkserkennung und Hintergrundbetrieb an einem Ort.',
+        'Check times, drive detection and background operation in one place.'
+      )
+    ) +
+    `<form id="schedule-form">${panel(`${icon('clock')} ${t('Automatische Prüfungen', 'Automatic checks')}`, `<div class="panel-body"><div class="schedule-form-grid"><div><div class="field-heading">${t('Prüfungen pro Tag', 'Checks per day')}</div>${field(t('Häufigkeit', 'Frequency'), 'checks-per-day', `<select id="checks-per-day">${Array.from({ length: 24 }, (_, i) => option(String(i + 1), String(draft.schedule.checksPerDay), `${i + 1} × ${t('täglich', 'daily')}`)).join('')}</select>`)}<p class="field-help">${t('Für jede Prüfung eine eigene Uhrzeit.', 'Choose a separate time for each check.')}</p></div><div><div class="field-heading">${t('Prüfuhrzeiten', 'Check times')}</div><div class="time-inputs" id="time-inputs">${timeInputs(draft.schedule.times)}</div></div></div><div class="info-box">${icon('clock')}<p>${t('Lokale Zeitzone', 'Local time zone')}: <strong>${esc(Intl.DateTimeFormat().resolvedOptions().timeZone)}</strong>. ${t('Nach dem Aufwachen wird die letzte verpasste Prüfung des aktuellen Tages nachgeholt. Der Rechner muss wach sein.', 'After waking up, the latest missed check of the current day is caught up. The computer must be awake.')}</p></div></div>`, toggle('schedule-enabled', draft.schedule.enabled, t('Automatische Prüfungen aktivieren', 'Enable automatic checks')))}
+    ${panel(
+      t('Hintergrund und Laufwerke', 'Background and drives'),
+      row(
+        t('Auch im Hintergrund weitermachen', 'Keep running in the background'),
+        t(
+          'Beim Schließen bleibt die App im Infobereich oder in der Menüleiste aktiv.',
+          'Closing the window keeps the app running in the system tray or menu bar.'
+        ),
+        toggle(
+          'closeToTray',
+          draft.closeToTray,
+          t('Beim Schließen im Hintergrund weiterlaufen', 'Keep running when closed')
+        )
+      ) +
+        row(
+          t('Beim Verbinden eines Laufwerks prüfen', 'Check when a drive connects'),
+          t(
+            'Erkennt konfigurierte Laufwerke innerhalb von etwa 30 Sekunden. Mehrere Quellen auf derselben Platte werden gemeinsam geprüft.',
+            'Detects configured drives within about 30 seconds. Shared destination folders are checked together.'
+          ),
+          toggle('onDriveConnect', draft.onDriveConnect, t('Beim Verbinden prüfen', 'Check on drive connection'))
+        ) +
+        row(
+          t('Unabhängige System-Zeitplanung', 'Independent OS scheduling'),
+          t(
+            'Startet Prüfungen auch bei beendeter GUI: launchd, Aufgabenplanung oder systemd. Nur für installierte native Pakete.',
+            'Runs checks with the GUI closed using launchd, Task Scheduler or systemd. Available in installed native packages.'
+          ),
+          toggle(
+            'systemSchedule',
+            draft.systemSchedule,
+            t('Unabhängige Zeitplanung aktivieren', 'Enable independent scheduling'),
+            appState.nativeScheduleSupported ? '' : 'disabled'
+          )
+        )
+    )}
+    ${enhancements.driveSettings()}<div class="save-row"><span>${t('Durchläufe sind gegen parallele Ausführung gesperrt.', 'Concurrent runs are prevented by a process lock.')}</span><button type="submit" class="button primary"${appState.busy ? ' disabled' : ''}>${icon('check')}${t('Zeitplan speichern', 'Save schedule')}</button></div></form>`
+  );
 }
 function settingsGeneral() {
-  const u=appState.update;
-  const statuses={idle:t('Bereit zur Versionsprüfung.','Ready to check for updates.'),current:t('Du verwendest die aktuelle Version.','You are running the latest version.'),unpublished:t('Noch kein offizielles Release veröffentlicht.','No official release has been published yet.'),checking:t('Die neueste Version wird geprüft …','Checking the latest version …'),available:t(`Version ${u.latestVersion} ist auf GitHub verfügbar.`,`Version ${u.latestVersion} is available on GitHub.`),ignored:t(`Version ${u.ignoredVersion} wird nicht mehr angezeigt. Erst eine neuere Version löst wieder einen Hinweis aus.`,`Version ${u.ignoredVersion} is skipped. Only a newer version will trigger another notice.`),waiting:t(`GitHub-API-Limit erreicht. Die Version wird um ${date(u.retryAt,true)} automatisch erneut geprüft. Ein Lesetoken unter Einstellungen → Konten erhöht das Limit.`,`GitHub API limit reached. The version is checked again automatically at ${date(u.retryAt,true)}. A read token under Settings → Accounts raises the limit.`),error:errorText(u.message||'')};
-  return `<form id="settings-form">${panel(t('Allgemein','General'),row(t('Bei der Anmeldung starten','Start at sign-in'),t('Die installierte App startet bei deiner Anmeldung im Hintergrund.','The installed app starts in the background when you sign in.'),toggle('launchAtLogin',draft.launchAtLogin,t('Bei der Anmeldung starten','Start at sign-in'),appState.packaged?'':'disabled'))+row(t('Benachrichtigungen','Notifications'),t('Meldungen zu abgeschlossenen Prüfungen und neuen Versionen.','Notifications for completed checks and newly available versions.'),toggle('notifications',draft.notifications,t('Benachrichtigungen aktivieren','Enable notifications')))+row(t('Neue Versionen automatisch prüfen','Check for new versions automatically'),t('Vergleicht beim Start und alle sechs Stunden mit dem letzten offiziellen GitHub-Release.','Compares with the latest official GitHub release at startup and every six hours.'),toggle('checkUpdates',draft.checkUpdates,t('Versionsüberwachung aktivieren','Enable version monitoring'))))}${saveRow()}</form>`+
-    panel(`${icon('download')} ${t('Version & Updates','Version & updates')}`,`<div class="panel-body"><span class="eyebrow">${t('INSTALLIERTE VERSION','INSTALLED VERSION')}</span><div class="update-version">${esc(u.currentVersion)}</div><p class="update-detail">${esc(statuses[u.status])}</p><div class="heading-buttons">${button(t('Jetzt auf Updates prüfen','Check for updates now'),'check-updates','refresh','secondary',u.status==='checking')}<button class="button secondary" data-link="releases">${icon('external')}${t('GitHub-Releases öffnen','Open GitHub releases')}</button>${u.status==='available'?button(t('Diese Version überspringen','Skip this version'),'ignore-update','','secondary'):''}${u.ignoredVersion?button(t('Übersprungene Version zurücksetzen','Reset skipped version'),'reset-update','','secondary'):''}</div><p class="field-help">${t('Die App meldet neue Versionen. Es gibt keine automatischen Downloads oder Installationen und keine erforderliche Zertifikatseinrichtung.','The app reports new versions. There are no automatic downloads or installations and no certificate setup is required.')}</p><p class="field-help">${esc(appState.gitVersion||t('Git wurde nicht gefunden.','Git was not found.'))}</p></div>`);
+  const u = appState.update;
+  const statuses = {
+    idle: t('Bereit zur Versionsprüfung.', 'Ready to check for updates.'),
+    current: t('Du verwendest die aktuelle Version.', 'You are running the latest version.'),
+    unpublished: t('Noch kein offizielles Release veröffentlicht.', 'No official release has been published yet.'),
+    checking: t('Die neueste Version wird geprüft …', 'Checking the latest version …'),
+    available: t(
+      `Version ${u.latestVersion} ist auf GitHub verfügbar.`,
+      `Version ${u.latestVersion} is available on GitHub.`
+    ),
+    ignored: t(
+      `Version ${u.ignoredVersion} wird nicht mehr angezeigt. Erst eine neuere Version löst wieder einen Hinweis aus.`,
+      `Version ${u.ignoredVersion} is skipped. Only a newer version will trigger another notice.`
+    ),
+    waiting: t(
+      `GitHub-API-Limit erreicht. Die Version wird um ${date(u.retryAt, true)} automatisch erneut geprüft. Ein Lesetoken unter Einstellungen → Konten erhöht das Limit.`,
+      `GitHub API limit reached. The version is checked again automatically at ${date(u.retryAt, true)}. A read token under Settings → Accounts raises the limit.`
+    ),
+    error: errorText(u.message || '')
+  };
+  return (
+    `<form id="settings-form">${panel(t('Allgemein', 'General'), row(t('Bei der Anmeldung starten', 'Start at sign-in'), t('Die installierte App startet bei deiner Anmeldung im Hintergrund.', 'The installed app starts in the background when you sign in.'), toggle('launchAtLogin', draft.launchAtLogin, t('Bei der Anmeldung starten', 'Start at sign-in'), appState.packaged ? '' : 'disabled')) + row(t('Benachrichtigungen', 'Notifications'), t('Meldungen zu abgeschlossenen Prüfungen und neuen Versionen.', 'Notifications for completed checks and newly available versions.'), toggle('notifications', draft.notifications, t('Benachrichtigungen aktivieren', 'Enable notifications'))) + row(t('Neue Versionen automatisch prüfen', 'Check for new versions automatically'), t('Vergleicht beim Start und alle sechs Stunden mit dem letzten offiziellen GitHub-Release.', 'Compares with the latest official GitHub release at startup and every six hours.'), toggle('checkUpdates', draft.checkUpdates, t('Versionsüberwachung aktivieren', 'Enable version monitoring'))))}${saveRow()}</form>` +
+    panel(
+      `${icon('download')} ${t('Version & Updates', 'Version & updates')}`,
+      `<div class="panel-body"><span class="eyebrow">${t('INSTALLIERTE VERSION', 'INSTALLED VERSION')}</span><div class="update-version">${esc(u.currentVersion)}</div><p class="update-detail">${esc(statuses[u.status])}</p><div class="heading-buttons">${button(t('Jetzt auf Updates prüfen', 'Check for updates now'), 'check-updates', 'refresh', 'secondary', u.status === 'checking')}<button class="button secondary" data-link="releases">${icon('external')}${t('GitHub-Releases öffnen', 'Open GitHub releases')}</button>${u.status === 'available' ? button(t('Diese Version überspringen', 'Skip this version'), 'ignore-update', '', 'secondary') : ''}${u.ignoredVersion ? button(t('Übersprungene Version zurücksetzen', 'Reset skipped version'), 'reset-update', '', 'secondary') : ''}</div><p class="field-help">${t('Die App meldet neue Versionen. Es gibt keine automatischen Downloads oder Installationen und keine erforderliche Zertifikatseinrichtung.', 'The app reports new versions. There are no automatic downloads or installations and no certificate setup is required.')}</p><p class="field-help">${esc(appState.gitVersion || t('Git wurde nicht gefunden.', 'Git was not found.'))}</p></div>`
+    )
+  );
 }
-function saveRow() { return `<div class="save-row"><button type="submit" class="button primary"${appState.busy?' disabled':''}>${icon('check')}${t('Einstellungen speichern','Save settings')}</button></div>`; }
+function saveRow() {
+  return `<div class="save-row"><button type="submit" class="button primary"${appState.busy ? ' disabled' : ''}>${icon('check')}${t('Einstellungen speichern', 'Save settings')}</button></div>`;
+}
 function settingsBackup() {
-  const b=draft.backup;
-  return `<form id="settings-form">${panel(t('Sicherungsumfang','Backup content'),`<div class="panel-body"><div class="field-grid">${field(t('Git-Modus','Git mode'),'backup-mode',`<select id="backup-mode" data-backup="mode">${option('snapshot',b.mode,t('Arbeitskopie · aktueller Standardbranch','Working copy · latest default branch'))}${option('mirror',b.mode,t('Mirror · alle Branches und Tags','Mirror · all branches and tags'))}</select>`,t('Ein Mirror enthält die vollständige Git-Historie. Arbeitskopien bleiben flach.','A mirror contains the full Git history. Working copies remain shallow.'))}${field(t('Integrität automatisch prüfen','Automatic integrity checks'),'integrity-mode',`<select id="integrity-mode" data-backup="integrity">${option('weekly',b.integrity,t('Wöchentlich','Weekly'))}${option('always',b.integrity,t('Bei jedem Durchlauf','Every run'))}${option('manual',b.integrity,t('Nur manuell','Manual only'))}</select>`,t('Unveränderte Sicherungen werden sonst ohne erneutes Hashen übersprungen.','Unchanged backups are otherwise skipped without rehashing every file.'))}</div></div>`+
-      row('Git LFS',t('Lädt die echten LFS-Inhalte. Git LFS muss auf diesem Rechner installiert sein.','Downloads actual LFS content. Git LFS must be installed on this computer.'),toggle('backup-lfs',b.lfs,t('Git LFS aktivieren','Enable Git LFS'),'data-backup="lfs"'))+
-      row(t('Rekursive Submodule','Recursive submodules'),t('Für Arbeitskopien. Es werden ausschließlich HTTPS-Submodule geladen.','For working copies. Only HTTPS submodules are downloaded.'),toggle('backup-submodules',b.submodules,t('Submodule aktivieren','Enable submodules'),`data-backup="submodules" ${b.mode==='mirror'?'disabled':''}`)))}
-    ${panel(t('GitHub-Metadaten','GitHub metadata'),`<div class="panel-body"><p>${t('Optional. Zusätzliche API-Abfragen und Release-Dateien benötigen mehr Zeit und Speicher. ETags vermeiden unveränderte API-Downloads.','Optional. Additional API calls and release assets require more time and storage. ETags avoid unchanged API downloads.')}</p><div class="check-grid">${[['issues','Issues '+t('mit Kommentaren','with comments')],['pullRequests','Pull Requests '+t('mit Reviews und Dateiänderungen','with reviews and file changes')],['releases',t('Releases mit Download-Dateien','Releases with downloadable assets')],['wiki',t('Wiki als Git-Mirror','Wiki as a Git mirror')]].map(([key,label])=>`<label class="check-label"><input type="checkbox" data-metadata="${key}" ${b.metadata[key]?'checked':''}>${label}</label>`).join('')}</div></div>`)}
+  const b = draft.backup;
+  return `<form id="settings-form">${panel(
+    t('Sicherungsumfang', 'Backup content'),
+    `<div class="panel-body"><div class="field-grid">${field(t('Git-Modus', 'Git mode'), 'backup-mode', `<select id="backup-mode" data-backup="mode">${option('snapshot', b.mode, t('Arbeitskopie · aktueller Standardbranch', 'Working copy · latest default branch'))}${option('mirror', b.mode, t('Mirror · alle Branches und Tags', 'Mirror · all branches and tags'))}</select>`, t('Ein Mirror enthält die vollständige Git-Historie. Arbeitskopien bleiben flach.', 'A mirror contains the full Git history. Working copies remain shallow.'))}${field(t('Integrität automatisch prüfen', 'Automatic integrity checks'), 'integrity-mode', `<select id="integrity-mode" data-backup="integrity">${option('weekly', b.integrity, t('Wöchentlich', 'Weekly'))}${option('always', b.integrity, t('Bei jedem Durchlauf', 'Every run'))}${option('manual', b.integrity, t('Nur manuell', 'Manual only'))}</select>`, t('Unveränderte Sicherungen werden sonst ohne erneutes Hashen übersprungen.', 'Unchanged backups are otherwise skipped without rehashing every file.'))}</div></div>` +
+      row(
+        'Git LFS',
+        t(
+          'Lädt die echten LFS-Inhalte. Git LFS muss auf diesem Rechner installiert sein.',
+          'Downloads actual LFS content. Git LFS must be installed on this computer.'
+        ),
+        toggle('backup-lfs', b.lfs, t('Git LFS aktivieren', 'Enable Git LFS'), 'data-backup="lfs"')
+      ) +
+      row(
+        t('Rekursive Submodule', 'Recursive submodules'),
+        t(
+          'Für Arbeitskopien. Es werden ausschließlich HTTPS-Submodule geladen.',
+          'For working copies. Only HTTPS submodules are downloaded.'
+        ),
+        toggle(
+          'backup-submodules',
+          b.submodules,
+          t('Submodule aktivieren', 'Enable submodules'),
+          `data-backup="submodules" ${b.mode === 'mirror' ? 'disabled' : ''}`
+        )
+      )
+  )}
+    ${panel(
+      t('GitHub-Metadaten', 'GitHub metadata'),
+      `<div class="panel-body"><p>${t('Optional. Zusätzliche API-Abfragen und Release-Dateien benötigen mehr Zeit und Speicher. ETags vermeiden unveränderte API-Downloads.', 'Optional. Additional API calls and release assets require more time and storage. ETags avoid unchanged API downloads.')}</p><div class="check-grid">${[
+        ['issues', 'Issues ' + t('mit Kommentaren', 'with comments')],
+        ['pullRequests', 'Pull Requests ' + t('mit Reviews und Dateiänderungen', 'with reviews and file changes')],
+        ['releases', t('Releases mit Download-Dateien', 'Releases with downloadable assets')],
+        ['wiki', t('Wiki als Git-Mirror', 'Wiki as a Git mirror')]
+      ]
+        .map(
+          ([key, label]) =>
+            `<label class="check-label"><input type="checkbox" data-metadata="${key}" ${b.metadata[key] ? 'checked' : ''}>${label}</label>`
+        )
+        .join('')}</div></div>`
+    )}
     ${enhancements.releasePanel(b)}
-    ${panel(t('Speicher und Verschlüsselung','Storage and encryption'),`<div class="panel-body"><div class="field-grid">${field(t('Freier Speicher als Reserve (MB)','Free storage reserve (MB)'),'reserve-mb',`<input type="number" id="reserve-mb" data-backup="reserveMB" min="64" max="1048576" value="${b.reserveMB}">`,t('Zusätzlich zum geschätzten Platz für den neuen Stand.','In addition to the estimated space needed for the new backup.'))}<div class="field"><label>${t('Archivpasswort','Archive password')}</label>${button(appState.encryptionReady?t('Passwort ändern','Change password'):t('Passwort setzen / entsperren','Set / unlock password'),'archive-password','shield','secondary')}<p class="field-help">${appState.encryptionReady?t('Für diese Sitzung entsperrt.','Unlocked for this session.'):t('Noch nicht entsperrt.','Not unlocked yet.')} ${appState.encryptionRemembered?t('Sicher im OS-Schlüsselspeicher hinterlegt.','Stored in the secure OS key store.'):''}</p></div></div></div>`+
-      row(t('Sicherungen verschlüsseln','Encrypt backups'),t('AES-256-GCM-Archiv mit Passwort. Der temporäre Klartext liegt nur im lokalen privaten Temp-Ordner und wird danach entfernt. Ohne Passwort ist keine Wiederherstellung möglich.','Password-protected AES-256-GCM archive. Temporary plaintext stays in a local private temp folder and is removed afterward. Recovery requires the password.'),toggle('backup-encryption',b.encryption,t('Verschlüsselung aktivieren','Enable encryption'),'data-backup="encryption"')))}${saveRow()}</form>`;
+    ${panel(
+      t('Speicher und Verschlüsselung', 'Storage and encryption'),
+      `<div class="panel-body"><div class="field-grid">${field(t('Freier Speicher als Reserve (MB)', 'Free storage reserve (MB)'), 'reserve-mb', `<input type="number" id="reserve-mb" data-backup="reserveMB" min="64" max="1048576" value="${b.reserveMB}">`, t('Zusätzlich zum geschätzten Platz für den neuen Stand.', 'In addition to the estimated space needed for the new backup.'))}<div class="field"><label>${t('Archivpasswort', 'Archive password')}</label>${button(appState.encryptionReady ? t('Passwort ändern', 'Change password') : t('Passwort setzen / entsperren', 'Set / unlock password'), 'archive-password', 'shield', 'secondary')}<p class="field-help">${appState.encryptionReady ? t('Für diese Sitzung entsperrt.', 'Unlocked for this session.') : t('Noch nicht entsperrt.', 'Not unlocked yet.')} ${appState.encryptionRemembered ? t('Sicher im OS-Schlüsselspeicher hinterlegt.', 'Stored in the secure OS key store.') : ''}</p></div></div></div>` +
+        row(
+          t('Sicherungen verschlüsseln', 'Encrypt backups'),
+          t(
+            'AES-256-GCM-Archiv mit Passwort. Der temporäre Klartext liegt nur im lokalen privaten Temp-Ordner und wird danach entfernt. Ohne Passwort ist keine Wiederherstellung möglich.',
+            'Password-protected AES-256-GCM archive. Temporary plaintext stays in a local private temp folder and is removed afterward. Recovery requires the password.'
+          ),
+          toggle(
+            'backup-encryption',
+            b.encryption,
+            t('Verschlüsselung aktivieren', 'Enable encryption'),
+            'data-backup="encryption"'
+          )
+        )
+    )}${saveRow()}</form>`;
 }
 function settingsAccounts() {
-  return panel(t('Git-Konten','Git accounts'),`<div class="panel-body"><p>${t('Öffentliche Quellen funktionieren ohne Anmeldung. Jede Quelle kann ein eigenes Konto verwenden. Tokens werden ausschließlich verschlüsselt gespeichert.','Public sources work without signing in. Each source can use its own account. Tokens are stored only with OS encryption.')}</p><div class="account-list">${appState.accounts.map(account=>`<div class="account-card"><div class="account-heading"><strong>${esc(account.id==='default'?t('Standard','Default'):account.label)}</strong>${studio.sourceBadge(account)}<span class="label ${account.configured?'':'neutral'}">${account.configured?t('Verbunden','Connected'):t('Öffentlicher Zugriff','Public access')}</span></div><form class="account-token-form" data-account="${esc(account.id)}"><label for="token-${esc(account.id)}">Personal Access Token</label><div class="input-group"><input id="token-${esc(account.id)}" name="token" type="password" autocomplete="off" placeholder="${t('Token wird nicht angezeigt','Token is never displayed')}"${appState.secureStorage?'':' disabled'}><button type="submit" class="button secondary"${!appState.secureStorage||appState.busy?' disabled':''}>${t('Token speichern','Save token')}</button></div></form><div class="heading-buttons account-actions">${studio.loginButton(account)}${account.configured?`<button class="text-button danger" data-remove-token="${esc(account.id)}">${t('Token entfernen','Remove token')}</button>`:''}${account.id!=='default'?`<button class="text-button danger" data-remove-account="${esc(account.id)}">${t('Konto entfernen','Remove account')}</button>`:''}</div></div>`).join('')}</div><form id="add-account-form" class="account-create">${studio.accountFields()}<div class="input-group"><input id="account-label" aria-label="${t('Name des GitHub-Kontos','GitHub account label')}" placeholder="${t('Name für ein weiteres Konto','Label for another account')}" required maxlength="80"><button class="button secondary" type="submit">${icon('plus')}${t('Konto hinzufügen','Add account')}</button></div></form><p class="field-help">${appState.secureStorage?t('Die Zugangsdaten verlassen den Hauptprozess nicht.','Credentials never leave the main process.'):t('Kein sicherer Schlüsselspeicher verfügbar. Öffentliche Quellen funktionieren weiterhin.','No secure key store is available. Public sources still work.')}</p><button class="text-button" data-link="token">${t('Token auf GitHub erstellen','Create a token on GitHub')} ${icon('external')}</button></div>`)+
-    panel(t('Geräteanmeldung','Device sign-in'),`<div class="panel-body"><p>${t('Für Device Flow benötigt GitHub die öffentliche Client-ID einer OAuth-App mit aktiviertem Device Flow. Ein Client-Secret wird nicht benötigt. Alternativ direkt ein Token verwenden.','Device Flow requires the public client ID of a GitHub OAuth app with Device Flow enabled. No client secret is needed. Alternatively, use a token directly.')}</p><form id="oauth-form"><label for="oauth-client-id">OAuth Client ID</label><div class="input-group"><input id="oauth-client-id" value="${esc(draft.oauthClientId)}" placeholder="${t('Optional · öffentliche Client-ID','Optional · public client ID')}"><button class="button secondary" type="submit">${t('Client-ID speichern','Save client ID')}</button></div></form>${appState.device?`<div class="info-box"><div><strong>${appState.device.status==='pending'?t('Anmeldung läuft','Sign-in pending'):appState.device.status==='success'?t('Anmeldung erfolgreich','Sign-in complete'):t('Anmeldung fehlgeschlagen','Sign-in failed')}</strong>${appState.device.userCode?`<p class="device-code">${esc(appState.device.userCode)}</p><div class="heading-buttons">${button(t('Code kopieren','Copy code'),'copy-device-code','','secondary')}<button class="button primary" data-link="device">GitHub öffnen / Open GitHub</button>${button(t('Abbrechen','Cancel'),'cancel-login','','secondary')}</div>`:''}${appState.device.message?`<p>${esc(errorText(appState.device.message))}</p>`:''}</div></div>`:''}</div>`);
+  return (
+    panel(
+      t('Git-Konten', 'Git accounts'),
+      `<div class="panel-body"><p>${t('Öffentliche Quellen funktionieren ohne Anmeldung. Jede Quelle kann ein eigenes Konto verwenden. Tokens werden ausschließlich verschlüsselt gespeichert.', 'Public sources work without signing in. Each source can use its own account. Tokens are stored only with OS encryption.')}</p><div class="account-list">${appState.accounts.map(account => `<div class="account-card"><div class="account-heading"><strong>${esc(account.id === 'default' ? t('Standard', 'Default') : account.label)}</strong>${studio.sourceBadge(account)}<span class="label ${account.configured ? '' : 'neutral'}">${account.configured ? t('Verbunden', 'Connected') : t('Öffentlicher Zugriff', 'Public access')}</span></div><form class="account-token-form" data-account="${esc(account.id)}"><label for="token-${esc(account.id)}">Personal Access Token</label><div class="input-group"><input id="token-${esc(account.id)}" name="token" type="password" autocomplete="off" placeholder="${t('Token wird nicht angezeigt', 'Token is never displayed')}"${appState.secureStorage ? '' : ' disabled'}><button type="submit" class="button secondary"${!appState.secureStorage || appState.busy ? ' disabled' : ''}>${t('Token speichern', 'Save token')}</button></div></form><div class="heading-buttons account-actions">${studio.loginButton(account)}${account.configured ? `<button class="text-button danger" data-remove-token="${esc(account.id)}">${t('Token entfernen', 'Remove token')}</button>` : ''}${account.id !== 'default' ? `<button class="text-button danger" data-remove-account="${esc(account.id)}">${t('Konto entfernen', 'Remove account')}</button>` : ''}</div></div>`).join('')}</div><form id="add-account-form" class="account-create">${studio.accountFields()}<div class="input-group"><input id="account-label" aria-label="${t('Name des GitHub-Kontos', 'GitHub account label')}" placeholder="${t('Name für ein weiteres Konto', 'Label for another account')}" required maxlength="80"><button class="button secondary" type="submit">${icon('plus')}${t('Konto hinzufügen', 'Add account')}</button></div></form><p class="field-help">${appState.secureStorage ? t('Die Zugangsdaten verlassen den Hauptprozess nicht.', 'Credentials never leave the main process.') : t('Kein sicherer Schlüsselspeicher verfügbar. Öffentliche Quellen funktionieren weiterhin.', 'No secure key store is available. Public sources still work.')}</p><button class="text-button" data-link="token">${t('Token auf GitHub erstellen', 'Create a token on GitHub')} ${icon('external')}</button></div>`
+    ) +
+    panel(
+      t('Geräteanmeldung', 'Device sign-in'),
+      `<div class="panel-body"><p>${t('Für Device Flow benötigt GitHub die öffentliche Client-ID einer OAuth-App mit aktiviertem Device Flow. Ein Client-Secret wird nicht benötigt. Alternativ direkt ein Token verwenden.', 'Device Flow requires the public client ID of a GitHub OAuth app with Device Flow enabled. No client secret is needed. Alternatively, use a token directly.')}</p><form id="oauth-form"><label for="oauth-client-id">OAuth Client ID</label><div class="input-group"><input id="oauth-client-id" value="${esc(draft.oauthClientId)}" placeholder="${t('Optional · öffentliche Client-ID', 'Optional · public client ID')}"><button class="button secondary" type="submit">${t('Client-ID speichern', 'Save client ID')}</button></div></form>${appState.device ? `<div class="info-box"><div><strong>${appState.device.status === 'pending' ? t('Anmeldung läuft', 'Sign-in pending') : appState.device.status === 'success' ? t('Anmeldung erfolgreich', 'Sign-in complete') : t('Anmeldung fehlgeschlagen', 'Sign-in failed')}</strong>${appState.device.userCode ? `<p class="device-code">${esc(appState.device.userCode)}</p><div class="heading-buttons">${button(t('Code kopieren', 'Copy code'), 'copy-device-code', '', 'secondary')}<button class="button primary" data-link="device">GitHub öffnen / Open GitHub</button>${button(t('Abbrechen', 'Cancel'), 'cancel-login', '', 'secondary')}</div>` : ''}${appState.device.message ? `<p>${esc(errorText(appState.device.message))}</p>` : ''}</div></div>` : ''}</div>`
+    )
+  );
 }
 function settingsAppearance() {
-  const a=draft.appearance;
-  const fields=field(t('Sprache','Language'),'appearance-language',`<select id="appearance-language" data-appearance="language">${option('de',a.language,'Deutsch')}${option('en',a.language,'English')}</select>`)+field(t('Darstellung','Theme'),'appearance-theme',`<select id="appearance-theme" data-appearance="theme">${option('system',a.theme,t('Systemeinstellung','System'))}${option('light',a.theme,t('Hell','Light'))}${option('dark',a.theme,t('Dunkel','Dark'))}</select>`)+field(t('Schriftgröße','Text size'),'appearance-font',`<select id="appearance-font" data-appearance="fontScale">${option('1',String(a.fontScale),t('Normal','Default'))}${option('1.15',String(a.fontScale),t('Größer · 115 %','Larger · 115%'))}${option('1.3',String(a.fontScale),t('Groß · 130 %','Large · 130%'))}</select>`);
-  return `<form id="settings-form">${panel(t('Sprache und Darstellung','Language and appearance'),`<div class="panel-body"><div class="field-grid three-columns">${fields}</div><p class="field-help">${t('Eingabefelder behalten gemeinsame Höhen und Ausrichtung.','Form controls stay aligned and consistently sized.')}</p></div>`+row(t('Hoher Kontrast','High contrast'),t('Deutlichere Konturen und stärkere Textkontraste.','Stronger outlines and text contrast.'),toggle('high-contrast',a.highContrast,t('Hohen Kontrast aktivieren','Enable high contrast'),'data-appearance="highContrast"')))}${saveRow()}</form>`+panel(t('Tastatur und Bedienung','Keyboard and accessibility'),`<div class="panel-body">${button(t('Tastenkürzel anzeigen','Show keyboard shortcuts'),'shortcuts','','secondary')}</div>`);
+  const a = draft.appearance;
+  const fields =
+    field(
+      t('Sprache', 'Language'),
+      'appearance-language',
+      `<select id="appearance-language" data-appearance="language">${option('de', a.language, 'Deutsch')}${option('en', a.language, 'English')}</select>`
+    ) +
+    field(
+      t('Darstellung', 'Theme'),
+      'appearance-theme',
+      `<select id="appearance-theme" data-appearance="theme">${option('system', a.theme, t('Systemeinstellung', 'System'))}${option('light', a.theme, t('Hell', 'Light'))}${option('dark', a.theme, t('Dunkel', 'Dark'))}</select>`
+    ) +
+    field(
+      t('Schriftgröße', 'Text size'),
+      'appearance-font',
+      `<select id="appearance-font" data-appearance="fontScale">${option('1', String(a.fontScale), t('Normal', 'Default'))}${option('1.15', String(a.fontScale), t('Größer · 115 %', 'Larger · 115%'))}${option('1.3', String(a.fontScale), t('Groß · 130 %', 'Large · 130%'))}</select>`
+    );
+  return (
+    `<form id="settings-form">${panel(t('Sprache und Darstellung', 'Language and appearance'), `<div class="panel-body"><div class="field-grid three-columns">${fields}</div><p class="field-help">${t('Eingabefelder behalten gemeinsame Höhen und Ausrichtung.', 'Form controls stay aligned and consistently sized.')}</p></div>` + row(t('Hoher Kontrast', 'High contrast'), t('Deutlichere Konturen und stärkere Textkontraste.', 'Stronger outlines and text contrast.'), toggle('high-contrast', a.highContrast, t('Hohen Kontrast aktivieren', 'Enable high contrast'), 'data-appearance="highContrast"')))}${saveRow()}</form>` +
+    panel(
+      t('Tastatur und Bedienung', 'Keyboard and accessibility'),
+      `<div class="panel-body">${button(t('Tastenkürzel anzeigen', 'Show keyboard shortcuts'), 'shortcuts', '', 'secondary')}</div>`
+    )
+  );
 }
 function settingsTransfer() {
-  return panel(t('Einstellungen übertragen','Transfer settings'),`<div class="panel-body"><p>${t('Exportiert Quellen, Filter, Speicherorte und Darstellung. Zugangsdaten, Archivpasswörter und Anmeldecodes sind nie enthalten. Importierte Ziele werden vor dem Speichern neu mit dem Laufwerk verbunden.','Exports sources, filters, destinations and appearance. Credentials, archive passwords and sign-in codes are never included. Imported destinations are rebound to their drives before saving.')}</p><div class="heading-buttons">${button(t('Einstellungen exportieren','Export settings'),'export-settings','download','secondary')}${button(t('Einstellungen importieren','Import settings'),'import-settings','folder','secondary',appState.busy)}</div></div>`)+panel(t('Anonymisierte Diagnose','Anonymized diagnostics'),`<div class="panel-body"><p>${t('Der Export ersetzt Repository-Namen durch neutrale IDs und entfernt Pfade, Kontonamen, Commit-IDs und rohe Fehlermeldungen.','The export replaces repository names with neutral IDs and removes paths, account names, commit IDs and raw error messages.')}</p>${button(t('Geschwärztes Protokoll exportieren','Export redacted log'),'export-logs','download','secondary')}</div>`);
+  return (
+    panel(
+      t('Einstellungen übertragen', 'Transfer settings'),
+      `<div class="panel-body"><p>${t('Exportiert Quellen, Filter, Speicherorte und Darstellung. Zugangsdaten, Archivpasswörter und Anmeldecodes sind nie enthalten. Importierte Ziele werden vor dem Speichern neu mit dem Laufwerk verbunden.', 'Exports sources, filters, destinations and appearance. Credentials, archive passwords and sign-in codes are never included. Imported destinations are rebound to their drives before saving.')}</p><div class="heading-buttons">${button(t('Einstellungen exportieren', 'Export settings'), 'export-settings', 'download', 'secondary')}${button(t('Einstellungen importieren', 'Import settings'), 'import-settings', 'folder', 'secondary', appState.busy)}</div></div>`
+    ) +
+    panel(
+      t('Anonymisierte Diagnose', 'Anonymized diagnostics'),
+      `<div class="panel-body"><p>${t('Der Export ersetzt Repository-Namen durch neutrale IDs und entfernt Pfade, Kontonamen, Commit-IDs und rohe Fehlermeldungen.', 'The export replaces repository names with neutral IDs and removes paths, account names, commit IDs and raw error messages.')}</p>${button(t('Geschwärztes Protokoll exportieren', 'Export redacted log'), 'export-logs', 'download', 'secondary')}</div>`
+    )
+  );
 }
 function settingsView() {
-  const tabs={general:t('Allgemein','General'),notifications:t('Meldungen','Notifications'),backup:t('Sicherung','Backup'),accounts:t('Konten','Accounts'),appearance:t('Darstellung','Appearance'),execution:t('Leistung & Regeln','Performance & rules'),transfer:t('Import / Export','Import / export')};
-  return heading(t('Ganz nach deinen Wünschen.','Make it work for you.'),t('Die wichtigsten Optionen zuerst. Erweiterte Funktionen bleiben übersichtlich getrennt.','Essential settings first. Advanced options stay neatly organized.'))+
-    `<div class="tabs" role="tablist">${Object.entries(tabs).map(([key,label])=>`<button role="tab" id="tab-${key}" aria-controls="settings-panel" tabindex="${settingsTab===key?0:-1}" aria-selected="${settingsTab===key}" data-settings-tab="${key}" class="${settingsTab===key?'active':''}">${label}</button>`).join('')}</div>`+
-    `<div role="tabpanel" id="settings-panel" aria-labelledby="tab-${settingsTab}">${({general:settingsGeneral,notifications:enhancements.notificationsSettings,backup:()=>settingsBackup()+studio.rotationPanel(),accounts:settingsAccounts,appearance:settingsAppearance,execution:features.executionSettings,transfer:settingsTransfer})[settingsTab]()}</div>`;
+  const tabs = {
+    general: t('Allgemein', 'General'),
+    notifications: t('Meldungen', 'Notifications'),
+    backup: t('Sicherung', 'Backup'),
+    accounts: t('Konten', 'Accounts'),
+    appearance: t('Darstellung', 'Appearance'),
+    execution: t('Leistung & Regeln', 'Performance & rules'),
+    transfer: t('Import / Export', 'Import / export')
+  };
+  return (
+    heading(
+      t('Ganz nach deinen Wünschen.', 'Make it work for you.'),
+      t(
+        'Die wichtigsten Optionen zuerst. Erweiterte Funktionen bleiben übersichtlich getrennt.',
+        'Essential settings first. Advanced options stay neatly organized.'
+      )
+    ) +
+    `<div class="tabs" role="tablist">${Object.entries(tabs)
+      .map(
+        ([key, label]) =>
+          `<button role="tab" id="tab-${key}" aria-controls="settings-panel" tabindex="${settingsTab === key ? 0 : -1}" aria-selected="${settingsTab === key}" data-settings-tab="${key}" class="${settingsTab === key ? 'active' : ''}">${label}</button>`
+      )
+      .join('')}</div>` +
+    `<div role="tabpanel" id="settings-panel" aria-labelledby="tab-${settingsTab}">${{ general: settingsGeneral, notifications: enhancements.notificationsSettings, backup: () => settingsBackup() + studio.rotationPanel(), accounts: settingsAccounts, appearance: settingsAppearance, execution: features.executionSettings, transfer: settingsTransfer }[settingsTab]()}</div>`
+  );
 }
 function restoreView() {
-  return heading(t('Sicher zurück an die Arbeit.','Get back to your work safely.'),t('Prüfen, kopieren, wiederherstellen. Vorhandene Dateien werden nicht überschrieben.','Verify, copy and restore. Existing files will not be overwritten.'))+
-    `<form id="restore-form">${panel(`01 · ${t('Sicherung auswählen','Choose a backup')}`,`<div class="panel-body"><div class="field-grid">${field(t('Gespeicherte Sicherung','Saved backup'),'restore-record',`<select id="restore-record"><option value="">${t('Bitte auswählen …','Choose a backup …')}</option>${appState.repositories.filter(r=>r.commit).map(r=>option(esc(r.id),restoreRecord,esc(`${r.fullName} · ${r.encrypted?t('verschlüsselt','encrypted'):r.mode||'snapshot'} · ${r.destination}`))).join('')}</select>`)}<div class="field"><label>${t('Oder verschlüsseltes Archiv öffnen','Or open an encrypted archive')}</label>${button(t('GCB-Datei auswählen','Choose GCB file'),'choose-archive','folder','secondary')}<p class="field-help" id="restore-archive-name">${esc(restoreArchive||t('Keine Datei gewählt','No file selected'))}</p></div></div>${field(t('Archivpasswort (nur bei Verschlüsselung)','Archive password (encrypted backups only)'),'restore-password',`<input type="password" id="restore-password" autocomplete="off" placeholder="${t('Leer lassen, wenn bereits entsperrt','Leave empty if already unlocked')}">`)}</div>`)}
-    ${features.restoreMarkup()}${panel(`02 · ${t('Neuen Arbeitsort festlegen','Choose a new location')}`,`<div class="panel-body"><div class="field-grid">${field(t('Übergeordneter Ordner','Parent folder'),'restore-parent',`<div class="input-group"><input id="restore-parent" placeholder="${t('Vorhandenen Ordner auswählen','Choose an existing folder')}" required>${button(t('Durchsuchen','Browse'),'choose-restore-parent','','secondary')}</div>`)}${field(t('Neuer Ordnername','New folder name'),'restore-name',`<input id="restore-name" value="restored-repository" required maxlength="100">`)}</div></div>`)}
-    <div class="info-box">${icon('shield')}<p>${t('Vollständige Kopien werden vor und nach der Wiederherstellung geprüft. Bei einer Dateiauswahl wird jede gewählte Datei einzeln verifiziert. Mirrors lassen sich vollständig oder als Dateien ihres HEAD-Stands wiederherstellen. Eine GitHub-Anmeldung ist nicht erforderlich.','Full copies are verified before and after recovery. Selected files are verified individually. Mirrors can be restored in full or as files from HEAD. No GitHub sign-in is required.')}</p></div><div class="save-row"><button type="submit" class="button primary"${appState.busy?' disabled':''}>${icon('history')}${t('Prüfen & wiederherstellen','Verify & restore')}</button></div><div id="restore-result" role="status"></div></form>`;
+  return (
+    heading(
+      t('Sicher zurück an die Arbeit.', 'Get back to your work safely.'),
+      t(
+        'Prüfen, kopieren, wiederherstellen. Vorhandene Dateien werden nicht überschrieben.',
+        'Verify, copy and restore. Existing files will not be overwritten.'
+      )
+    ) +
+    `<form id="restore-form">${panel(
+      `01 · ${t('Sicherung auswählen', 'Choose a backup')}`,
+      `<div class="panel-body"><div class="field-grid">${field(
+        t('Gespeicherte Sicherung', 'Saved backup'),
+        'restore-record',
+        `<select id="restore-record"><option value="">${t('Bitte auswählen …', 'Choose a backup …')}</option>${appState.repositories
+          .filter(r => r.commit)
+          .map(r =>
+            option(
+              esc(r.id),
+              restoreRecord,
+              esc(
+                `${r.fullName} · ${r.encrypted ? t('verschlüsselt', 'encrypted') : r.mode || 'snapshot'} · ${r.destination}`
+              )
+            )
+          )
+          .join('')}</select>`
+      )}<div class="field"><label>${t('Oder verschlüsseltes Archiv öffnen', 'Or open an encrypted archive')}</label>${button(t('GCB-Datei auswählen', 'Choose GCB file'), 'choose-archive', 'folder', 'secondary')}<p class="field-help" id="restore-archive-name">${esc(restoreArchive || t('Keine Datei gewählt', 'No file selected'))}</p></div></div>${field(t('Archivpasswort (nur bei Verschlüsselung)', 'Archive password (encrypted backups only)'), 'restore-password', `<input type="password" id="restore-password" autocomplete="off" placeholder="${t('Leer lassen, wenn bereits entsperrt', 'Leave empty if already unlocked')}">`)}</div>`
+    )}
+    ${features.restoreMarkup()}${panel(`02 · ${t('Neuen Arbeitsort festlegen', 'Choose a new location')}`, `<div class="panel-body"><div class="field-grid">${field(t('Übergeordneter Ordner', 'Parent folder'), 'restore-parent', `<div class="input-group"><input id="restore-parent" placeholder="${t('Vorhandenen Ordner auswählen', 'Choose an existing folder')}" required>${button(t('Durchsuchen', 'Browse'), 'choose-restore-parent', '', 'secondary')}</div>`)}${field(t('Neuer Ordnername', 'New folder name'), 'restore-name', `<input id="restore-name" value="restored-repository" required maxlength="100">`)}</div></div>`)}
+    <div class="info-box">${icon('shield')}<p>${t('Vollständige Kopien werden vor und nach der Wiederherstellung geprüft. Bei einer Dateiauswahl wird jede gewählte Datei einzeln verifiziert. Mirrors lassen sich vollständig oder als Dateien ihres HEAD-Stands wiederherstellen. Eine GitHub-Anmeldung ist nicht erforderlich.', 'Full copies are verified before and after recovery. Selected files are verified individually. Mirrors can be restored in full or as files from HEAD. No GitHub sign-in is required.')}</p></div><div class="save-row"><button type="submit" class="button primary"${appState.busy ? ' disabled' : ''}>${icon('history')}${t('Prüfen & wiederherstellen', 'Verify & restore')}</button></div><div id="restore-result" role="status"></div></form>`
+  );
 }
 function docsView() {
-  return heading(t('Gut zu wissen.','Good to know.'),t('Ein kurzer Einstieg. Die ausführliche Anleitung mit Bildern liegt im Projekt.','A quick start. The full illustrated guide is included with the project.'))+
-    panel(t('In drei Schritten zur Sicherung','Your first backup in three steps'),`<div class="panel-body docs"><ol><li>${t('Git installieren und die App starten. Es sind keine Konten oder Repositories voreingestellt.','Install Git and start the app. No accounts or repositories are preconfigured.')}</li><li>${t('Quelle hinzufügen: Konto oder konto/repository. Zielordner auswählen. Mehrere Quellen pro Zeile und mehrere Ziele pro Quelle sind möglich.','Add a source: owner or owner/repository. Choose a destination folder. Multiple source lines and multiple destinations per source are supported.')}</li><li>${t('Jetzt prüfen starten und anschließend die Uhrzeiten im Zeitplan festlegen.','Start Check now and then configure your check times under Schedule.')}</li></ol><h2>${t('Was wird gespeichert?','What is backed up?')}</h2><p>${t('Standardmäßig ein flacher aktueller Klon des Standardbranches. In Einstellungen → Sicherung kannst du vollständige Mirrors, LFS, Submodule, anbieterspezifische Metadaten und verschlüsselte Archive wählen. Jeder Zielordner behält nur den letzten erfolgreichen Stand.','By default, a shallow clone of the latest default branch. Settings → Backup provides full mirrors, LFS, submodules, provider metadata and encrypted archives. Each destination keeps only the latest successful backup.')}</p><h2>${t('Leicht und schnell bleiben','Keep checks fast')}</h2><p>${t('Unveränderte Git-Stände werden übersprungen. API-ETags sparen Downloads. Integritätsprüfungen laufen standardmäßig wöchentlich. Große Mirror-Sicherungen werden bei Änderungen lokal kopiert und inkrementell aktualisiert; Dateisysteme mit Copy-on-Write sparen dabei Kopierarbeit.','Unchanged Git revisions are skipped. API ETags save downloads. Integrity checks are weekly by default. Mirrors reuse local objects and fetch changes incrementally; copy-on-write file systems can reduce copying work.')}</p><h2>${t('Dateien schützen und wiederherstellen','Protect and restore your data')}</h2><p>${t('Sicherungsordner sind keine Arbeitsverzeichnisse. Änderungen darin können beim nächsten Austausch verloren gehen. Verwende den Wiederherstellungsassistenten für eine geprüfte Kopie an einem neuen Ort. Ein Archivpasswort kann nicht wiederhergestellt werden. Zum Wechseln das neue Passwort im Passwortwechsel-Assistenten übernehmen. Nicht ausgewählte Archive behalten zunächst ihr bisheriges Passwort.','Backup folders are not working directories. Local changes can be lost when a backup is replaced. Use Restore for a verified copy in a new location. Lost archive passwords cannot be recovered. Use the password change assistant to adopt a new password. Unselected archives initially keep their previous password.')}</p><h2>${t('Zeitplan und Laufwerke','Schedules and drives')}</h2><p>${t('Die App erkennt konfigurierte Laufwerke auf Wunsch innerhalb von etwa 30 Sekunden. Die unabhängige Zeitplanung verwendet auf nativen Paketen launchd, Aufgabenplanung oder systemd und startet auch bei geschlossener GUI. Der Rechner muss eingeschaltet und wach sein; die App weckt ihn nicht. Flatpak und Entwicklungsfassungen verwenden den App-Zeitplan.','Optional drive detection checks for configured drives within about 30 seconds. Native packages can use launchd, Task Scheduler or systemd to run with the GUI closed. The computer must be powered on and awake; the app does not wake it. Flatpak and development builds use the in-app scheduler.')}</p><h2>${t('Versionshinweise','Version notifications')}</h2><p>${t('Die App vergleicht nur mit dem letzten offiziellen GitHub-Release und zeigt einen Hinweis. Diese Version überspringen merkt sich die Auswahl über Neustarts hinweg. Erst eine höhere Version löst erneut einen Hinweis aus. Es gibt keinen automatischen Download oder Installer und keine erforderliche Signierzertifikatseinrichtung.','The app only compares with the latest official GitHub release and displays a notice. Skip this version persists across restarts. Only a higher version triggers a new notice. There are no automatic downloads or installers and no signing-certificate setup is required.')}</p><h2>${t('Zugang und Datenschutz','Access and privacy')}</h2><p>${t('Keine Telemetrie und kein eigener Cloud-Speicher. Tokens und optional das Archivpasswort werden mit dem OS-Schlüsselspeicher verschlüsselt. Ein Token mit Leserechten genügt für private Quellen. Device Flow benötigt die Client-ID einer OAuth-App; ein Token bleibt die Alternative ohne OAuth-App-Einrichtung. Exporte von Einstellungen enthalten keine Zugangsdaten. Diagnoseprotokolle werden anonymisiert.','No telemetry or backup cloud. Tokens and optionally the archive password use the secure OS key store. Read access is enough for private sources. Device Flow requires an OAuth app client ID; a token is the alternative without registering an OAuth app. Settings exports contain no credentials. Diagnostic exports are anonymized.')}</p><button class="text-button" data-link="repository">${t('Projekt und vollständige Dokumentation','Project and full documentation')} ${icon('external')}</button></div>`);
+  return (
+    heading(
+      t('Gut zu wissen.', 'Good to know.'),
+      t(
+        'Ein kurzer Einstieg. Die ausführliche Anleitung mit Bildern liegt im Projekt.',
+        'A quick start. The full illustrated guide is included with the project.'
+      )
+    ) +
+    panel(
+      t('In drei Schritten zur Sicherung', 'Your first backup in three steps'),
+      `<div class="panel-body docs"><ol><li>${t('Git installieren und die App starten. Es sind keine Konten oder Repositories voreingestellt.', 'Install Git and start the app. No accounts or repositories are preconfigured.')}</li><li>${t('Quelle hinzufügen: Konto oder konto/repository. Zielordner auswählen. Mehrere Quellen pro Zeile und mehrere Ziele pro Quelle sind möglich.', 'Add a source: owner or owner/repository. Choose a destination folder. Multiple source lines and multiple destinations per source are supported.')}</li><li>${t('Jetzt prüfen starten und anschließend die Uhrzeiten im Zeitplan festlegen.', 'Start Check now and then configure your check times under Schedule.')}</li></ol><h2>${t('Was wird gespeichert?', 'What is backed up?')}</h2><p>${t('Standardmäßig ein flacher aktueller Klon des Standardbranches. In Einstellungen → Sicherung kannst du vollständige Mirrors, LFS, Submodule, anbieterspezifische Metadaten und verschlüsselte Archive wählen. Jeder Zielordner behält nur den letzten erfolgreichen Stand.', 'By default, a shallow clone of the latest default branch. Settings → Backup provides full mirrors, LFS, submodules, provider metadata and encrypted archives. Each destination keeps only the latest successful backup.')}</p><h2>${t('Leicht und schnell bleiben', 'Keep checks fast')}</h2><p>${t('Unveränderte Git-Stände werden übersprungen. API-ETags sparen Downloads. Integritätsprüfungen laufen standardmäßig wöchentlich. Große Mirror-Sicherungen werden bei Änderungen lokal kopiert und inkrementell aktualisiert; Dateisysteme mit Copy-on-Write sparen dabei Kopierarbeit.', 'Unchanged Git revisions are skipped. API ETags save downloads. Integrity checks are weekly by default. Mirrors reuse local objects and fetch changes incrementally; copy-on-write file systems can reduce copying work.')}</p><h2>${t('Dateien schützen und wiederherstellen', 'Protect and restore your data')}</h2><p>${t('Sicherungsordner sind keine Arbeitsverzeichnisse. Änderungen darin können beim nächsten Austausch verloren gehen. Verwende den Wiederherstellungsassistenten für eine geprüfte Kopie an einem neuen Ort. Ein Archivpasswort kann nicht wiederhergestellt werden. Zum Wechseln das neue Passwort im Passwortwechsel-Assistenten übernehmen. Nicht ausgewählte Archive behalten zunächst ihr bisheriges Passwort.', 'Backup folders are not working directories. Local changes can be lost when a backup is replaced. Use Restore for a verified copy in a new location. Lost archive passwords cannot be recovered. Use the password change assistant to adopt a new password. Unselected archives initially keep their previous password.')}</p><h2>${t('Zeitplan und Laufwerke', 'Schedules and drives')}</h2><p>${t('Die App erkennt konfigurierte Laufwerke auf Wunsch innerhalb von etwa 30 Sekunden. Die unabhängige Zeitplanung verwendet auf nativen Paketen launchd, Aufgabenplanung oder systemd und startet auch bei geschlossener GUI. Der Rechner muss eingeschaltet und wach sein; die App weckt ihn nicht. Flatpak und Entwicklungsfassungen verwenden den App-Zeitplan.', 'Optional drive detection checks for configured drives within about 30 seconds. Native packages can use launchd, Task Scheduler or systemd to run with the GUI closed. The computer must be powered on and awake; the app does not wake it. Flatpak and development builds use the in-app scheduler.')}</p><h2>${t('Versionshinweise', 'Version notifications')}</h2><p>${t('Die App vergleicht nur mit dem letzten offiziellen GitHub-Release und zeigt einen Hinweis. Diese Version überspringen merkt sich die Auswahl über Neustarts hinweg. Erst eine höhere Version löst erneut einen Hinweis aus. Es gibt keinen automatischen Download oder Installer und keine erforderliche Signierzertifikatseinrichtung.', 'The app only compares with the latest official GitHub release and displays a notice. Skip this version persists across restarts. Only a higher version triggers a new notice. There are no automatic downloads or installers and no signing-certificate setup is required.')}</p><h2>${t('Zugang und Datenschutz', 'Access and privacy')}</h2><p>${t('Keine Telemetrie und kein eigener Cloud-Speicher. Tokens und optional das Archivpasswort werden mit dem OS-Schlüsselspeicher verschlüsselt. Ein Token mit Leserechten genügt für private Quellen. Device Flow benötigt die Client-ID einer OAuth-App; ein Token bleibt die Alternative ohne OAuth-App-Einrichtung. Exporte von Einstellungen enthalten keine Zugangsdaten. Diagnoseprotokolle werden anonymisiert.', 'No telemetry or backup cloud. Tokens and optionally the archive password use the secure OS key store. Read access is enough for private sources. Device Flow requires an OAuth app client ID; a token is the alternative without registering an OAuth app. Settings exports contain no credentials. Diagnostic exports are anonymized.')}</p><button class="text-button" data-link="repository">${t('Projekt und vollständige Dokumentation', 'Project and full documentation')} ${icon('external')}</button></div>`
+    )
+  );
 }
-function renderView() { const active=document.activeElement, focusSearch=view==='sources'&&active?.id==='source-search', start=focusSearch?active.selectionStart:null, end=focusSearch?active.selectionEnd:null; document.getElementById('main-content').innerHTML = ({overview,sources:sourcesView,schedule:scheduleView,restore:restoreView,settings:settingsView,docs:docsView,history:studio.historyView})[view]();if(view==='history')void attempt(studio.loadHistory);if(view==='overview'){features.updateProgress();features.updateMetrics();} if(focusSearch){const input=document.getElementById('source-search');if(input){input.focus({preventScroll:true});input.setSelectionRange(start,end);}} }
-function switchView(next) { if (!Object.hasOwn(labels(),next)) return; features.leaveView(view,next);view=next; draft=structuredClone(appState.config); renderChrome(); renderView(); document.getElementById('main-content').focus({preventScroll:true}); }
-function saveConfig(config, message = t('Einstellungen gespeichert.','Settings saved.')) {
+function renderView() {
+  const active = document.activeElement,
+    focusSearch = view === 'sources' && active?.id === 'source-search',
+    start = focusSearch ? active.selectionStart : null,
+    end = focusSearch ? active.selectionEnd : null;
+  document.getElementById('main-content').innerHTML = {
+    overview,
+    sources: sourcesView,
+    schedule: scheduleView,
+    restore: restoreView,
+    settings: settingsView,
+    docs: docsView,
+    history: studio.historyView
+  }[view]();
+  if (view === 'history') void attempt(studio.loadHistory);
+  if (view === 'overview') {
+    features.updateProgress();
+    features.updateMetrics();
+  }
+  if (focusSearch) {
+    const input = document.getElementById('source-search');
+    if (input) {
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(start, end);
+    }
+  }
+}
+function switchView(next) {
+  if (!Object.hasOwn(labels(), next)) return;
+  features.leaveView(view, next);
+  view = next;
+  draft = structuredClone(appState.config);
+  renderChrome();
+  renderView();
+  document.getElementById('main-content').focus({ preventScroll: true });
+}
+function saveConfig(config, message = t('Einstellungen gespeichert.', 'Settings saved.')) {
   // Apply queued edits to the latest confirmed configuration, including rapid source clicks.
-  const save = async () => { const next=typeof config==='function'?config(structuredClone(appState.config)):config; appState=await api.saveConfig(next); draft=structuredClone(appState.config); studio.update(); workspace.update(); renderChrome(); renderView(); toast(message); };
-  const saved=configSaves.catch(()=>{}).then(save); configSaves=saved; return saved;
+  const save = async () => {
+    const next = typeof config === 'function' ? config(structuredClone(appState.config)) : config;
+    appState = await api.saveConfig(next);
+    draft = structuredClone(appState.config);
+    studio.update();
+    workspace.update();
+    renderChrome();
+    renderView();
+    toast(message);
+  };
+  const saved = configSaves.catch(() => {}).then(save);
+  configSaves = saved;
+  return saved;
 }
 function configAction(action, message) {
-  const save = async () => { const result = await action(); appState = await api.getState(); draft = structuredClone(appState.config); studio.update(); workspace.update(); renderChrome(); renderView(); if (message) toast(message); return result; };
-  const saved = configSaves.catch(() => {}).then(save); configSaves = saved; return saved;
+  const save = async () => {
+    const result = await action();
+    appState = await api.getState();
+    draft = structuredClone(appState.config);
+    studio.update();
+    workspace.update();
+    renderChrome();
+    renderView();
+    if (message) toast(message);
+    return result;
+  };
+  const saved = configSaves.catch(() => {}).then(save);
+  configSaves = saved;
+  return saved;
 }
 function sourceValue(input) {
   return window.gitClonerNormalizeSource(input).value;
 }
 function sourceFormSettings() {
-  return { ...sourceDraft, ...studio.sourceOrigin(), value: document.getElementById('source-values').value.trim(), destination: document.getElementById('source-destination').value.trim(), accountId: document.getElementById('source-account').value, filters: { includeForks: document.getElementById('include-forks').checked, includeArchived: document.getElementById('include-archived').checked, include: document.getElementById('filter-include').value.split(/\r?\n/).map(value => value.trim()).filter(Boolean), exclude: document.getElementById('filter-exclude').value.split(/\r?\n/).map(value => value.trim()).filter(Boolean) } };
+  return {
+    ...sourceDraft,
+    ...studio.sourceOrigin(),
+    value: document.getElementById('source-values').value.trim(),
+    destination: document.getElementById('source-destination').value.trim(),
+    accountId: document.getElementById('source-account').value,
+    filters: {
+      includeForks: document.getElementById('include-forks').checked,
+      includeArchived: document.getElementById('include-archived').checked,
+      include: document
+        .getElementById('filter-include')
+        .value.split(/\r?\n/)
+        .map(value => value.trim())
+        .filter(Boolean),
+      exclude: document
+        .getElementById('filter-exclude')
+        .value.split(/\r?\n/)
+        .map(value => value.trim())
+        .filter(Boolean)
+    }
+  };
 }
 function normalizeSourceForm() {
   const input = document.getElementById('source-values');
   if (!input || !document.getElementById('source-dialog').open) return false;
-  const lines = input.value.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+  const lines = input.value
+    .split(/\r?\n/)
+    .map(value => value.trim())
+    .filter(Boolean);
   const normalized = lines.map(value => window.gitClonerNormalizeSource(value, studio.sourceOrigin()));
   input.value = normalized.map(item => item.value).join('\n');
   if (!editingSource && normalized.length === 1 && normalized[0].ownerPage) {
     const seed = { ...sourceFormSettings(), value: normalized[0].value };
     document.getElementById('source-dialog').close();
-    workspace.openBrowser({ seed, template: seed, autoOwner: true, autoload: true }); return true;
+    workspace.openBrowser({ seed, template: seed, autoOwner: true, autoload: true });
+    return true;
   }
   return false;
 }
 document.addEventListener('paste', event => {
   if (event.target.id !== 'source-values') return;
-  const value = event.clipboardData?.getData('text/plain'); if (!value || !/https?:\/\//i.test(value)) return;
-  event.preventDefault(); event.target.setRangeText(value, event.target.selectionStart, event.target.selectionEnd, 'end');
-  try { normalizeSourceForm(); } catch (error) { const node = document.getElementById('source-error'); node.textContent = error.message; node.hidden = false; }
+  const value = event.clipboardData?.getData('text/plain');
+  if (!value || !/https?:\/\//i.test(value)) return;
+  event.preventDefault();
+  event.target.setRangeText(value, event.target.selectionStart, event.target.selectionEnd, 'end');
+  try {
+    normalizeSourceForm();
+  } catch (error) {
+    const node = document.getElementById('source-error');
+    node.textContent = error.message;
+    node.hidden = false;
+  }
 });
 document.addEventListener('focusout', event => {
   if (event.target.id !== 'source-values') return;
-  try { normalizeSourceForm(); } catch (error) { const node = document.getElementById('source-error'); node.textContent = error.message; node.hidden = false; }
+  try {
+    normalizeSourceForm();
+  } catch (error) {
+    const node = document.getElementById('source-error');
+    node.textContent = error.message;
+    node.hidden = false;
+  }
 });
-function targetRows() { return sourceDraft.additionalDestinations.map((target,i)=>`<div class="input-group target-row"><input value="${esc(target.destination)}" data-extra-path="${i}" aria-label="${t('Weiteres Ziel','Additional destination')} ${i+1}" placeholder="${t('Vorhandenen Zielordner wählen','Choose an existing destination')}"><button type="button" class="button secondary" data-choose-extra="${i}">${t('Durchsuchen','Browse')}</button><button type="button" class="icon-button danger" data-remove-extra="${i}" aria-label="${t('Ziel entfernen','Remove destination')}">${icon('trash')}</button></div>`).join(''); }
+function targetRows() {
+  return sourceDraft.additionalDestinations
+    .map(
+      (target, i) =>
+        `<div class="input-group target-row"><input value="${esc(target.destination)}" data-extra-path="${i}" aria-label="${t('Weiteres Ziel', 'Additional destination')} ${i + 1}" placeholder="${t('Vorhandenen Zielordner wählen', 'Choose an existing destination')}"><button type="button" class="button secondary" data-choose-extra="${i}">${t('Durchsuchen', 'Browse')}</button><button type="button" class="icon-button danger" data-remove-extra="${i}" aria-label="${t('Ziel entfernen', 'Remove destination')}">${icon('trash')}</button></div>`
+    )
+    .join('');
+}
 function openSource(id = null) {
-  editingSource=id; sourceDraft=structuredClone(appState.config.sources.find(s=>s.id===id)||{accountId:'default',filters:{includeForks:true,includeArchived:true,include:[],exclude:[]},additionalDestinations:[]});
-  document.getElementById('source-dialog').innerHTML=`<form id="source-form"><div class="dialog-heading"><div><span class="eyebrow">GIT</span><h2 id="source-dialog-title">${id?t('Quelle bearbeiten','Edit source'):t('Quelle hinzufügen','Add source')}</h2></div><button type="button" class="icon-button" data-action="close-dialog" aria-label="${t('Schließen','Close')}">×</button></div><p class="muted">${t('Ein Konto für alle Repositories oder ausgewählte Projekte. Eine Quelle pro Zeile.','Use an account for all repositories or select individual projects. One source per line.')}</p>${studio.sourceFields(sourceDraft)}${field(t('GitHub-Konto oder Repository','GitHub account or repository'),'source-values',`<textarea id="source-values" rows="2" required spellcheck="false" placeholder="${t('konto oder konto/repository','owner or owner/repository')}">${esc(sourceDraft.value||'')}</textarea>`)}${field(t('Zielordner auf deinem Laufwerk','Destination folder on your drive'),'source-destination',`<div class="input-group"><input id="source-destination" value="${esc(sourceDraft.destination||'')}" required placeholder="${t('Vorhandenen Ordner auswählen','Choose an existing folder')}"><button type="button" class="button secondary" data-action="choose-source-directory">${t('Durchsuchen','Browse')}</button></div>`)}<details class="advanced"><summary>${t('Weitere Ziele, Konto und Filter','Additional destinations, account and filters')}</summary><div class="advanced-body"><div id="extra-targets">${targetRows()}</div>${button(t('Weiteren Zielordner hinzufügen','Add another destination'),'add-target','plus','secondary',false,'type="button"')}${field(t('Zugangsdaten verwenden','Use credentials'),'source-account',`<select id="source-account">${studio.accountOptions(sourceDraft)}</select>`)}<div class="check-grid"><label class="check-label"><input type="checkbox" id="include-forks" ${sourceDraft.filters.includeForks?'checked':''}>${t('Forks einschließen','Include forks')}</label><label class="check-label"><input type="checkbox" id="include-archived" ${sourceDraft.filters.includeArchived?'checked':''}>${t('Archivierte Repositories einschließen','Include archived repositories')}</label></div><div class="field-grid">${field(t('Nur diese Namen (optional)','Include names (optional)'),'filter-include',`<textarea id="filter-include" rows="2" placeholder="projekt-*">${esc(sourceDraft.filters.include.join('\n'))}</textarea>`)}${field(t('Diese Namen ausschließen','Exclude names'),'filter-exclude',`<textarea id="filter-exclude" rows="2" placeholder="test-*">${esc(sourceDraft.filters.exclude.join('\n'))}</textarea>`)}</div><p class="field-help">${t('Ein Muster pro Zeile. * ersetzt mehrere Zeichen, ? ein Zeichen. Ohne Einschlussfilter werden alle passenden Repositories gesichert.','One pattern per line. * matches any sequence and ? one character. Leave includes empty to back up all matching repositories.')}</p></div></details>${workspace.organizationFields(sourceDraft)}${features.sourceOptions(sourceDraft.backup)}${enhancements.sourceSchedule(sourceDraft.schedule)}${releaseTools.installationFields(sourceDraft)}<div class="info-box">${icon('folder')}<p>${t('Ablage: Zielordner / Konto / Repository. Einzelne Repository-Regeln haben Vorrang.','Stored under destination / owner / repository. Individual repository rules take precedence.')}</p></div><p id="source-error" class="form-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" class="button secondary" data-action="close-dialog">${t('Abbrechen','Cancel')}</button><button type="submit" class="button primary" id="source-submit">${id?t('Änderungen speichern','Save changes'):t('Quelle hinzufügen','Add source')}</button></div></form>`;
-  studio.syncSource();document.getElementById('source-dialog').showModal();
+  editingSource = id;
+  sourceDraft = structuredClone(
+    appState.config.sources.find(s => s.id === id) || {
+      accountId: 'default',
+      filters: { includeForks: true, includeArchived: true, include: [], exclude: [] },
+      additionalDestinations: []
+    }
+  );
+  document.getElementById('source-dialog').innerHTML =
+    `<form id="source-form"><div class="dialog-heading"><div><span class="eyebrow">GIT</span><h2 id="source-dialog-title">${id ? t('Quelle bearbeiten', 'Edit source') : t('Quelle hinzufügen', 'Add source')}</h2></div><button type="button" class="icon-button" data-action="close-dialog" aria-label="${t('Schließen', 'Close')}">×</button></div><p class="muted">${t('Ein Konto für alle Repositories oder ausgewählte Projekte. Eine Quelle pro Zeile.', 'Use an account for all repositories or select individual projects. One source per line.')}</p>${studio.sourceFields(sourceDraft)}${field(t('GitHub-Konto oder Repository', 'GitHub account or repository'), 'source-values', `<textarea id="source-values" rows="2" required spellcheck="false" placeholder="${t('konto oder konto/repository', 'owner or owner/repository')}">${esc(sourceDraft.value || '')}</textarea>`)}${field(t('Zielordner auf deinem Laufwerk', 'Destination folder on your drive'), 'source-destination', `<div class="input-group"><input id="source-destination" value="${esc(sourceDraft.destination || '')}" required placeholder="${t('Vorhandenen Ordner auswählen', 'Choose an existing folder')}"><button type="button" class="button secondary" data-action="choose-source-directory">${t('Durchsuchen', 'Browse')}</button></div>`)}<details class="advanced"><summary>${t('Weitere Ziele, Konto und Filter', 'Additional destinations, account and filters')}</summary><div class="advanced-body"><div id="extra-targets">${targetRows()}</div>${button(t('Weiteren Zielordner hinzufügen', 'Add another destination'), 'add-target', 'plus', 'secondary', false, 'type="button"')}${field(t('Zugangsdaten verwenden', 'Use credentials'), 'source-account', `<select id="source-account">${studio.accountOptions(sourceDraft)}</select>`)}<div class="check-grid"><label class="check-label"><input type="checkbox" id="include-forks" ${sourceDraft.filters.includeForks ? 'checked' : ''}>${t('Forks einschließen', 'Include forks')}</label><label class="check-label"><input type="checkbox" id="include-archived" ${sourceDraft.filters.includeArchived ? 'checked' : ''}>${t('Archivierte Repositories einschließen', 'Include archived repositories')}</label></div><div class="field-grid">${field(t('Nur diese Namen (optional)', 'Include names (optional)'), 'filter-include', `<textarea id="filter-include" rows="2" placeholder="projekt-*">${esc(sourceDraft.filters.include.join('\n'))}</textarea>`)}${field(t('Diese Namen ausschließen', 'Exclude names'), 'filter-exclude', `<textarea id="filter-exclude" rows="2" placeholder="test-*">${esc(sourceDraft.filters.exclude.join('\n'))}</textarea>`)}</div><p class="field-help">${t('Ein Muster pro Zeile. * ersetzt mehrere Zeichen, ? ein Zeichen. Ohne Einschlussfilter werden alle passenden Repositories gesichert.', 'One pattern per line. * matches any sequence and ? one character. Leave includes empty to back up all matching repositories.')}</p></div></details>${workspace.organizationFields(sourceDraft)}${features.sourceOptions(sourceDraft.backup)}${enhancements.sourceSchedule(sourceDraft.schedule)}${releaseTools.installationFields(sourceDraft)}<div class="info-box">${icon('folder')}<p>${t('Ablage: Zielordner / Konto / Repository. Einzelne Repository-Regeln haben Vorrang.', 'Stored under destination / owner / repository. Individual repository rules take precedence.')}</p></div><p id="source-error" class="form-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" class="button secondary" data-action="close-dialog">${t('Abbrechen', 'Cancel')}</button><button type="submit" class="button primary" id="source-submit">${id ? t('Änderungen speichern', 'Save changes') : t('Quelle hinzufügen', 'Add source')}</button></div></form>`;
+  studio.syncSource();
+  document.getElementById('source-dialog').showModal();
 }
 function passwordDialog(id = null) {
-  verifyRecord=id;
-  document.getElementById('password-dialog').innerHTML=`<form id="password-form"><div class="dialog-heading"><h2 id="password-dialog-title">${id?t('Archiv entsperren und prüfen','Unlock and verify archive'):t('Archivpasswort setzen','Set archive password')}</h2></div><p class="muted">${t('Mindestens 12 Zeichen. Ein verlorenes Passwort kann nicht wiederhergestellt werden.','At least 12 characters. A lost password cannot be recovered.')}</p>${field(t('Passwort','Password'),'archive-passphrase','<input type="password" id="archive-passphrase" minlength="12" autocomplete="off" required>')}${id?'':`<label class="check-label"><input type="checkbox" id="remember-passphrase"${appState.secureStorage?'':' disabled'}>${t('Im sicheren OS-Schlüsselspeicher merken (für unabhängige Zeitplanung)','Remember in the secure OS key store (for independent scheduling)')}</label><p class="field-help">${t('Bisherige Archive benötigen bis zum nächsten erfolgreichen Backup das bisherige Passwort.','Existing archives still need their previous password until the next successful backup.')}</p>`}<p class="form-error" id="password-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" class="button secondary" data-action="close-password">${t('Abbrechen','Cancel')}</button><button class="button primary" type="submit">${id?t('Prüfen','Verify'):t('Passwort übernehmen','Use password')}</button></div></form>`;
+  verifyRecord = id;
+  document.getElementById('password-dialog').innerHTML =
+    `<form id="password-form"><div class="dialog-heading"><h2 id="password-dialog-title">${id ? t('Archiv entsperren und prüfen', 'Unlock and verify archive') : t('Archivpasswort setzen', 'Set archive password')}</h2></div><p class="muted">${t('Mindestens 12 Zeichen. Ein verlorenes Passwort kann nicht wiederhergestellt werden.', 'At least 12 characters. A lost password cannot be recovered.')}</p>${field(t('Passwort', 'Password'), 'archive-passphrase', '<input type="password" id="archive-passphrase" minlength="12" autocomplete="off" required>')}${id ? '' : `<label class="check-label"><input type="checkbox" id="remember-passphrase"${appState.secureStorage ? '' : ' disabled'}>${t('Im sicheren OS-Schlüsselspeicher merken (für unabhängige Zeitplanung)', 'Remember in the secure OS key store (for independent scheduling)')}</label><p class="field-help">${t('Bisherige Archive benötigen bis zum nächsten erfolgreichen Backup das bisherige Passwort.', 'Existing archives still need their previous password until the next successful backup.')}</p>`}<p class="form-error" id="password-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" class="button secondary" data-action="close-password">${t('Abbrechen', 'Cancel')}</button><button class="button primary" type="submit">${id ? t('Prüfen', 'Verify') : t('Passwort übernehmen', 'Use password')}</button></div></form>`;
   document.getElementById('password-dialog').showModal();
 }
-document.addEventListener('input',event=>{
-  const node=event.target;
-  if(node.id==='repository-search'){query=node.value;pageIndex=0;document.getElementById('repository-list').innerHTML=repositoryTable();}
-  if(node.dataset.extraPath!==undefined)sourceDraft.additionalDestinations[Number(node.dataset.extraPath)].destination=node.value;
+document.addEventListener('input', event => {
+  const node = event.target;
+  if (node.id === 'repository-search') {
+    query = node.value;
+    pageIndex = 0;
+    document.getElementById('repository-list').innerHTML = repositoryTable();
+  }
+  if (node.dataset.extraPath !== undefined)
+    sourceDraft.additionalDestinations[Number(node.dataset.extraPath)].destination = node.value;
 });
-document.addEventListener('change',event=>{
-  const node=event.target;
-  if(node.dataset.sourceToggle){const id=node.dataset.sourceToggle,enabled=node.checked;void attempt(()=>saveConfig(next=>{const source=next.sources.find(s=>s.id===id);if(source)source.enabled=enabled;return next;},t('Quelle aktualisiert.','Source updated.')));}
-  else if(node.id==='checks-per-day'){
-    const count=Number(node.value),[h,m]=draft.schedule.times[0].split(':').map(Number);draft.schedule.checksPerDay=count;
-    draft.schedule.times=Array.from({length:count},(_,i)=>{const n=(h*60+m+Math.floor(i*1440/count))%1440;return`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;});document.getElementById('time-inputs').innerHTML=timeInputs(draft.schedule.times);
-  }else if(node.dataset.timeIndex!==undefined)draft.schedule.times[Number(node.dataset.timeIndex)]=node.value;
-  else if(node.name==='schedule-enabled')draft.schedule.enabled=node.checked;
-  else if(['closeToTray','launchAtLogin','notifications','checkUpdates','onDriveConnect','systemSchedule','autoRelocate'].includes(node.name))draft[node.name]=node.checked;
-  else if(node.dataset.backup){draft.backup[node.dataset.backup]=node.type==='checkbox'?node.checked:node.type==='number'?Number(node.value):node.value;if(node.dataset.backup==='mode'){if(node.value==='mirror')draft.backup.submodules=false;renderView();}}
-  else if(node.dataset.metadata)draft.backup.metadata[node.dataset.metadata]=node.checked;
-  else if(node.dataset.appearance)draft.appearance[node.dataset.appearance]=node.type==='checkbox'?node.checked:node.dataset.appearance==='fontScale'?Number(node.value):node.value;
-  else if(node.id==='source-own-backup'){sourceDraft.backup=node.checked?structuredClone(appState.config.backup):null;document.getElementById('source-backup-fields').hidden=!node.checked;}
-  else if(node.dataset.sourceBackup&&sourceDraft.backup){sourceDraft.backup[node.dataset.sourceBackup]=node.type==='checkbox'?node.checked:node.value;if(node.dataset.sourceBackup==='mode'){const checkbox=document.querySelector('[data-source-backup="submodules"]');checkbox.disabled=node.value==='mirror';if(checkbox.disabled){checkbox.checked=false;sourceDraft.backup.submodules=false;}}}
-  else if(node.dataset.sourceMetadata&&sourceDraft.backup)sourceDraft.backup.metadata[node.dataset.sourceMetadata]=node.checked;
-  else if(node.id==='repository-filter'){statusFilter=node.value;pageIndex=0;document.getElementById('repository-list').innerHTML=repositoryTable();}
-  else if(node.id==='restore-record'){void features.resetBrowser();restoreRecord=node.value;if(restoreRecord){restoreArchive='';document.getElementById('restore-archive-name').textContent=t('Keine Datei gewählt','No file selected');}}
-});
-document.addEventListener('click',event=>{
-  const node=event.target.closest('button,a');if(!node||node.disabled)return;
-  if(node.classList.contains('skip-link')){event.preventDefault();document.getElementById('main-content').focus({preventScroll:true});return;}
-  if(node.classList.contains('brand')){event.preventDefault();switchView('overview');return;}
-  if(node.dataset.view){if(node.dataset.settingsTab)settingsTab=node.dataset.settingsTab;switchView(node.dataset.view);return;}
-  if(node.dataset.settingsTab){settingsTab=node.dataset.settingsTab;renderView();return;}
-  if(node.dataset.link){void attempt(()=>api.openLink(node.dataset.link));return;}
-  if(node.dataset.editSource){openSource(node.dataset.editSource);return;}
-  if(node.dataset.openSource){void attempt(()=>api.openDestination(node.dataset.openSource));return;}
-  if(node.dataset.openProgram){void attempt(()=>api.openProgramDirectory(node.dataset.openProgram));return;}
-  if(node.dataset.openReleases){void attempt(()=>api.openReleaseDirectory(node.dataset.openReleases));return;}
-  if(node.dataset.restoreReleases){restoreRecord=node.dataset.restoreReleases;restoreArchive='';features.setRestoreScope('releases');switchView('restore');return;}
-  if(node.dataset.restore){restoreRecord=node.dataset.restore;restoreArchive='';switchView('restore');return;}
-  if(node.dataset.verify){const record=appState.repositories.find(r=>r.id===node.dataset.verify);if(record.encrypted&&!appState.encryptionReady){passwordDialog(record.id);return;}void attempt(async()=>{await api.verifyBackup({id:record.id});toast(t('Integrität erfolgreich geprüft.','Integrity verified successfully.'));});return;}
-  if(node.dataset.removeSource){const id=node.dataset.removeSource;void attempt(()=>saveConfig(next=>{next.sources=next.sources.filter(s=>s.id!==id);return next;},t('Quelle entfernt. Gesicherte Dateien bleiben erhalten.','Source removed. Existing backups are retained.')));return;}
-  if(node.dataset.chooseExtra!==undefined){void attempt(async()=>{const path=await api.chooseDirectory();if(path){sourceDraft.additionalDestinations[Number(node.dataset.chooseExtra)].destination=path;document.getElementById('extra-targets').innerHTML=targetRows();}});return;}
-  if(node.dataset.removeExtra!==undefined){sourceDraft.additionalDestinations.splice(Number(node.dataset.removeExtra),1);document.getElementById('extra-targets').innerHTML=targetRows();return;}
-  if(node.dataset.deviceLogin){void attempt(async()=>{await api.beginLogin(node.dataset.deviceLogin);toast(t('Anmeldung gestartet.','Sign-in started.'));});return;}
-  if(node.dataset.removeToken){void attempt(async()=>{await api.saveToken('',node.dataset.removeToken);appState=await api.getState();renderChrome();renderView();toast(t('Token entfernt.','Token removed.'));});return;}
-  if(node.dataset.removeAccount){void attempt(async()=>{const id=node.dataset.removeAccount;if(appState.config.sources.some(source=>source.accountId===id))throw new Error(t('Dieses Konto wird noch von einer Quelle verwendet. Bitte zuerst neu zuweisen.','This account is still assigned to a source. Reassign the source first.'));await api.saveToken('',id);const next=structuredClone(appState.config);next.accounts=next.accounts.filter(a=>a.id!==id);await saveConfig(next);});return;}
-  void attempt(async()=>{
-    switch(node.dataset.action){
-      case'add-source':openSource();break;
-      case'close-dialog':document.getElementById('source-dialog').close();break;
-      case'close-password':document.getElementById('password-dialog').close();break;
-      case'choose-source-directory':{const directory=await api.chooseDirectory();if(directory)document.getElementById('source-destination').value=directory;break;}
-      case'add-target':if(sourceDraft.additionalDestinations.length>=9)throw new Error(t('Maximal zehn Ziele pro Quelle.','At most ten destinations per source.'));sourceDraft.additionalDestinations.push({id:crypto.randomUUID(),destination:''});document.getElementById('extra-targets').innerHTML=targetRows();break;
-      case'backup':await api.runBackup();toast(t('Prüfung gestartet.','Check started.'));break;
-      case'check-updates':await api.checkUpdates();appState=await api.getState();renderChrome();if(view==='settings')renderView();break;
-      case'ignore-update':await api.ignoreUpdate();appState=await api.getState();renderChrome();if(view==='settings')renderView();toast(t('Diese Version wird nicht mehr angezeigt.','This version will no longer be shown.'));break;
-      case'reset-update':await api.resetUpdate();appState=await api.getState();renderChrome();renderView();break;
-      case'archive-password':passwordDialog();break;
-      case'choose-archive':{const archive=await api.chooseArchive();if(archive){await features.resetBrowser();restoreArchive=archive;restoreRecord='';document.getElementById('restore-record').value='';document.getElementById('restore-archive-name').textContent=archive;}break;}
-      case'choose-restore-parent':{const parent=await api.chooseDirectory();if(parent)document.getElementById('restore-parent').value=parent;break;}
-      case'export-settings':if(await api.exportSettings())toast(t('Einstellungen ohne Zugangsdaten exportiert.','Settings exported without credentials.'));break;
-      case'export-logs':if(await api.exportLogs())toast(t('Anonymisiertes Protokoll exportiert.','Anonymized log exported.'));break;
-      case'import-settings':{
-        importDraft=await api.importSettings();if(!importDraft)break;
-        document.getElementById('import-dialog').innerHTML=`<div class="dialog-heading"><h2 id="import-dialog-title">${t('Einstellungen übernehmen?','Apply imported settings?')}</h2></div><p>${importDraft.sources.length} ${t('Quellen. Zugangsdaten sind nicht enthalten. System-Zeitplanung und Autostart werden nicht übernommen. Bestehende Sicherungsdateien bleiben erhalten.','sources. No credentials are included. Native scheduling and autostart are not imported. Existing backup files are retained.')}</p><ul>${importDraft.sources.map(s=>`<li>${esc(s.value)} · ${esc(s.destination)}</li>`).join('')}</ul><p class="form-error" id="import-error" role="alert" hidden></p><div class="dialog-actions">${button(t('Abbrechen','Cancel'),'cancel-import','','secondary')}${button(t('Übernehmen','Apply'),'apply-import')}</div>`;document.getElementById('import-dialog').showModal();break;
+document.addEventListener('change', event => {
+  const node = event.target;
+  if (node.dataset.sourceToggle) {
+    const id = node.dataset.sourceToggle,
+      enabled = node.checked;
+    void attempt(() =>
+      saveConfig(
+        next => {
+          const source = next.sources.find(s => s.id === id);
+          if (source) source.enabled = enabled;
+          return next;
+        },
+        t('Quelle aktualisiert.', 'Source updated.')
+      )
+    );
+  } else if (node.id === 'checks-per-day') {
+    const count = Number(node.value),
+      [h, m] = draft.schedule.times[0].split(':').map(Number);
+    draft.schedule.checksPerDay = count;
+    draft.schedule.times = Array.from({ length: count }, (_, i) => {
+      const n = (h * 60 + m + Math.floor((i * 1440) / count)) % 1440;
+      return `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+    });
+    document.getElementById('time-inputs').innerHTML = timeInputs(draft.schedule.times);
+  } else if (node.dataset.timeIndex !== undefined) draft.schedule.times[Number(node.dataset.timeIndex)] = node.value;
+  else if (node.name === 'schedule-enabled') draft.schedule.enabled = node.checked;
+  else if (
+    [
+      'closeToTray',
+      'launchAtLogin',
+      'notifications',
+      'checkUpdates',
+      'onDriveConnect',
+      'systemSchedule',
+      'autoRelocate'
+    ].includes(node.name)
+  )
+    draft[node.name] = node.checked;
+  else if (node.dataset.backup) {
+    draft.backup[node.dataset.backup] =
+      node.type === 'checkbox' ? node.checked : node.type === 'number' ? Number(node.value) : node.value;
+    if (node.dataset.backup === 'mode') {
+      if (node.value === 'mirror') draft.backup.submodules = false;
+      renderView();
+    }
+  } else if (node.dataset.metadata) draft.backup.metadata[node.dataset.metadata] = node.checked;
+  else if (node.dataset.appearance)
+    draft.appearance[node.dataset.appearance] =
+      node.type === 'checkbox'
+        ? node.checked
+        : node.dataset.appearance === 'fontScale'
+          ? Number(node.value)
+          : node.value;
+  else if (node.id === 'source-own-backup') {
+    sourceDraft.backup = node.checked ? structuredClone(appState.config.backup) : null;
+    document.getElementById('source-backup-fields').hidden = !node.checked;
+  } else if (node.dataset.sourceBackup && sourceDraft.backup) {
+    sourceDraft.backup[node.dataset.sourceBackup] = node.type === 'checkbox' ? node.checked : node.value;
+    if (node.dataset.sourceBackup === 'mode') {
+      const checkbox = document.querySelector('[data-source-backup="submodules"]');
+      checkbox.disabled = node.value === 'mirror';
+      if (checkbox.disabled) {
+        checkbox.checked = false;
+        sourceDraft.backup.submodules = false;
       }
-      case'cancel-import':document.getElementById('import-dialog').close();break;
-      case'apply-import':try{await saveConfig(importDraft);document.getElementById('import-dialog').close();}catch(error){const node=document.getElementById('import-error');node.textContent=errorText(error.message);node.hidden=false;}break;
-      case'copy-device-code':await api.copyDeviceCode();toast(t('Code kopiert.','Code copied.'));break;
-      case'cancel-login':await api.cancelLogin();break;
-      case'previous-page':pageIndex--;document.getElementById('repository-list').innerHTML=repositoryTable();break;
-      case'next-page':pageIndex++;document.getElementById('repository-list').innerHTML=repositoryTable();break;
+    }
+  } else if (node.dataset.sourceMetadata && sourceDraft.backup)
+    sourceDraft.backup.metadata[node.dataset.sourceMetadata] = node.checked;
+  else if (node.id === 'repository-filter') {
+    statusFilter = node.value;
+    pageIndex = 0;
+    document.getElementById('repository-list').innerHTML = repositoryTable();
+  } else if (node.id === 'restore-record') {
+    void features.resetBrowser();
+    restoreRecord = node.value;
+    if (restoreRecord) {
+      restoreArchive = '';
+      document.getElementById('restore-archive-name').textContent = t('Keine Datei gewählt', 'No file selected');
+    }
+  }
+});
+document.addEventListener('click', event => {
+  const node = event.target.closest('button,a');
+  if (!node || node.disabled) return;
+  if (node.classList.contains('skip-link')) {
+    event.preventDefault();
+    document.getElementById('main-content').focus({ preventScroll: true });
+    return;
+  }
+  if (node.classList.contains('brand')) {
+    event.preventDefault();
+    switchView('overview');
+    return;
+  }
+  if (node.dataset.view) {
+    if (node.dataset.settingsTab) settingsTab = node.dataset.settingsTab;
+    switchView(node.dataset.view);
+    return;
+  }
+  if (node.dataset.settingsTab) {
+    settingsTab = node.dataset.settingsTab;
+    renderView();
+    return;
+  }
+  if (node.dataset.link) {
+    void attempt(() => api.openLink(node.dataset.link));
+    return;
+  }
+  if (node.dataset.editSource) {
+    openSource(node.dataset.editSource);
+    return;
+  }
+  if (node.dataset.openSource) {
+    void attempt(() => api.openDestination(node.dataset.openSource));
+    return;
+  }
+  if (node.dataset.openProgram) {
+    void attempt(() => api.openProgramDirectory(node.dataset.openProgram));
+    return;
+  }
+  if (node.dataset.openReleases) {
+    void attempt(() => api.openReleaseDirectory(node.dataset.openReleases));
+    return;
+  }
+  if (node.dataset.restoreReleases) {
+    restoreRecord = node.dataset.restoreReleases;
+    restoreArchive = '';
+    features.setRestoreScope('releases');
+    switchView('restore');
+    return;
+  }
+  if (node.dataset.restore) {
+    restoreRecord = node.dataset.restore;
+    restoreArchive = '';
+    switchView('restore');
+    return;
+  }
+  if (node.dataset.verify) {
+    const record = appState.repositories.find(r => r.id === node.dataset.verify);
+    if (record.encrypted && !appState.encryptionReady) {
+      passwordDialog(record.id);
+      return;
+    }
+    void attempt(async () => {
+      await api.verifyBackup({ id: record.id });
+      toast(t('Integrität erfolgreich geprüft.', 'Integrity verified successfully.'));
+    });
+    return;
+  }
+  if (node.dataset.removeSource) {
+    const id = node.dataset.removeSource;
+    void attempt(() =>
+      saveConfig(
+        next => {
+          next.sources = next.sources.filter(s => s.id !== id);
+          return next;
+        },
+        t('Quelle entfernt. Gesicherte Dateien bleiben erhalten.', 'Source removed. Existing backups are retained.')
+      )
+    );
+    return;
+  }
+  if (node.dataset.chooseExtra !== undefined) {
+    void attempt(async () => {
+      const path = await api.chooseDirectory();
+      if (path) {
+        sourceDraft.additionalDestinations[Number(node.dataset.chooseExtra)].destination = path;
+        document.getElementById('extra-targets').innerHTML = targetRows();
+      }
+    });
+    return;
+  }
+  if (node.dataset.removeExtra !== undefined) {
+    sourceDraft.additionalDestinations.splice(Number(node.dataset.removeExtra), 1);
+    document.getElementById('extra-targets').innerHTML = targetRows();
+    return;
+  }
+  if (node.dataset.deviceLogin) {
+    void attempt(async () => {
+      await api.beginLogin(node.dataset.deviceLogin);
+      toast(t('Anmeldung gestartet.', 'Sign-in started.'));
+    });
+    return;
+  }
+  if (node.dataset.removeToken) {
+    void attempt(async () => {
+      await api.saveToken('', node.dataset.removeToken);
+      appState = await api.getState();
+      renderChrome();
+      renderView();
+      toast(t('Token entfernt.', 'Token removed.'));
+    });
+    return;
+  }
+  if (node.dataset.removeAccount) {
+    void attempt(async () => {
+      const id = node.dataset.removeAccount;
+      if (appState.config.sources.some(source => source.accountId === id))
+        throw new Error(
+          t(
+            'Dieses Konto wird noch von einer Quelle verwendet. Bitte zuerst neu zuweisen.',
+            'This account is still assigned to a source. Reassign the source first.'
+          )
+        );
+      await api.saveToken('', id);
+      const next = structuredClone(appState.config);
+      next.accounts = next.accounts.filter(a => a.id !== id);
+      await saveConfig(next);
+    });
+    return;
+  }
+  void attempt(async () => {
+    switch (node.dataset.action) {
+      case 'add-source':
+        openSource();
+        break;
+      case 'close-dialog':
+        document.getElementById('source-dialog').close();
+        break;
+      case 'close-password':
+        document.getElementById('password-dialog').close();
+        break;
+      case 'choose-source-directory': {
+        const directory = await api.chooseDirectory();
+        if (directory) document.getElementById('source-destination').value = directory;
+        break;
+      }
+      case 'add-target':
+        if (sourceDraft.additionalDestinations.length >= 9)
+          throw new Error(t('Maximal zehn Ziele pro Quelle.', 'At most ten destinations per source.'));
+        sourceDraft.additionalDestinations.push({ id: crypto.randomUUID(), destination: '' });
+        document.getElementById('extra-targets').innerHTML = targetRows();
+        break;
+      case 'backup':
+        await api.runBackup();
+        toast(t('Prüfung gestartet.', 'Check started.'));
+        break;
+      case 'check-updates':
+        await api.checkUpdates();
+        appState = await api.getState();
+        renderChrome();
+        if (view === 'settings') renderView();
+        break;
+      case 'ignore-update':
+        await api.ignoreUpdate();
+        appState = await api.getState();
+        renderChrome();
+        if (view === 'settings') renderView();
+        toast(t('Diese Version wird nicht mehr angezeigt.', 'This version will no longer be shown.'));
+        break;
+      case 'reset-update':
+        await api.resetUpdate();
+        appState = await api.getState();
+        renderChrome();
+        renderView();
+        break;
+      case 'archive-password':
+        passwordDialog();
+        break;
+      case 'choose-archive': {
+        const archive = await api.chooseArchive();
+        if (archive) {
+          await features.resetBrowser();
+          restoreArchive = archive;
+          restoreRecord = '';
+          document.getElementById('restore-record').value = '';
+          document.getElementById('restore-archive-name').textContent = archive;
+        }
+        break;
+      }
+      case 'choose-restore-parent': {
+        const parent = await api.chooseDirectory();
+        if (parent) document.getElementById('restore-parent').value = parent;
+        break;
+      }
+      case 'export-settings':
+        if (await api.exportSettings())
+          toast(t('Einstellungen ohne Zugangsdaten exportiert.', 'Settings exported without credentials.'));
+        break;
+      case 'export-logs':
+        if (await api.exportLogs()) toast(t('Anonymisiertes Protokoll exportiert.', 'Anonymized log exported.'));
+        break;
+      case 'import-settings': {
+        importDraft = await api.importSettings();
+        if (!importDraft) break;
+        document.getElementById('import-dialog').innerHTML =
+          `<div class="dialog-heading"><h2 id="import-dialog-title">${t('Einstellungen übernehmen?', 'Apply imported settings?')}</h2></div><p>${importDraft.sources.length} ${t('Quellen. Zugangsdaten sind nicht enthalten. System-Zeitplanung und Autostart werden nicht übernommen. Bestehende Sicherungsdateien bleiben erhalten.', 'sources. No credentials are included. Native scheduling and autostart are not imported. Existing backup files are retained.')}</p><ul>${importDraft.sources.map(s => `<li>${esc(s.value)} · ${esc(s.destination)}</li>`).join('')}</ul><p class="form-error" id="import-error" role="alert" hidden></p><div class="dialog-actions">${button(t('Abbrechen', 'Cancel'), 'cancel-import', '', 'secondary')}${button(t('Übernehmen', 'Apply'), 'apply-import')}</div>`;
+        document.getElementById('import-dialog').showModal();
+        break;
+      }
+      case 'cancel-import':
+        document.getElementById('import-dialog').close();
+        break;
+      case 'apply-import':
+        try {
+          await saveConfig(importDraft);
+          document.getElementById('import-dialog').close();
+        } catch (error) {
+          const node = document.getElementById('import-error');
+          node.textContent = errorText(error.message);
+          node.hidden = false;
+        }
+        break;
+      case 'copy-device-code':
+        await api.copyDeviceCode();
+        toast(t('Code kopiert.', 'Code copied.'));
+        break;
+      case 'cancel-login':
+        await api.cancelLogin();
+        break;
+      case 'previous-page':
+        pageIndex--;
+        document.getElementById('repository-list').innerHTML = repositoryTable();
+        break;
+      case 'next-page':
+        pageIndex++;
+        document.getElementById('repository-list').innerHTML = repositoryTable();
+        break;
     }
   });
 });
-document.addEventListener('submit',event=>{
+document.addEventListener('submit', event => {
   event.preventDefault();
-  const form=event.target;
-  if(form.id==='source-form'){
-    void(async()=>{
-      const submit=document.getElementById('source-submit');submit.disabled=true;
-      try{
-        if(normalizeSourceForm())return;
-        const values=document.getElementById('source-values').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(value=>studio.sourceValue(value));
-        if(!values.length||(editingSource&&values.length!==1))throw new Error(t('Bitte eine Quelle pro Zeile eintragen. Beim Bearbeiten ist nur eine Quelle möglich.','Enter one source per line. Editing supports one source at a time.'));
-        if(sourceDraft.installation?.enabled&&values.length!==1)throw new Error(t('Automatische Installation bitte je einzelnem Repository einrichten.','Configure automatic installation for one repository at a time.'));
-        const destination=document.getElementById('source-destination').value.trim();
-        const next=structuredClone(appState.config);next.sources=next.sources.filter(s=>s.id!==editingSource);
-        for(const value of values)next.sources.push({...sourceDraft,...studio.sourceOrigin(),id:editingSource||crypto.randomUUID(),kind:studio.sourceKind(value),value,destination,enabled:sourceDraft.enabled??true,accountId:document.getElementById('source-account').value,filters:{includeForks:document.getElementById('include-forks').checked,includeArchived:document.getElementById('include-archived').checked,include:document.getElementById('filter-include').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean),exclude:document.getElementById('filter-exclude').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean)}});
-        await saveConfig(next,t('Quelle gespeichert.','Source saved.'));document.getElementById('source-dialog').close();
-      }catch(error){const node=document.getElementById('source-error');node.textContent=errorText(error.message);node.hidden=false;}finally{submit.disabled=false;}
+  const form = event.target;
+  if (form.id === 'source-form') {
+    void (async () => {
+      const submit = document.getElementById('source-submit');
+      submit.disabled = true;
+      try {
+        if (normalizeSourceForm()) return;
+        const values = document
+          .getElementById('source-values')
+          .value.split(/\r?\n/)
+          .map(s => s.trim())
+          .filter(Boolean)
+          .map(value => studio.sourceValue(value));
+        if (!values.length || (editingSource && values.length !== 1))
+          throw new Error(
+            t(
+              'Bitte eine Quelle pro Zeile eintragen. Beim Bearbeiten ist nur eine Quelle möglich.',
+              'Enter one source per line. Editing supports one source at a time.'
+            )
+          );
+        if (sourceDraft.installation?.enabled && values.length !== 1)
+          throw new Error(
+            t(
+              'Automatische Installation bitte je einzelnem Repository einrichten.',
+              'Configure automatic installation for one repository at a time.'
+            )
+          );
+        const destination = document.getElementById('source-destination').value.trim();
+        const next = structuredClone(appState.config);
+        next.sources = next.sources.filter(s => s.id !== editingSource);
+        for (const value of values)
+          next.sources.push({
+            ...sourceDraft,
+            ...studio.sourceOrigin(),
+            id: editingSource || crypto.randomUUID(),
+            kind: studio.sourceKind(value),
+            value,
+            destination,
+            enabled: sourceDraft.enabled ?? true,
+            accountId: document.getElementById('source-account').value,
+            filters: {
+              includeForks: document.getElementById('include-forks').checked,
+              includeArchived: document.getElementById('include-archived').checked,
+              include: document
+                .getElementById('filter-include')
+                .value.split(/\r?\n/)
+                .map(s => s.trim())
+                .filter(Boolean),
+              exclude: document
+                .getElementById('filter-exclude')
+                .value.split(/\r?\n/)
+                .map(s => s.trim())
+                .filter(Boolean)
+            }
+          });
+        await saveConfig(next, t('Quelle gespeichert.', 'Source saved.'));
+        document.getElementById('source-dialog').close();
+      } catch (error) {
+        const node = document.getElementById('source-error');
+        node.textContent = errorText(error.message);
+        node.hidden = false;
+      } finally {
+        submit.disabled = false;
+      }
     })();
-  }else if(['schedule-form','settings-form'].includes(form.id))void attempt(()=>saveConfig(draft));
-  else if(form.classList.contains('account-token-form'))void attempt(async()=>{const input=form.elements.token;if(!input.value.trim())throw new Error(t('Bitte ein Token eingeben.','Enter a token first.'));await api.saveToken(input.value,form.dataset.account);input.value='';appState=await api.getState();renderChrome();renderView();toast(t('Token sicher gespeichert.','Token stored securely.'));});
-  else if(form.id==='add-account-form')void attempt(async()=>{const next=structuredClone(appState.config);next.accounts.push({...studio.accountValue(),id:crypto.randomUUID(),label:document.getElementById('account-label').value.trim()});await saveConfig(next);});
-  else if(form.id==='oauth-form')void attempt(async()=>{draft.oauthClientId=document.getElementById('oauth-client-id').value.trim();await saveConfig(draft);});
-  else if(form.id==='password-form')void(async()=>{try{const password=document.getElementById('archive-passphrase').value;if(verifyRecord){await api.verifyBackup({id:verifyRecord,passphrase:password});toast(t('Integrität erfolgreich geprüft.','Integrity verified successfully.'));}else{await api.unlockEncryption({password,remember:document.getElementById('remember-passphrase').checked});appState=await api.getState();toast(t('Archivpasswort übernommen.','Archive password set.'));}document.getElementById('archive-passphrase').value='';document.getElementById('password-dialog').close();renderView();}catch(error){const node=document.getElementById('password-error');node.hidden=false;node.textContent=errorText(error.message);}})();
-  else if(form.id==='restore-form')void attempt(async()=>{const options={recordId:restoreRecord,archive:restoreArchive,parent:document.getElementById('restore-parent').value.trim(),name:document.getElementById('restore-name').value.trim(),passphrase:document.getElementById('restore-password').value};if(!options.recordId&&!options.archive)throw new Error(t('Bitte eine Sicherung auswählen.','Choose a backup first.'));const submit=form.querySelector('button[type="submit"]');submit.disabled=true;try{const result=await features.restore(options);document.getElementById('restore-password').value='';document.getElementById('restore-result').innerHTML=`<div class="info-box">${icon('check')}<p>${t('Erfolgreich geprüft und wiederhergestellt:','Verified and restored successfully:')} <strong>${esc(result.destination)}</strong></p></div>`;toast(t('Wiederherstellung abgeschlossen.','Restore complete.'));}finally{submit.disabled=false;}});
+  } else if (['schedule-form', 'settings-form'].includes(form.id)) void attempt(() => saveConfig(draft));
+  else if (form.classList.contains('account-token-form'))
+    void attempt(async () => {
+      const input = form.elements.token;
+      if (!input.value.trim()) throw new Error(t('Bitte ein Token eingeben.', 'Enter a token first.'));
+      await api.saveToken(input.value, form.dataset.account);
+      input.value = '';
+      appState = await api.getState();
+      renderChrome();
+      renderView();
+      toast(t('Token sicher gespeichert.', 'Token stored securely.'));
+    });
+  else if (form.id === 'add-account-form')
+    void attempt(async () => {
+      const next = structuredClone(appState.config);
+      next.accounts.push({
+        ...studio.accountValue(),
+        id: crypto.randomUUID(),
+        label: document.getElementById('account-label').value.trim()
+      });
+      await saveConfig(next);
+    });
+  else if (form.id === 'oauth-form')
+    void attempt(async () => {
+      draft.oauthClientId = document.getElementById('oauth-client-id').value.trim();
+      await saveConfig(draft);
+    });
+  else if (form.id === 'password-form')
+    void (async () => {
+      try {
+        const password = document.getElementById('archive-passphrase').value;
+        if (verifyRecord) {
+          await api.verifyBackup({ id: verifyRecord, passphrase: password });
+          toast(t('Integrität erfolgreich geprüft.', 'Integrity verified successfully.'));
+        } else {
+          await api.unlockEncryption({ password, remember: document.getElementById('remember-passphrase').checked });
+          appState = await api.getState();
+          toast(t('Archivpasswort übernommen.', 'Archive password set.'));
+        }
+        document.getElementById('archive-passphrase').value = '';
+        document.getElementById('password-dialog').close();
+        renderView();
+      } catch (error) {
+        const node = document.getElementById('password-error');
+        node.hidden = false;
+        node.textContent = errorText(error.message);
+      }
+    })();
+  else if (form.id === 'restore-form')
+    void attempt(async () => {
+      const options = {
+        recordId: restoreRecord,
+        archive: restoreArchive,
+        parent: document.getElementById('restore-parent').value.trim(),
+        name: document.getElementById('restore-name').value.trim(),
+        passphrase: document.getElementById('restore-password').value
+      };
+      if (!options.recordId && !options.archive)
+        throw new Error(t('Bitte eine Sicherung auswählen.', 'Choose a backup first.'));
+      const submit = form.querySelector('button[type="submit"]');
+      submit.disabled = true;
+      try {
+        const result = await features.restore(options);
+        document.getElementById('restore-password').value = '';
+        document.getElementById('restore-result').innerHTML =
+          `<div class="info-box">${icon('check')}<p>${t('Erfolgreich geprüft und wiederhergestellt:', 'Verified and restored successfully:')} <strong>${esc(result.destination)}</strong></p></div>`;
+        toast(t('Wiederherstellung abgeschlossen.', 'Restore complete.'));
+      } finally {
+        submit.disabled = false;
+      }
+    });
 });
-async function init(){
-  features.bind();enhancements.bind();studio.bind();workspace.bind();releaseTools.bind();programLibrary.bind();document.getElementById('brand-icon').innerHTML=icon('branch');document.getElementById('version-icon').innerHTML=icon('download');
-  appState=await api.getState();draft=structuredClone(appState.config);renderChrome();renderView();
-  api.onState(next=>{const changed=next.dataRevision!==appState.dataRevision;const deviceChanged=JSON.stringify(next.device)!==JSON.stringify(appState.device);appState=next;studio.update();workspace.update();releaseTools.update();renderChrome();if(view==='overview')updateOverview(changed);else if(view==='settings'&&settingsTab==='accounts'&&deviceChanged&&!document.activeElement?.matches('input,textarea,select'))renderView();});
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyAppearance);
+async function init() {
+  features.bind();
+  enhancements.bind();
+  studio.bind();
+  workspace.bind();
+  releaseTools.bind();
+  programLibrary.bind();
+  document.getElementById('brand-icon').innerHTML = icon('branch');
+  document.getElementById('version-icon').innerHTML = icon('download');
+  appState = await api.getState();
+  draft = structuredClone(appState.config);
+  renderChrome();
+  renderView();
+  api.onState(next => {
+    const changed = next.dataRevision !== appState.dataRevision;
+    const deviceChanged = JSON.stringify(next.device) !== JSON.stringify(appState.device);
+    appState = next;
+    studio.update();
+    workspace.update();
+    releaseTools.update();
+    renderChrome();
+    if (view === 'overview') updateOverview(changed);
+    else if (
+      view === 'settings' &&
+      settingsTab === 'accounts' &&
+      deviceChanged &&
+      !document.activeElement?.matches('input,textarea,select')
+    )
+      renderView();
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyAppearance);
 }
-void init().catch(error=>toast(error.message,true));
+void init().catch(error => toast(error.message, true));

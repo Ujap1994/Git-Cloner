@@ -13,11 +13,15 @@ async function normalize(directory) {
 }
 
 async function afterPack(context) {
-  const resources = context.electronPlatformName === 'darwin'
-    ? path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, 'Contents', 'Resources')
-    : path.join(context.appOutDir, 'resources');
+  const resources =
+    context.electronPlatformName === 'darwin'
+      ? path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, 'Contents', 'Resources')
+      : path.join(context.appOutDir, 'resources');
   await fs.mkdir(path.join(resources, 'licenses'), { recursive: true });
-  await fs.copyFile(path.join(context.packager.projectDir, 'LICENSE'), path.join(resources, 'licenses', 'LICENSE.git-cloner.txt'));
+  await fs.copyFile(
+    path.join(context.packager.projectDir, 'LICENSE'),
+    path.join(resources, 'licenses', 'LICENSE.git-cloner.txt')
+  );
   // Independent of the developer's umask and the Electron archive extractor.
   if (context.electronPlatformName !== 'win32') await normalize(context.appOutDir);
 }

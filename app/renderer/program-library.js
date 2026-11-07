@@ -1,66 +1,209 @@
 window.createGitClonerProgramLibrary = function ({ api, t, esc, field, button, bytes, getState, getSourceDraft }) {
-  let preview, selected = new Set(), history, historyOffset = 0, historyRequest = 0, programRequest = 0, searchTimer;
+  let preview,
+    selected = new Set(),
+    history,
+    historyOffset = 0,
+    historyRequest = 0,
+    programRequest = 0,
+    searchTimer;
   const filters = { search: '', status: 'all', period: 'all' };
-  const statuses = () => ({ downloaded: t('Heruntergeladen', 'Downloaded'), reused: t('Lokal übernommen', 'Reused locally'), resumed: t('Fortgesetzt', 'Resumed'), cached: t('Aus Download-Cache', 'From download cache'), error: t('Fehlgeschlagen', 'Failed'), cleaned: t('Cache bereinigt', 'Cache cleaned') });
-  const date = value => new Intl.DateTimeFormat(t('de-DE', 'en-GB'), { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+  const statuses = () => ({
+    downloaded: t('Heruntergeladen', 'Downloaded'),
+    reused: t('Lokal übernommen', 'Reused locally'),
+    resumed: t('Fortgesetzt', 'Resumed'),
+    cached: t('Aus Download-Cache', 'From download cache'),
+    error: t('Fehlgeschlagen', 'Failed'),
+    cleaned: t('Cache bereinigt', 'Cache cleaned')
+  });
+  const date = value =>
+    new Intl.DateTimeFormat(t('de-DE', 'en-GB'), { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
   function summary() {
     const programs = getSourceDraft()?.installation?.programs || [];
-    return programs.length ? `<strong>${programs.length} ${programs.length === 1 ? t('Programm ausgewählt', 'program selected') : t('Programme ausgewählt', 'programs selected')}</strong><ul class="program-selection-list">${programs.map(name => `<li>${esc(name)}</li>`).join('')}</ul>` : t('Automatische Auswahl, wenn genau ein Programm enthalten ist.', 'Automatic selection when exactly one program is included.');
+    return programs.length
+      ? `<strong>${programs.length} ${programs.length === 1 ? t('Programm ausgewählt', 'program selected') : t('Programme ausgewählt', 'programs selected')}</strong><ul class="program-selection-list">${programs.map(name => `<li>${esc(name)}</li>`).join('')}</ul>`
+      : t(
+          'Automatische Auswahl, wenn genau ein Programm enthalten ist.',
+          'Automatic selection when exactly one program is included.'
+        );
   }
   function fields(source) {
     const shortcut = source.installation?.shortcut || { enabled: false, destination: '' };
     return `<div class="program-library-fields"><div class="field"><label>${t('Programme im Release-Archiv', 'Programs inside the release archive')}</label><div id="source-program-summary" class="field-help">${summary()}</div><div class="heading-buttons">${button(t('Programme aus Sicherung auswählen', 'Choose programs from backup'), 'program-pick', '', 'secondary', !source.id)}${button(t('Automatische Auswahl', 'Automatic selection'), 'program-reset', '', 'secondary')}</div><p class="field-help">${t('Nach der ersten Release-Sicherung verfügbar. Mehrere Apps werden gemeinsam geprüft und ausgetauscht.', 'Available after the first release backup. Multiple apps are verified and replaced together.')}</p></div><label class="check-label"><input type="checkbox" id="source-shortcut-enabled"${shortcut.enabled ? ' checked' : ''}>${t('Programmverknüpfungen erstellen', 'Create program shortcuts')}</label><div id="source-shortcut-fields"${shortcut.enabled ? '' : ' hidden'}>${field(t('Ordner für Verknüpfungen', 'Shortcut folder'), 'source-shortcut-destination', `<div class="input-group"><input id="source-shortcut-destination" value="${esc(shortcut.destination)}" placeholder="${t('Zum Beispiel Schreibtisch / Desktop', 'For example Desktop')}"><button type="button" class="button secondary" data-action="shortcut-directory">${t('Durchsuchen', 'Browse')}</button></div>`, t('Verknüpfungen folgen der verwalteten Installation. Eigene oder veränderte Dateien werden nicht überschrieben.', 'Shortcuts follow the managed installation. Unrelated or modified files are preserved.'))}</div></div>`;
   }
-  function updateSummary() { const node = document.getElementById('source-program-summary'); if (node) node.innerHTML = summary(); }
+  function updateSummary() {
+    const node = document.getElementById('source-program-summary');
+    if (node) node.innerHTML = summary();
+  }
   async function pick() {
-    const request = ++programRequest, source = getSourceDraft(), configured = getState().config.sources.find(item => item.id === source.id);
-    if (!configured || document.getElementById('source-values').value.trim() !== configured.value || document.getElementById('source-destination').value.trim() !== configured.destination) throw new Error(t('Bitte die Quelle zuerst speichern und ihre Release-Dateien sichern.', 'Save the source and back up its release files first.'));
+    const request = ++programRequest,
+      source = getSourceDraft(),
+      configured = getState().config.sources.find(item => item.id === source.id);
+    if (
+      !configured ||
+      document.getElementById('source-values').value.trim() !== configured.value ||
+      document.getElementById('source-destination').value.trim() !== configured.destination
+    )
+      throw new Error(
+        t(
+          'Bitte die Quelle zuerst speichern und ihre Release-Dateien sichern.',
+          'Save the source and back up its release files first.'
+        )
+      );
     const dialog = document.getElementById('program-picker-dialog');
-    dialog.innerHTML = `<div class="dialog-heading"><h2 id="program-picker-title">${t('Programme auswählen', 'Choose programs')}</h2>${button(t('Abbrechen', 'Cancel'), 'program-pick-close', '', 'secondary')}</div><p role="status">${t('Gesicherte Release-Datei wird geprüft …', 'Verifying the backed-up release file …')}</p>`; dialog.showModal();
+    dialog.innerHTML = `<div class="dialog-heading"><h2 id="program-picker-title">${t('Programme auswählen', 'Choose programs')}</h2>${button(t('Abbrechen', 'Cancel'), 'program-pick-close', '', 'secondary')}</div><p role="status">${t('Gesicherte Release-Datei wird geprüft …', 'Verifying the backed-up release file …')}</p>`;
+    dialog.showModal();
     try {
       preview = await api.programCandidates({ sourceId: source.id, pattern: source.installation?.pattern || '' });
       if (request !== programRequest || !dialog.open || getSourceDraft()?.id !== source.id) return;
-      selected = new Set((source.installation?.programs || []).filter(key => preview.candidates.some(item => item.key === key && item.available)));
-      if (!selected.size && preview.candidates.length === 1 && preview.candidates[0].available) selected.add(preview.candidates[0].key);
+      selected = new Set(
+        (source.installation?.programs || []).filter(key =>
+          preview.candidates.some(item => item.key === key && item.available)
+        )
+      );
+      if (!selected.size && preview.candidates.length === 1 && preview.candidates[0].available)
+        selected.add(preview.candidates[0].key);
       renderPicker();
-    } catch (error) { if (request !== programRequest || !dialog.open) return; dialog.innerHTML = `<h2 id="program-picker-title">${t('Programme auswählen', 'Choose programs')}</h2><p class="form-error" role="alert">${esc(error.message)}</p><div class="dialog-actions">${button(t('Schließen', 'Close'), 'program-pick-close', '', 'secondary')}</div>`; }
+    } catch (error) {
+      if (request !== programRequest || !dialog.open) return;
+      dialog.innerHTML = `<h2 id="program-picker-title">${t('Programme auswählen', 'Choose programs')}</h2><p class="form-error" role="alert">${esc(error.message)}</p><div class="dialog-actions">${button(t('Schließen', 'Close'), 'program-pick-close', '', 'secondary')}</div>`;
+    }
   }
   function renderPicker() {
-    document.getElementById('program-picker-dialog').innerHTML = `<div class="dialog-heading"><div><h2 id="program-picker-title">${t('Programme auswählen', 'Choose programs')}</h2><p class="muted">${esc(preview.tag)} · ${esc(preview.asset)}</p></div>${button(t('Abbrechen', 'Cancel'), 'program-pick-close', '', 'secondary')}</div><p>${t('Wähle die Programme, die gemeinsam installiert und aktuell gehalten werden sollen. Mindestens eines, höchstens 64.', 'Choose the programs to install and keep current together. Select between one and 64.')}</p><div class="program-candidates">${preview.candidates.map(item => `<label class="program-candidate${item.available ? '' : ' unavailable'}"><input type="checkbox" data-program-key="${esc(item.key)}"${selected.has(item.key) ? ' checked' : ''}${item.available ? '' : ' disabled'}><span><strong>${esc(item.name)}</strong><span class="repo-detail">${esc(item.key)}</span>${item.message ? `<span class="inline-warning">${esc(item.message)}</span>` : ''}</span><span class="label neutral">${item.available ? t('Kompatibel', 'Compatible') : t('Nicht verfügbar', 'Unavailable')}</span></label>`).join('')}</div><p class="field-help">${t('Die Auswahl gilt auch für spätere Releases. Wenn Pfade im Archiv wechseln, bleibt die bisherige Installation erhalten und die Auswahl muss erneuert werden.', 'The selection also applies to later releases. If archive paths change, the previous installation is retained and the selection must be updated.')}</p><div class="dialog-actions"><span id="program-count" role="status">${selected.size} ${t('ausgewählt', 'selected')}</span>${button(t('Auswahl übernehmen', 'Apply selection'), 'program-pick-apply', '', 'primary', !selected.size || selected.size > 64)}</div>`;
+    document.getElementById('program-picker-dialog').innerHTML =
+      `<div class="dialog-heading"><div><h2 id="program-picker-title">${t('Programme auswählen', 'Choose programs')}</h2><p class="muted">${esc(preview.tag)} · ${esc(preview.asset)}</p></div>${button(t('Abbrechen', 'Cancel'), 'program-pick-close', '', 'secondary')}</div><p>${t('Wähle die Programme, die gemeinsam installiert und aktuell gehalten werden sollen. Mindestens eines, höchstens 64.', 'Choose the programs to install and keep current together. Select between one and 64.')}</p><div class="program-candidates">${preview.candidates.map(item => `<label class="program-candidate${item.available ? '' : ' unavailable'}"><input type="checkbox" data-program-key="${esc(item.key)}"${selected.has(item.key) ? ' checked' : ''}${item.available ? '' : ' disabled'}><span><strong>${esc(item.name)}</strong><span class="repo-detail">${esc(item.key)}</span>${item.message ? `<span class="inline-warning">${esc(item.message)}</span>` : ''}</span><span class="label neutral">${item.available ? t('Kompatibel', 'Compatible') : t('Nicht verfügbar', 'Unavailable')}</span></label>`).join('')}</div><p class="field-help">${t('Die Auswahl gilt auch für spätere Releases. Wenn Pfade im Archiv wechseln, bleibt die bisherige Installation erhalten und die Auswahl muss erneuert werden.', 'The selection also applies to later releases. If archive paths change, the previous installation is retained and the selection must be updated.')}</p><div class="dialog-actions"><span id="program-count" role="status">${selected.size} ${t('ausgewählt', 'selected')}</span>${button(t('Auswahl übernehmen', 'Apply selection'), 'program-pick-apply', '', 'primary', !selected.size || selected.size > 64)}</div>`;
   }
-  function historyButton() { return button(t('Download-Verlauf anzeigen', 'View download history'), 'download-history', 'history', 'secondary'); }
+  function historyButton() {
+    return button(t('Download-Verlauf anzeigen', 'View download history'), 'download-history', 'history', 'secondary');
+  }
   function historyShell() {
     const dialog = document.getElementById('download-history-dialog');
-    dialog.innerHTML = `<div class="dialog-heading"><div><h2 id="download-history-title">${t('Download-Verlauf', 'Download history')}</h2><p class="muted">${t('Gemessene Dateibytes aus Release-Abrufen und Cache-Bereinigungen.', 'Measured file bytes from release transfers and cache cleanup.')}</p></div>${button(t('Schließen', 'Close'), 'download-history-close', '', 'secondary')}</div><div class="field-grid download-history-filters">${field(t('Repository oder Datei suchen', 'Search repository or file'), 'download-history-search', '<input id="download-history-search" type="search" maxlength="200">')}${field(t('Ergebnis', 'Result'), 'download-history-status', `<select id="download-history-status"><option value="all">${t('Alle Ergebnisse', 'All results')}</option>${Object.entries(statuses()).map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}</select>`)}${field(t('Zeitraum', 'Period'), 'download-history-period', `<select id="download-history-period"><option value="all">${t('Gesamter Verlauf', 'All history')}</option><option value="7d">${t('Letzte 7 Tage', 'Last 7 days')}</option><option value="30d">${t('Letzte 30 Tage', 'Last 30 days')}</option></select>`)}</div><div id="download-history-results" aria-live="polite"></div><p id="download-history-error" role="alert" class="form-error" hidden></p>`;
+    dialog.innerHTML = `<div class="dialog-heading"><div><h2 id="download-history-title">${t('Download-Verlauf', 'Download history')}</h2><p class="muted">${t('Gemessene Dateibytes aus Release-Abrufen und Cache-Bereinigungen.', 'Measured file bytes from release transfers and cache cleanup.')}</p></div>${button(t('Schließen', 'Close'), 'download-history-close', '', 'secondary')}</div><div class="field-grid download-history-filters">${field(t('Repository oder Datei suchen', 'Search repository or file'), 'download-history-search', '<input id="download-history-search" type="search" maxlength="200">')}${field(
+      t('Ergebnis', 'Result'),
+      'download-history-status',
+      `<select id="download-history-status"><option value="all">${t('Alle Ergebnisse', 'All results')}</option>${Object.entries(
+        statuses()
+      )
+        .map(([value, label]) => `<option value="${value}">${label}</option>`)
+        .join('')}</select>`
+    )}${field(t('Zeitraum', 'Period'), 'download-history-period', `<select id="download-history-period"><option value="all">${t('Gesamter Verlauf', 'All history')}</option><option value="7d">${t('Letzte 7 Tage', 'Last 7 days')}</option><option value="30d">${t('Letzte 30 Tage', 'Last 30 days')}</option></select>`)}</div><div id="download-history-results" aria-live="polite"></div><p id="download-history-error" role="alert" class="form-error" hidden></p>`;
   }
   function renderHistory() {
     const totals = history.totals;
-    document.getElementById('download-history-results').innerHTML = `<div class="download-storage-summary"><div><strong>${bytes(totals.networkBytes)}</strong><span>${t('Empfangene Release-Nutzdaten', 'Received release payload')}</span></div><div><strong>${bytes(totals.reusedBytes + totals.resumedBytes)}</strong><span>${t('Datenabruf vermieden', 'Transfer avoided')}</span></div><div><strong>${bytes(totals.freedBytes)}</strong><span>${t('Cache-Dateibytes bereinigt', 'Cache file bytes removed')}</span></div></div><p class="field-help">${t('Vermieden: lokal übernommene Dateien und geprüfte Downloadteile. Bereinigt: entfernte temporäre Dateibytes; der freie Laufwerksplatz kann davon abweichen.', 'Avoided: reused files and verified download parts. Cleaned: removed temporary file bytes; actual free drive space may differ.')}</p><div class="table-wrap"><table class="table download-history-table"><thead><tr><th>${t('ZEIT / QUELLE', 'TIME / SOURCE')}</th><th>${t('ERGEBNIS', 'RESULT')}</th><th>${t('EMPFANGEN', 'RECEIVED')}</th><th>${t('VERMIEDEN', 'AVOIDED')}</th><th>${t('BEREINIGT', 'CLEANED')}</th></tr></thead><tbody>${history.entries.map(item => `<tr><td><strong>${esc(item.fullName || t('Cache-Bereinigung', 'Cache cleanup'))}</strong><div class="repo-detail">${date(item.at)}${item.tag ? ' · ' + esc(item.tag) : ''}</div><div class="repo-detail">${esc(item.encrypted ? t('Verschlüsselte Release-Datei', 'Encrypted release file') : item.name || '')}</div></td><td><span class="label ${item.status === 'error' ? 'error' : 'neutral'}">${statuses()[item.status]}</span></td><td class="nowrap">${bytes(item.networkBytes)}</td><td class="nowrap">${bytes(item.reusedBytes + item.resumedBytes)}</td><td class="nowrap">${bytes(item.freedBytes)}</td></tr>`).join('') || `<tr><td colspan="5">${t('Noch keine passenden Download-Einträge.', 'No matching download entries yet.')}</td></tr>`}</tbody></table></div><div class="pagination"><span>${history.total} ${t('Treffer', 'matches')} · ${history.retained} / ${history.limit} ${t('gespeichert', 'retained')}</span><div>${button('‹', 'download-history-previous', '', 'secondary', !historyOffset)}${button('›', 'download-history-next', '', 'secondary', historyOffset + 50 >= history.total)}</div></div><div class="dialog-actions">${button(t('Neu laden', 'Refresh'), 'download-history-refresh', 'refresh', 'secondary')}</div>`;
+    document.getElementById('download-history-results').innerHTML =
+      `<div class="download-storage-summary"><div><strong>${bytes(totals.networkBytes)}</strong><span>${t('Empfangene Release-Nutzdaten', 'Received release payload')}</span></div><div><strong>${bytes(totals.reusedBytes + totals.resumedBytes)}</strong><span>${t('Datenabruf vermieden', 'Transfer avoided')}</span></div><div><strong>${bytes(totals.freedBytes)}</strong><span>${t('Cache-Dateibytes bereinigt', 'Cache file bytes removed')}</span></div></div><p class="field-help">${t('Vermieden: lokal übernommene Dateien und geprüfte Downloadteile. Bereinigt: entfernte temporäre Dateibytes; der freie Laufwerksplatz kann davon abweichen.', 'Avoided: reused files and verified download parts. Cleaned: removed temporary file bytes; actual free drive space may differ.')}</p><div class="table-wrap"><table class="table download-history-table"><thead><tr><th>${t('ZEIT / QUELLE', 'TIME / SOURCE')}</th><th>${t('ERGEBNIS', 'RESULT')}</th><th>${t('EMPFANGEN', 'RECEIVED')}</th><th>${t('VERMIEDEN', 'AVOIDED')}</th><th>${t('BEREINIGT', 'CLEANED')}</th></tr></thead><tbody>${history.entries.map(item => `<tr><td><strong>${esc(item.fullName || t('Cache-Bereinigung', 'Cache cleanup'))}</strong><div class="repo-detail">${date(item.at)}${item.tag ? ' · ' + esc(item.tag) : ''}</div><div class="repo-detail">${esc(item.encrypted ? t('Verschlüsselte Release-Datei', 'Encrypted release file') : item.name || '')}</div></td><td><span class="label ${item.status === 'error' ? 'error' : 'neutral'}">${statuses()[item.status]}</span></td><td class="nowrap">${bytes(item.networkBytes)}</td><td class="nowrap">${bytes(item.reusedBytes + item.resumedBytes)}</td><td class="nowrap">${bytes(item.freedBytes)}</td></tr>`).join('') || `<tr><td colspan="5">${t('Noch keine passenden Download-Einträge.', 'No matching download entries yet.')}</td></tr>`}</tbody></table></div><div class="pagination"><span>${history.total} ${t('Treffer', 'matches')} · ${history.retained} / ${history.limit} ${t('gespeichert', 'retained')}</span><div>${button('‹', 'download-history-previous', '', 'secondary', !historyOffset)}${button('›', 'download-history-next', '', 'secondary', historyOffset + 50 >= history.total)}</div></div><div class="dialog-actions">${button(t('Neu laden', 'Refresh'), 'download-history-refresh', 'refresh', 'secondary')}</div>`;
   }
   async function loadHistory() {
-    const request = ++historyRequest, result = await api.downloadHistory({ ...filters, offset: historyOffset });
+    const request = ++historyRequest,
+      result = await api.downloadHistory({ ...filters, offset: historyOffset });
     if (request !== historyRequest || !document.getElementById('download-history-dialog').open) return;
-    history = result; renderHistory();
+    history = result;
+    renderHistory();
   }
-  async function openHistory() { filters.search = ''; filters.status = filters.period = 'all'; historyOffset = 0; historyShell(); document.getElementById('download-history-dialog').showModal(); await loadHistory(); }
+  async function openHistory() {
+    filters.search = '';
+    filters.status = filters.period = 'all';
+    historyOffset = 0;
+    historyShell();
+    document.getElementById('download-history-dialog').showModal();
+    await loadHistory();
+  }
   function bind() {
-    document.getElementById('program-picker-dialog').addEventListener('cancel', () => { programRequest++; });
+    document.getElementById('program-picker-dialog').addEventListener('cancel', () => {
+      programRequest++;
+    });
     document.addEventListener('input', event => {
-      if (event.target.id === 'source-shortcut-destination') { const source = getSourceDraft(); source.installation.shortcut ||= { enabled: false, destination: '' }; source.installation.shortcut.destination = event.target.value.trim(); }
-      if (event.target.id === 'download-history-search') { filters.search = event.target.value; historyOffset = 0; clearTimeout(searchTimer); searchTimer = setTimeout(() => void loadHistory().catch(showError), 200); }
+      if (event.target.id === 'source-shortcut-destination') {
+        const source = getSourceDraft();
+        source.installation.shortcut ||= { enabled: false, destination: '' };
+        source.installation.shortcut.destination = event.target.value.trim();
+      }
+      if (event.target.id === 'download-history-search') {
+        filters.search = event.target.value;
+        historyOffset = 0;
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => void loadHistory().catch(showError), 200);
+      }
     });
     document.addEventListener('change', event => {
       const node = event.target;
-      if (node.id === 'source-shortcut-enabled') { const source = getSourceDraft(), destination = document.getElementById('source-shortcut-destination'); source.installation.shortcut = { enabled: node.checked, destination: destination.value.trim() || getState().desktopDirectory || '' }; destination.value = source.installation.shortcut.destination; document.getElementById('source-shortcut-fields').hidden = !node.checked; }
-      if (node.dataset.programKey) { if (node.checked) selected.add(node.dataset.programKey); else selected.delete(node.dataset.programKey); document.getElementById('program-count').textContent = `${selected.size} ${t('ausgewählt', 'selected')}`; document.querySelector('[data-action="program-pick-apply"]').disabled = !selected.size || selected.size > 64; }
-      if (node.id === 'download-history-status' || node.id === 'download-history-period') { filters[node.id.endsWith('status') ? 'status' : 'period'] = node.value; historyOffset = 0; void loadHistory().catch(showError); }
+      if (node.id === 'source-shortcut-enabled') {
+        const source = getSourceDraft(),
+          destination = document.getElementById('source-shortcut-destination');
+        source.installation.shortcut = {
+          enabled: node.checked,
+          destination: destination.value.trim() || getState().desktopDirectory || ''
+        };
+        destination.value = source.installation.shortcut.destination;
+        document.getElementById('source-shortcut-fields').hidden = !node.checked;
+      }
+      if (node.dataset.programKey) {
+        if (node.checked) selected.add(node.dataset.programKey);
+        else selected.delete(node.dataset.programKey);
+        document.getElementById('program-count').textContent = `${selected.size} ${t('ausgewählt', 'selected')}`;
+        document.querySelector('[data-action="program-pick-apply"]').disabled = !selected.size || selected.size > 64;
+      }
+      if (node.id === 'download-history-status' || node.id === 'download-history-period') {
+        filters[node.id.endsWith('status') ? 'status' : 'period'] = node.value;
+        historyOffset = 0;
+        void loadHistory().catch(showError);
+      }
     });
     document.addEventListener('click', event => {
-      const node = event.target.closest('button'); if (!node || node.disabled) return;
-      const actions = { 'program-pick': pick, 'program-pick-close': () => { programRequest++; document.getElementById('program-picker-dialog').close(); }, 'program-pick-apply': () => { getSourceDraft().installation.programs = [...selected].sort(); updateSummary(); document.getElementById('program-picker-dialog').close(); }, 'program-reset': () => { getSourceDraft().installation.programs = []; updateSummary(); }, 'shortcut-directory': async () => { const destination = await api.chooseDirectory(); if (destination) { document.getElementById('source-shortcut-destination').value = destination; getSourceDraft().installation.shortcut = { enabled: document.getElementById('source-shortcut-enabled').checked, destination }; } }, 'download-history': openHistory, 'download-history-close': () => { historyRequest++; clearTimeout(searchTimer); document.getElementById('download-history-dialog').close(); }, 'download-history-refresh': loadHistory, 'download-history-previous': () => { historyOffset -= 50; return loadHistory(); }, 'download-history-next': () => { historyOffset += 50; return loadHistory(); } };
+      const node = event.target.closest('button');
+      if (!node || node.disabled) return;
+      const actions = {
+        'program-pick': pick,
+        'program-pick-close': () => {
+          programRequest++;
+          document.getElementById('program-picker-dialog').close();
+        },
+        'program-pick-apply': () => {
+          getSourceDraft().installation.programs = [...selected].sort();
+          updateSummary();
+          document.getElementById('program-picker-dialog').close();
+        },
+        'program-reset': () => {
+          getSourceDraft().installation.programs = [];
+          updateSummary();
+        },
+        'shortcut-directory': async () => {
+          const destination = await api.chooseDirectory();
+          if (destination) {
+            document.getElementById('source-shortcut-destination').value = destination;
+            getSourceDraft().installation.shortcut = {
+              enabled: document.getElementById('source-shortcut-enabled').checked,
+              destination
+            };
+          }
+        },
+        'download-history': openHistory,
+        'download-history-close': () => {
+          historyRequest++;
+          clearTimeout(searchTimer);
+          document.getElementById('download-history-dialog').close();
+        },
+        'download-history-refresh': loadHistory,
+        'download-history-previous': () => {
+          historyOffset -= 50;
+          return loadHistory();
+        },
+        'download-history-next': () => {
+          historyOffset += 50;
+          return loadHistory();
+        }
+      };
       if (actions[node.dataset.action]) void Promise.resolve().then(actions[node.dataset.action]).catch(showError);
     });
   }
-  function showError(error) { const historyDialog = document.getElementById('download-history-dialog'), node = historyDialog.open ? document.getElementById('download-history-error') : document.getElementById('source-error'); if (node) { node.textContent = error.message; node.hidden = false; } }
+  function showError(error) {
+    const historyDialog = document.getElementById('download-history-dialog'),
+      node = historyDialog.open
+        ? document.getElementById('download-history-error')
+        : document.getElementById('source-error');
+    if (node) {
+      node.textContent = error.message;
+      node.hidden = false;
+    }
+  }
   return { fields, bind, historyButton };
 };

@@ -1,38 +1,273 @@
-const {test,expect}=require('@playwright/test');
-const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),{pathToFileURL}=require('node:url');
-const {launch}=require('./helpers.cjs');
-const {repository}=require('../helpers/repository.cjs');
-const {defaults,validateConfig}=require('../../app/core/config.cjs');
-const {managed}=require('../../app/core/backup.cjs');
-const {authenticateArchive}=require('../../app/core/archives.cjs');
-const cleanup=[];
-test.afterEach(async()=>{while(cleanup.length)await cleanup.pop()();});
-async function app(options){const value=await launch(options);cleanup.push(()=>value.close());return value;}
-async function fixture(){const callbacks=[],value=await repository({after:fn=>callbacks.push(fn)});cleanup.push(async()=>{for(const fn of callbacks)await fn();});return value;}
-async function capture(page,name){await page.screenshot({path:path.resolve(__dirname,'../../docs/screenshots',name),fullPage:!(await page.locator('dialog[open]').count())});}
-test('GitLab subgroup sources persist with aligned provider and server fields and no preset repositories',async()=>{
-  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'gc-provider-ui-'));cleanup.push(()=>fs.rm(directory,{recursive:true,force:true}));const f=await app();expect((await f.page.evaluate(()=>window.gitCloner.getState())).config.sources).toEqual([]);
-  await f.page.getByRole('button',{name:'Quellen',exact:true}).click();await f.page.getByRole('button',{name:'Quelle hinzufügen',exact:true}).first().click();await f.page.getByLabel('Anbieter',{exact:true}).selectOption('gitlab');await f.page.getByLabel('Serveradresse',{exact:true}).fill('https://gitlab.example.org');await f.page.getByLabel('Art der Quelle').selectOption('owner');await f.page.getByLabel('Konto, Gruppe oder Repository').fill('example-team/subgroup');await f.page.getByLabel('Zielordner auf deinem Laufwerk').fill(directory);
-  const boxes=await Promise.all(['Anbieter','Serveradresse'].map(label=>f.page.getByLabel(label,{exact:true}).boundingBox()));expect(boxes[0].y).toBe(boxes[1].y);expect(boxes[0].height).toBe(boxes[1].height);await capture(f.page,'provider-source.png');await f.page.getByRole('dialog').getByRole('button',{name:'Quelle hinzufügen',exact:true}).click();await expect(f.page.getByRole('dialog')).not.toBeVisible();await expect(f.page.locator('#main-content')).toContainText('GitLab');await f.page.reload();await f.page.getByRole('button',{name:'Quellen',exact:true}).click();const state=await f.page.evaluate(()=>window.gitCloner.getState());expect(state.config.sources[0]).toMatchObject({provider:'gitlab',server:'https://gitlab.example.org',kind:'owner',value:'example-team/subgroup'});
+const { test, expect } = require('@playwright/test');
+const fs = require('node:fs/promises'),
+  path = require('node:path'),
+  os = require('node:os'),
+  { pathToFileURL } = require('node:url');
+const { launch } = require('./helpers.cjs');
+const { repository } = require('../helpers/repository.cjs');
+const { defaults, validateConfig } = require('../../app/core/config.cjs');
+const { managed } = require('../../app/core/backup.cjs');
+const { authenticateArchive } = require('../../app/core/archives.cjs');
+const cleanup = [];
+test.afterEach(async () => {
+  while (cleanup.length) await cleanup.pop()();
 });
-test('provider-specific account setup keeps Forgejo server and username together',async()=>{
-  const f=await app();await f.page.getByRole('button',{name:'Einstellungen',exact:true}).click();await f.page.getByRole('tab',{name:'Konten',exact:true}).click();await f.page.getByLabel('Anbieter des Kontos').selectOption('forgejo');await f.page.getByLabel('Server des Kontos').fill('https://forgejo.example.org');await f.page.getByLabel('Eigener Forgejo-Benutzername').fill('example-reader');await f.page.getByLabel('Kontobezeichnung').fill('Forgejo example');await f.page.getByRole('button',{name:'Konto hinzufügen',exact:true}).click();await expect(f.page.locator('#toast')).toHaveText('Einstellungen gespeichert.');const state=await f.page.evaluate(()=>window.gitCloner.getState());expect(state.config.accounts[0]).toMatchObject({provider:'forgejo',server:'https://forgejo.example.org',username:'example-reader'});await expect(f.page.locator('.account-card').last()).toContainText('Forgejo');await expect(f.page.locator('.account-card').last().getByRole('button',{name:'Mit GitHub anmelden'})).toHaveCount(0);
+async function app(options) {
+  const value = await launch(options);
+  cleanup.push(() => value.close());
+  return value;
+}
+async function fixture() {
+  const callbacks = [],
+    value = await repository({ after: fn => callbacks.push(fn) });
+  cleanup.push(async () => {
+    for (const fn of callbacks) await fn();
+  });
+  return value;
+}
+async function capture(page, name) {
+  await page.screenshot({
+    path: path.resolve(__dirname, '../../docs/screenshots', name),
+    fullPage: !(await page.locator('dialog[open]').count())
+  });
+}
+test('GitLab subgroup sources persist with aligned provider and server fields and no preset repositories', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'gc-provider-ui-'));
+  cleanup.push(() => fs.rm(directory, { recursive: true, force: true }));
+  const f = await app();
+  expect((await f.page.evaluate(() => window.gitCloner.getState())).config.sources).toEqual([]);
+  await f.page.getByRole('button', { name: 'Quellen', exact: true }).click();
+  await f.page.getByRole('button', { name: 'Quelle hinzufügen', exact: true }).first().click();
+  await f.page.getByLabel('Anbieter', { exact: true }).selectOption('gitlab');
+  await f.page.getByLabel('Serveradresse', { exact: true }).fill('https://gitlab.example.org');
+  await f.page.getByLabel('Art der Quelle').selectOption('owner');
+  await f.page.getByLabel('Konto, Gruppe oder Repository').fill('example-team/subgroup');
+  await f.page.getByLabel('Zielordner auf deinem Laufwerk').fill(directory);
+  const boxes = await Promise.all(
+    ['Anbieter', 'Serveradresse'].map(label => f.page.getByLabel(label, { exact: true }).boundingBox())
+  );
+  expect(boxes[0].y).toBe(boxes[1].y);
+  expect(boxes[0].height).toBe(boxes[1].height);
+  await capture(f.page, 'provider-source.png');
+  await f.page.getByRole('dialog').getByRole('button', { name: 'Quelle hinzufügen', exact: true }).click();
+  await expect(f.page.getByRole('dialog')).not.toBeVisible();
+  await expect(f.page.locator('#main-content')).toContainText('GitLab');
+  await f.page.reload();
+  await f.page.getByRole('button', { name: 'Quellen', exact: true }).click();
+  const state = await f.page.evaluate(() => window.gitCloner.getState());
+  expect(state.config.sources[0]).toMatchObject({
+    provider: 'gitlab',
+    server: 'https://gitlab.example.org',
+    kind: 'owner',
+    value: 'example-team/subgroup'
+  });
 });
-test('history filters real saved results, opens details and displays contextual help',async()=>{
-  const config=defaults();config.checkUpdates=false;const now=new Date().toISOString(),state={history:[{startedAt:now,finishedAt:now,trigger:'manual',resultCount:2,errorCount:1,changedCount:1,results:[{fullName:'example-team/project-a',status:'updated'},{fullName:'example-team/project-b',status:'error',helpCode:'permissions',message:'Schreibzugriff nicht möglich.'}]},{startedAt:'2026-01-01T02:00:00Z',finishedAt:'2026-01-01T02:01:00Z',trigger:'schedule',resultCount:1,errorCount:0,results:[{fullName:'other-example/project',status:'unchanged'}]}]};const f=await app({config,state});await f.page.getByRole('button',{name:'Verlauf',exact:true}).click();await expect(f.page.locator('.history-table tbody tr')).toHaveCount(2);await f.page.getByLabel('Repository suchen').fill('project-b');await f.page.getByLabel('Ergebnis',{exact:true}).selectOption('errors');await expect(f.page.locator('.history-table tbody tr')).toHaveCount(1);await capture(f.page,'history-search.png');await f.page.getByRole('button',{name:'Details',exact:true}).click();const dialog=f.page.getByRole('dialog');await expect(dialog).toContainText('example-team/project-b');await dialog.getByRole('button',{name:'Fehlerhilfe',exact:true}).click();await expect(dialog).toContainText('Dateizugriff nicht möglich');await expect(dialog).toContainText('Schreibrechte');await capture(f.page,'error-help.png');
+test('provider-specific account setup keeps Forgejo server and username together', async () => {
+  const f = await app();
+  await f.page.getByRole('button', { name: 'Einstellungen', exact: true }).click();
+  await f.page.getByRole('tab', { name: 'Konten', exact: true }).click();
+  await f.page.getByLabel('Anbieter des Kontos').selectOption('forgejo');
+  await f.page.getByLabel('Server des Kontos').fill('https://forgejo.example.org');
+  await f.page.getByLabel('Eigener Forgejo-Benutzername').fill('example-reader');
+  await f.page.getByLabel('Kontobezeichnung').fill('Forgejo example');
+  await f.page.getByRole('button', { name: 'Konto hinzufügen', exact: true }).click();
+  await expect(f.page.locator('#toast')).toHaveText('Einstellungen gespeichert.');
+  const state = await f.page.evaluate(() => window.gitCloner.getState());
+  expect(state.config.accounts[0]).toMatchObject({
+    provider: 'forgejo',
+    server: 'https://forgejo.example.org',
+    username: 'example-reader'
+  });
+  await expect(f.page.locator('.account-card').last()).toContainText('Forgejo');
+  await expect(f.page.locator('.account-card').last().getByRole('button', { name: 'Mit GitHub anmelden' })).toHaveCount(
+    0
+  );
 });
-test('a persisted disk-full queue clearly waits and remains paused after an unsuccessful space check',async()=>{
-  const f=await fixture(),config=f.config(),id='waiting-job';const queue={id:'waiting-queue',config,jobs:[{source:f.source,repository:f.repository,sourceId:f.source.id,targetId:f.source.id+':primary'}],unresolved:false,completed:[],results:[],startedAt:new Date().toISOString(),trigger:'manual',elapsedMs:0,receivedBytes:0,pauseReason:'space',blockedSpaces:{[id]:{root:f.backup,requiredBytes:'999999999999999999999'}},message:'Warte auf genügend freien Speicher. Bestehende Sicherungen bleiben erhalten.'};const a=await app({config,state:{queue}});await expect(a.page.locator('#progress-details')).toContainText('Wartet auf freien Speicher');await a.page.getByRole('button',{name:'Fortsetzen',exact:true}).click();expect((await a.page.evaluate(()=>window.gitCloner.getState())).queue.pauseReason).toBe('space');await capture(a.page,'space-wait.png');
+test('history filters real saved results, opens details and displays contextual help', async () => {
+  const config = defaults();
+  config.checkUpdates = false;
+  const now = new Date().toISOString(),
+    state = {
+      history: [
+        {
+          startedAt: now,
+          finishedAt: now,
+          trigger: 'manual',
+          resultCount: 2,
+          errorCount: 1,
+          changedCount: 1,
+          results: [
+            { fullName: 'example-team/project-a', status: 'updated' },
+            {
+              fullName: 'example-team/project-b',
+              status: 'error',
+              helpCode: 'permissions',
+              message: 'Schreibzugriff nicht möglich.'
+            }
+          ]
+        },
+        {
+          startedAt: '2026-01-01T02:00:00Z',
+          finishedAt: '2026-01-01T02:01:00Z',
+          trigger: 'schedule',
+          resultCount: 1,
+          errorCount: 0,
+          results: [{ fullName: 'other-example/project', status: 'unchanged' }]
+        }
+      ]
+    };
+  const f = await app({ config, state });
+  await f.page.getByRole('button', { name: 'Verlauf', exact: true }).click();
+  await expect(f.page.locator('.history-table tbody tr')).toHaveCount(2);
+  await f.page.getByLabel('Repository suchen').fill('project-b');
+  await f.page.getByLabel('Ergebnis', { exact: true }).selectOption('errors');
+  await expect(f.page.locator('.history-table tbody tr')).toHaveCount(1);
+  await capture(f.page, 'history-search.png');
+  await f.page.getByRole('button', { name: 'Details', exact: true }).click();
+  const dialog = f.page.getByRole('dialog');
+  await expect(dialog).toContainText('example-team/project-b');
+  await dialog.getByRole('button', { name: 'Fehlerhilfe', exact: true }).click();
+  await expect(dialog).toContainText('Dateizugriff nicht möglich');
+  await expect(dialog).toContainText('Schreibrechte');
+  await capture(f.page, 'error-help.png');
 });
-test('a persisted API-limit queue shows its release time and stays paused until the reset',async()=>{
-  const f=await fixture(),config=f.config(),until=new Date(Date.now()+3600000).toISOString();const queue={id:'rate-queue',config,jobs:[{source:f.source,repository:f.repository,sourceId:f.source.id,targetId:f.source.id+':primary'}],unresolved:false,completed:[],results:[],startedAt:new Date().toISOString(),trigger:'manual',elapsedMs:0,receivedBytes:0,pauseReason:'rate',rateLimitUntil:until,message:'Warte auf die Freigabe des API-Limits. Erledigte Sicherungen bleiben erhalten.'};const a=await app({config,state:{queue}});await expect(a.page.locator('#progress-details')).toContainText('Wartet auf API-Limit');await expect(a.page.locator('[data-rate-until]')).toContainText('Freigabe voraussichtlich');const state=await a.page.evaluate(()=>window.gitCloner.getState());expect(state.queue.pauseReason).toBe('rate');expect(state.queue.rateLimitUntil).toBe(until);
+test('a persisted disk-full queue clearly waits and remains paused after an unsuccessful space check', async () => {
+  const f = await fixture(),
+    config = f.config(),
+    id = 'waiting-job';
+  const queue = {
+    id: 'waiting-queue',
+    config,
+    jobs: [{ source: f.source, repository: f.repository, sourceId: f.source.id, targetId: f.source.id + ':primary' }],
+    unresolved: false,
+    completed: [],
+    results: [],
+    startedAt: new Date().toISOString(),
+    trigger: 'manual',
+    elapsedMs: 0,
+    receivedBytes: 0,
+    pauseReason: 'space',
+    blockedSpaces: { [id]: { root: f.backup, requiredBytes: '999999999999999999999' } },
+    message: 'Warte auf genügend freien Speicher. Bestehende Sicherungen bleiben erhalten.'
+  };
+  const a = await app({ config, state: { queue } });
+  await expect(a.page.locator('#progress-details')).toContainText('Wartet auf freien Speicher');
+  await a.page.getByRole('button', { name: 'Fortsetzen', exact: true }).click();
+  expect((await a.page.evaluate(() => window.gitCloner.getState())).queue.pauseReason).toBe('space');
+  await capture(a.page, 'space-wait.png');
 });
-test('password wizard changes a real encrypted backup and restores it using the new active password',async()=>{
-  const f=await fixture(),old='old GUI backup password',fresh='new GUI backup password';f.options.encryption=true;const record=await f.sync({passphrase:old}),config=validateConfig({...f.config(),backup:{...f.options}}),a=await app({config,state:{repositories:{[record.id]:record}}});await a.page.getByRole('button',{name:'Einstellungen',exact:true}).click();await a.page.getByRole('tab',{name:'Sicherung',exact:true}).click();await a.page.getByRole('button',{name:'Passwortwechsel-Assistent',exact:true}).click();const dialog=a.page.getByRole('dialog',{name:'Archivpasswort wechseln'});await expect(dialog.locator('.rotation-item')).toHaveCount(1);await dialog.getByLabel('Bisheriges Passwort, falls benötigt').fill(old);await dialog.getByLabel('Neues Passwort',{exact:true}).fill(fresh);await dialog.getByLabel('Neues Passwort bestätigen').fill(fresh);const boxes=await Promise.all(['Neues Passwort','Neues Passwort bestätigen'].map(label=>dialog.getByLabel(label,{exact:true}).boundingBox()));expect(boxes[0].y).toBe(boxes[1].y);expect(boxes[0].height).toBe(boxes[1].height);await capture(a.page,'password-rotation.png');await dialog.getByRole('button',{name:'Ausgewählte Archive umstellen',exact:true}).click();await expect(dialog.locator('#rotation-report')).toContainText('1 Archive umgestellt');await authenticateArchive(path.join(record.destination,'backup.gcb'),fresh);const marker=await managed(record.destination,record.fullName);expect(marker.encryptionKeyId).toBeTruthy();await dialog.getByRole('button',{name:'Schließen',exact:true}).click();await a.page.getByRole('button',{name:'Wiederherstellen',exact:true}).click();await a.page.getByLabel('Gespeicherte Sicherung').selectOption(record.id);await a.page.getByLabel('Übergeordneter Ordner').fill(f.root);await a.page.getByLabel('Neuer Ordnername').fill('rotation-restored');await a.page.getByRole('button',{name:'Prüfen & wiederherstellen',exact:true}).click();await expect(a.page.locator('#restore-result')).toContainText('Erfolgreich geprüft');expect(await fs.readFile(path.join(f.root,'rotation-restored','README.md'),'utf8')).toBe('  old text  \n');
+test('a persisted API-limit queue shows its release time and stays paused until the reset', async () => {
+  const f = await fixture(),
+    config = f.config(),
+    until = new Date(Date.now() + 3600000).toISOString();
+  const queue = {
+    id: 'rate-queue',
+    config,
+    jobs: [{ source: f.source, repository: f.repository, sourceId: f.source.id, targetId: f.source.id + ':primary' }],
+    unresolved: false,
+    completed: [],
+    results: [],
+    startedAt: new Date().toISOString(),
+    trigger: 'manual',
+    elapsedMs: 0,
+    receivedBytes: 0,
+    pauseReason: 'rate',
+    rateLimitUntil: until,
+    message: 'Warte auf die Freigabe des API-Limits. Erledigte Sicherungen bleiben erhalten.'
+  };
+  const a = await app({ config, state: { queue } });
+  await expect(a.page.locator('#progress-details')).toContainText('Wartet auf API-Limit');
+  await expect(a.page.locator('[data-rate-until]')).toContainText('Freigabe voraussichtlich');
+  const state = await a.page.evaluate(() => window.gitCloner.getState());
+  expect(state.queue.pauseReason).toBe('rate');
+  expect(state.queue.rateLimitUntil).toBe(until);
 });
-test('LFS recommendations inspect a real Git tree and apply only after an explicit source choice',async()=>{
-  const f=await fixture();await fs.writeFile(path.join(f.remote,'.gitattributes'),'*.bin filter=lfs diff=lfs merge=lfs -text\n');await f.command('add','.');await f.command('commit','-m','LFS attributes');const head=(await f.command('rev-parse','HEAD')).stdout.trim(),commit=await f.github.request(`/repos/demo/project/git/commits/${head}`),tree=await f.github.request(`/repos/demo/project/git/trees/${commit.tree.sha}?recursive=1`),entry=tree.tree.find(e=>e.path==='.gitattributes'),api={};api[`/repos/demo/project`]=f.repository;api[`/repos/demo/project/git/commits/${head}`]=commit;api[`/repos/demo/project/git/trees/${commit.tree.sha}?recursive=1`]=tree;api[`/repos/demo/project/git/blobs/${entry.sha}`]=await f.github.request(`/repos/demo/project/git/blobs/${entry.sha}`);const a=await app({config:f.config(),repositories:[f.repository],api,remotes:{'https://github.com/demo/project.git':pathToFileURL(f.remote).href}});await a.page.getByRole('button',{name:'Quellen',exact:true}).click();await a.page.getByRole('button',{name:'Umfang empfehlen',exact:true}).click();const dialog=a.page.getByRole('dialog');await dialog.getByRole('button',{name:'Umfang prüfen',exact:true}).click();await expect(dialog).toContainText('LFS-Regeln gefunden.');expect((await a.page.evaluate(()=>window.gitCloner.getState())).config.sources[0].backup).toBe(null);await capture(a.page,'content-recommendations.png');await dialog.getByRole('button',{name:'Auswahl für diese Quelle übernehmen',exact:true}).click();await expect(dialog).not.toBeVisible();const saved=await a.page.evaluate(()=>window.gitCloner.getState());expect(saved.config.sources[0].backup.lfs).toBe(true);expect(saved.config.backup.lfs).toBe(false);
+test('password wizard changes a real encrypted backup and restores it using the new active password', async () => {
+  const f = await fixture(),
+    old = 'old GUI backup password',
+    fresh = 'new GUI backup password';
+  f.options.encryption = true;
+  const record = await f.sync({ passphrase: old }),
+    config = validateConfig({ ...f.config(), backup: { ...f.options } }),
+    a = await app({ config, state: { repositories: { [record.id]: record } } });
+  await a.page.getByRole('button', { name: 'Einstellungen', exact: true }).click();
+  await a.page.getByRole('tab', { name: 'Sicherung', exact: true }).click();
+  await a.page.getByRole('button', { name: 'Passwortwechsel-Assistent', exact: true }).click();
+  const dialog = a.page.getByRole('dialog', { name: 'Archivpasswort wechseln' });
+  await expect(dialog.locator('.rotation-item')).toHaveCount(1);
+  await dialog.getByLabel('Bisheriges Passwort, falls benötigt').fill(old);
+  await dialog.getByLabel('Neues Passwort', { exact: true }).fill(fresh);
+  await dialog.getByLabel('Neues Passwort bestätigen').fill(fresh);
+  const boxes = await Promise.all(
+    ['Neues Passwort', 'Neues Passwort bestätigen'].map(label =>
+      dialog.getByLabel(label, { exact: true }).boundingBox()
+    )
+  );
+  expect(boxes[0].y).toBe(boxes[1].y);
+  expect(boxes[0].height).toBe(boxes[1].height);
+  await capture(a.page, 'password-rotation.png');
+  await dialog.getByRole('button', { name: 'Ausgewählte Archive umstellen', exact: true }).click();
+  await expect(dialog.locator('#rotation-report')).toContainText('1 Archive umgestellt');
+  await authenticateArchive(path.join(record.destination, 'backup.gcb'), fresh);
+  const marker = await managed(record.destination, record.fullName);
+  expect(marker.encryptionKeyId).toBeTruthy();
+  await dialog.getByRole('button', { name: 'Schließen', exact: true }).click();
+  await a.page.getByRole('button', { name: 'Wiederherstellen', exact: true }).click();
+  await a.page.getByLabel('Gespeicherte Sicherung').selectOption(record.id);
+  await a.page.getByLabel('Übergeordneter Ordner').fill(f.root);
+  await a.page.getByLabel('Neuer Ordnername').fill('rotation-restored');
+  await a.page.getByRole('button', { name: 'Prüfen & wiederherstellen', exact: true }).click();
+  await expect(a.page.locator('#restore-result')).toContainText('Erfolgreich geprüft');
+  expect(await fs.readFile(path.join(f.root, 'rotation-restored', 'README.md'), 'utf8')).toBe('  old text  \n');
 });
-test('new settings and history remain usable in English dark mode with large text',async()=>{
-  const config=defaults();config.appearance={language:'en',theme:'dark',fontScale:1.3,highContrast:false};const f=await app({config});await f.application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1040,900));await f.page.getByRole('button',{name:'History',exact:true}).click();await expect(f.page.getByLabel('Search repositories')).toBeVisible();expect(await f.page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);await f.page.getByRole('button',{name:'Settings',exact:true}).click();await f.page.getByRole('tab',{name:'Accounts',exact:true}).click();expect(await f.page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+test('LFS recommendations inspect a real Git tree and apply only after an explicit source choice', async () => {
+  const f = await fixture();
+  await fs.writeFile(path.join(f.remote, '.gitattributes'), '*.bin filter=lfs diff=lfs merge=lfs -text\n');
+  await f.command('add', '.');
+  await f.command('commit', '-m', 'LFS attributes');
+  const head = (await f.command('rev-parse', 'HEAD')).stdout.trim(),
+    commit = await f.github.request(`/repos/demo/project/git/commits/${head}`),
+    tree = await f.github.request(`/repos/demo/project/git/trees/${commit.tree.sha}?recursive=1`),
+    entry = tree.tree.find(e => e.path === '.gitattributes'),
+    api = {};
+  api[`/repos/demo/project`] = f.repository;
+  api[`/repos/demo/project/git/commits/${head}`] = commit;
+  api[`/repos/demo/project/git/trees/${commit.tree.sha}?recursive=1`] = tree;
+  api[`/repos/demo/project/git/blobs/${entry.sha}`] = await f.github.request(
+    `/repos/demo/project/git/blobs/${entry.sha}`
+  );
+  const a = await app({
+    config: f.config(),
+    repositories: [f.repository],
+    api,
+    remotes: { 'https://github.com/demo/project.git': pathToFileURL(f.remote).href }
+  });
+  await a.page.getByRole('button', { name: 'Quellen', exact: true }).click();
+  await a.page.getByRole('button', { name: 'Umfang empfehlen', exact: true }).click();
+  const dialog = a.page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Umfang prüfen', exact: true }).click();
+  await expect(dialog).toContainText('LFS-Regeln gefunden.');
+  expect((await a.page.evaluate(() => window.gitCloner.getState())).config.sources[0].backup).toBe(null);
+  await capture(a.page, 'content-recommendations.png');
+  await dialog.getByRole('button', { name: 'Auswahl für diese Quelle übernehmen', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  const saved = await a.page.evaluate(() => window.gitCloner.getState());
+  expect(saved.config.sources[0].backup.lfs).toBe(true);
+  expect(saved.config.backup.lfs).toBe(false);
+});
+test('new settings and history remain usable in English dark mode with large text', async () => {
+  const config = defaults();
+  config.appearance = { language: 'en', theme: 'dark', fontScale: 1.3, highContrast: false };
+  const f = await app({ config });
+  await f.application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1040, 900));
+  await f.page.getByRole('button', { name: 'History', exact: true }).click();
+  await expect(f.page.getByLabel('Search repositories')).toBeVisible();
+  expect(
+    await f.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)
+  ).toBe(true);
+  await f.page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await f.page.getByRole('tab', { name: 'Accounts', exact: true }).click();
+  expect(
+    await f.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)
+  ).toBe(true);
 });

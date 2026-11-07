@@ -8,15 +8,15 @@ Verwende ausschließlich die [offiziellen GitHub-Releases](https://github.com/Uj
 
 Die fertige App benötigt kein separates Node.js. **Git muss erreichbar sein**, für die optionale LFS-Sicherung zusätzlich **Git LFS**. Flatpak enthält beides. Nach einer Git-Installation die App neu starten.
 
-| System | Passendes Paket und Installation |
-| --- | --- |
-| macOS | Universal für Intel und Apple Silicon, alternativ x64 oder ARM64. DMG öffnen und App nach „Programme“ ziehen. Git bei Bedarf über `xcode-select --install` installieren. |
-| Windows | Git for Windows installieren und die PATH-Integration für andere Programme wählen. Danach x64-/ARM64-Installer oder Portable starten. |
-| Ubuntu / Mint | Git installieren; dann `sudo apt install ./DATEINAME.deb`. |
-| Fedora | `sudo dnf install git ./DATEINAME.rpm`. |
-| Arch / CachyOS | `sudo pacman -U ./DATEINAME.pkg.tar.zst`. Die Abhängigkeiten werden vom Paketmanager aufgelöst. |
-| AppImage | Git installieren, Datei ausführbar machen (`chmod +x ./DATEINAME.AppImage`) und starten. Je nach Distribution ist FUSE erforderlich; alternativ `--appimage-extract` verwenden. |
-| Linux TAR.GZ | An einem festen Ort entpacken und die enthaltene Anwendung starten; Git und die Desktop-Laufzeitbibliotheken müssen installiert sein. |
+| System         | Passendes Paket und Installation                                                                                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS          | Universal für Intel und Apple Silicon, alternativ x64 oder ARM64. DMG öffnen und App nach „Programme“ ziehen. Git bei Bedarf über `xcode-select --install` installieren.        |
+| Windows        | Git for Windows installieren und die PATH-Integration für andere Programme wählen. Danach x64-/ARM64-Installer oder Portable starten.                                           |
+| Ubuntu / Mint  | Git installieren; dann `sudo apt install ./DATEINAME.deb`.                                                                                                                      |
+| Fedora         | `sudo dnf install git ./DATEINAME.rpm`.                                                                                                                                         |
+| Arch / CachyOS | `sudo pacman -U ./DATEINAME.pkg.tar.zst`. Die Abhängigkeiten werden vom Paketmanager aufgelöst.                                                                                 |
+| AppImage       | Git installieren, Datei ausführbar machen (`chmod +x ./DATEINAME.AppImage`) und starten. Je nach Distribution ist FUSE erforderlich; alternativ `--appimage-extract` verwenden. |
+| Linux TAR.GZ   | An einem festen Ort entpacken und die enthaltene Anwendung starten; Git und die Desktop-Laufzeitbibliotheken müssen installiert sein.                                           |
 
 `DATEINAME` steht jeweils für den tatsächlichen Dateinamen aus dem Release. Für ARM64 ein entsprechendes Paket wählen. CachyOS verwendet hauptsächlich x86_64; Linux-aarch64-Pakete richten sich an kompatible ARM-Systeme.
 
@@ -46,11 +46,11 @@ Flatpak nutzt App-Zeitplan und Autostart, keinen unabhängigen systemd-Worker. F
 
 Verbinde die externe Festplatte und lege einen Sicherungsordner an. Beispiele:
 
-| System | Neutraler Zielpfad |
-| --- | --- |
-| macOS | `/Volumes/BackupDisk/GitHub` |
-| Windows | `E:\GitHub-Backups` |
-| Linux | `/media/backup-disk/GitHub` |
+| System  | Neutraler Zielpfad           |
+| ------- | ---------------------------- |
+| macOS   | `/Volumes/BackupDisk/GitHub` |
+| Windows | `E:\GitHub-Backups`          |
+| Linux   | `/media/backup-disk/GitHub`  |
 
 Der Ordner muss vorhanden und beschreibbar sein. Unter macOS kann die Erlaubnis für Wechselmedien notwendig sein. Die App speichert dort eine zufällige Laufwerkskennung in `.git-cloner-volume.json`. Diese Datei erhalten: Ein fehlendes oder ausgetauschtes Laufwerk darf nicht versehentlich durch einen neuen lokalen Ordner ersetzt werden.
 
@@ -84,14 +84,14 @@ Wähle **Jetzt prüfen**. Neue Stände werden zunächst separat aufgebaut und ge
 
 ![Leere Startübersicht ohne Standard-Repositories](screenshots/overview.png)
 
-| Status | Bedeutung |
-| --- | --- |
-| Gesichert | Erste Sicherung angelegt. |
-| Aktualisiert | Veränderte Git-Daten oder Metadaten übernommen. |
-| Aktuell | Der geprüfte Remote-Stand entspricht der Sicherung. |
-| Repariert | Beschädigte verwaltete Sicherung erfolgreich neu aufgebaut. |
-| Leer | Das Git-Repository enthält noch keinen Commit. |
-| Fehler | Der Vorgang war nicht erfolgreich; Meldung im Verlauf prüfen. |
+| Status       | Bedeutung                                                     |
+| ------------ | ------------------------------------------------------------- |
+| Gesichert    | Erste Sicherung angelegt.                                     |
+| Aktualisiert | Veränderte Git-Daten oder Metadaten übernommen.               |
+| Aktuell      | Der geprüfte Remote-Stand entspricht der Sicherung.           |
+| Repariert    | Beschädigte verwaltete Sicherung erfolgreich neu aufgebaut.   |
+| Leer         | Das Git-Repository enthält noch keinen Commit.                |
+| Fehler       | Der Vorgang war nicht erfolgreich; Meldung im Verlauf prüfen. |
 
 Suche und Statusfilter helfen bei vielen Repositories. Die Liste zeigt bis zu 75 Zeilen pro Seite. Einträge bieten Integritätsprüfung und Wiederherstellung. Ein Integritätsfehler bleibt sichtbar und erzwingt beim nächsten Sicherungslauf eine erneute Prüfung beziehungsweise Reparatur.
 
@@ -101,16 +101,16 @@ Die App verarbeitet standardmäßig bis zu zwei kleine Repositories parallel. Au
 
 Unter **Einstellungen → Sicherung** sind Zusatzfunktionen standardmäßig ausgeschaltet:
 
-| Option | Wirkung |
-| --- | --- |
-| Aktueller Stand | Schnelle flache Arbeitskopie des aktuellen Standardbranches. Keine vollständige Git-Historie. |
+| Option               | Wirkung                                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Aktueller Stand      | Schnelle flache Arbeitskopie des aktuellen Standardbranches. Keine vollständige Git-Historie.                                                     |
 | Vollständiger Mirror | Bare-Repository mit vollständiger Git-Historie, allen Branches und Tags. Kein ausgecheckter Arbeitsordner. Änderungen werden inkrementell geholt. |
-| Git LFS | Echte LFS-Inhalte herunterladen; zusätzlich installiertes Git LFS erforderlich. |
-| Submodule | Im Snapshot rekursiv auschecken. Nur sichere HTTPS-Remotes; GitHub-SSH-Adressen werden auf HTTPS umgesetzt. Nicht mit Mirror kombinierbar. |
-| Issues | Issues und Kommentare als JSON. |
-| Pull Requests | PRs, Reviews, Kommentare und Änderungsinformationen als JSON. |
-| Releases | Release-Daten und zugehörige Dateien. Große Dateien benötigen entsprechend Platz und Zeit. |
-| Wiki | Separater Git-Mirror des Wikis. Ein nicht zugängliches Wiki wird ausdrücklich gemeldet. |
+| Git LFS              | Echte LFS-Inhalte herunterladen; zusätzlich installiertes Git LFS erforderlich.                                                                   |
+| Submodule            | Im Snapshot rekursiv auschecken. Nur sichere HTTPS-Remotes; GitHub-SSH-Adressen werden auf HTTPS umgesetzt. Nicht mit Mirror kombinierbar.        |
+| Issues               | Issues und Kommentare als JSON.                                                                                                                   |
+| Pull Requests        | PRs, Reviews, Kommentare und Änderungsinformationen als JSON.                                                                                     |
+| Releases             | Release-Daten und zugehörige Dateien. Große Dateien benötigen entsprechend Platz und Zeit.                                                        |
+| Wiki                 | Separater Git-Mirror des Wikis. Ein nicht zugängliches Wiki wird ausdrücklich gemeldet.                                                           |
 
 Release-Dateien liegen ab Version 3.3 sichtbar unter **`Zielordner / Konto / Repository / Git-Cloner-Releases`**, mit ihren ursprünglichen Dateinamen. Die Übersicht nennt diesen Ordner und bietet **Release-Ordner öffnen**. Besitzt das Repository bereits einen gleichnamigen Ordner, verwendet die App einen freien nummerierten Namen und erhält die Repository-Dateien. Bei verschlüsselten Sicherungen liegt der Release-Ordner innerhalb von `backup.gcb`; zum Zugriff **Release-Dateien wiederherstellen** wählen und entsperren. Ältere Sicherungen mit Dateien im versteckten `.git/git-cloner-metadata/release-assets` bleiben wiederherstellbar und wechseln bei der nächsten erfolgreichen Prüfung in die sichtbare Ablage.
 
@@ -207,22 +207,21 @@ Unter **Einstellungen → Darstellung** gibt es Deutsch/Englisch, Hell/Dunkel/Sy
 
 Der Diagnoseexport entfernt Konto-/Repository-Namen, Pfade, Commit-IDs und rohe Fehlermeldungen. Der Verlauf behält bis zu 100 Durchläufe und maximal 500 Einzelergebnisse je Lauf, Fehler zuerst. Gesamtsummen bleiben erhalten. `settings.json`, `state.json`, `history.json` und die verschlüsselte `secrets.enc` niemals als vermeintlich anonymen Support-Export versenden.
 
-| Problem | Nächster Schritt |
-| --- | --- |
-| Git fehlt | Git installieren, PATH prüfen, App neu starten. Unter macOS kann die Finder-Umgebung von der Terminal-Umgebung abweichen. |
-| Laufwerkskennung fehlt | Richtigen Datenträger verbinden. Bei einem bewusst neuen Ziel die Quelle neu einrichten. Keine fremde Kennung kopieren. |
-| Fremder Ordner blockiert Ziel | Neuen Zielordner wählen oder vorhandene Daten selbst sicher verschieben. |
-| Platzmangel | Platz für den alten und neuen Stand sowie Reserve freigeben; Metadaten/LFS können größer als die Schätzung sein. |
-| GitHub 401 / 403 | Gültigkeit, Repository-Freigabe, Org-SSO und API-Limit prüfen. |
-| Wartet auf API-Limit | Freigabezeitpunkt abwarten; die Warteschlange setzt automatisch fort und behält erledigte Repositories. Ohne Token erlaubt GitHub 60 Anfragen pro Stunde; ein Repository mit Release-Sicherung braucht etwa drei Anfragen pro Lauf plus eine je neuer Release-Datei, zwei Läufe mit 10 Repositories innerhalb einer Stunde können das Limit also erreichen. Ein Lesetoken unter Einstellungen → Konten erhöht das Limit, danach sofort **Fortsetzen** möglich. |
-| DMG wird nicht installiert | Meldung in der Übersicht prüfen: Eine fehlende oder ungültige Signatur, ein Programm für eine andere CPU oder mehrere verschiedene, gleichwertige Pakete verhindern den Austausch. Im letzten Fall den **Release-Dateinamen** eingrenzen, etwa `*arm64.dmg`. Dieselbe Datei unter zwei Namen (gleiche SHA-256) zählt als ein Paket. Finder-Metadaten im DMG (`com.apple.FinderInfo`) sind kein Signaturfehler mehr. |
-| LFS fehlt | Git LFS installieren oder die Option abschalten; vorhandener erfolgreicher Stand bleibt erhalten. |
-| Passwort fehlt/falsch | Das Passwort dieses Archivs eingeben. Nach einem Wechsel kann für ältere Archive noch das alte gelten. |
-| Kein automatischer Lauf | Quelle und Zeitplan aktiviert/gespeichert? Rechner wach? App im Hintergrund oder OS-Worker aktiv? |
-| Token nicht speicherbar | Sicheren OS-Schlüsselspeicher/Keyring einrichten oder öffentliche Quellen verwenden. |
+| Problem                       | Nächster Schritt                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Git fehlt                     | Git installieren, PATH prüfen, App neu starten. Unter macOS kann die Finder-Umgebung von der Terminal-Umgebung abweichen.                                                                                                                                                                                                                                                                                                                                      |
+| Laufwerkskennung fehlt        | Richtigen Datenträger verbinden. Bei einem bewusst neuen Ziel die Quelle neu einrichten. Keine fremde Kennung kopieren.                                                                                                                                                                                                                                                                                                                                        |
+| Fremder Ordner blockiert Ziel | Neuen Zielordner wählen oder vorhandene Daten selbst sicher verschieben.                                                                                                                                                                                                                                                                                                                                                                                       |
+| Platzmangel                   | Platz für den alten und neuen Stand sowie Reserve freigeben; Metadaten/LFS können größer als die Schätzung sein.                                                                                                                                                                                                                                                                                                                                               |
+| GitHub 401 / 403              | Gültigkeit, Repository-Freigabe, Org-SSO und API-Limit prüfen.                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Wartet auf API-Limit          | Freigabezeitpunkt abwarten; die Warteschlange setzt automatisch fort und behält erledigte Repositories. Ohne Token erlaubt GitHub 60 Anfragen pro Stunde; ein Repository mit Release-Sicherung braucht etwa drei Anfragen pro Lauf plus eine je neuer Release-Datei, zwei Läufe mit 10 Repositories innerhalb einer Stunde können das Limit also erreichen. Ein Lesetoken unter Einstellungen → Konten erhöht das Limit, danach sofort **Fortsetzen** möglich. |
+| DMG wird nicht installiert    | Meldung in der Übersicht prüfen: Eine fehlende oder ungültige Signatur, ein Programm für eine andere CPU oder mehrere verschiedene, gleichwertige Pakete verhindern den Austausch. Im letzten Fall den **Release-Dateinamen** eingrenzen, etwa `*arm64.dmg`. Dieselbe Datei unter zwei Namen (gleiche SHA-256) zählt als ein Paket. Finder-Metadaten im DMG (`com.apple.FinderInfo`) sind kein Signaturfehler mehr.                                            |
+| LFS fehlt                     | Git LFS installieren oder die Option abschalten; vorhandener erfolgreicher Stand bleibt erhalten.                                                                                                                                                                                                                                                                                                                                                              |
+| Passwort fehlt/falsch         | Das Passwort dieses Archivs eingeben. Nach einem Wechsel kann für ältere Archive noch das alte gelten.                                                                                                                                                                                                                                                                                                                                                         |
+| Kein automatischer Lauf       | Quelle und Zeitplan aktiviert/gespeichert? Rechner wach? App im Hintergrund oder OS-Worker aktiv?                                                                                                                                                                                                                                                                                                                                                              |
+| Token nicht speicherbar       | Sicheren OS-Schlüsselspeicher/Keyring einrichten oder öffentliche Quellen verwenden.                                                                                                                                                                                                                                                                                                                                                                           |
 
 [Architektur und Datenablage](ENTWICKLUNG.md) · [Paketverzeichnisse](PAKETVERZEICHNISSE.md) · [Roadmap-Status](ROADMAP.md)
-
 
 ## 11. Einrichtungsassistent und Probelauf
 
@@ -252,15 +251,15 @@ Zustand und Warteschlange werden gebündelt sowie beim Pausieren geschrieben. Na
 
 Unter **Einstellungen → Leistung & Regeln**:
 
-| Einstellung | Bedeutung |
-| --- | --- |
-| Parallele kleine Repositories | 1–4, Standard 2. Höchstens zwei kleine Aufgaben je erkanntem Datenträger. |
-| Als klein behandeln bis | GitHub-Größenschätzung in MiB, Standard 50. Unbekannte oder größere Repositories laufen exklusiv. |
-| Aufwendige Sicherungen | Mirrors, LFS, Submodule, Metadaten und Verschlüsselung laufen unabhängig von der Größenschätzung einzeln. |
-| Wiederholungen | 0–5 zusätzliche Versuche je vorübergehend fehlgeschlagener Netzwerkoperation; Standard 2. Zunehmende Wartezeit und begrenzte Berücksichtigung von Retry-After. Verschachtelte Wiederholungen vervielfachen die Versuchszahl nicht. |
-| Download-Limit | KiB/s, 0 = unbegrenzt. Gemeinsames Limit über Git-, LFS- und Release-Downloads, einschließlich Transportdaten. API-JSON, Uploads und andere Anwendungen sind ausgenommen. |
-| Nur am Netzteil sichern | Bei Akkubetrieb oder unbekanntem erforderlichem Stromstatus wartet die Warteschlange. Laufende Aufgaben werden fertiggestellt. |
-| Erlaubte WLAN-Namen | Exakter Name pro Zeile. Leer erlaubt alle Netzwerke. Bei nicht erlaubtem oder unbekanntem WLAN-Namen wartet die App. |
+| Einstellung                   | Bedeutung                                                                                                                                                                                                                          |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parallele kleine Repositories | 1–4, Standard 2. Höchstens zwei kleine Aufgaben je erkanntem Datenträger.                                                                                                                                                          |
+| Als klein behandeln bis       | GitHub-Größenschätzung in MiB, Standard 50. Unbekannte oder größere Repositories laufen exklusiv.                                                                                                                                  |
+| Aufwendige Sicherungen        | Mirrors, LFS, Submodule, Metadaten und Verschlüsselung laufen unabhängig von der Größenschätzung einzeln.                                                                                                                          |
+| Wiederholungen                | 0–5 zusätzliche Versuche je vorübergehend fehlgeschlagener Netzwerkoperation; Standard 2. Zunehmende Wartezeit und begrenzte Berücksichtigung von Retry-After. Verschachtelte Wiederholungen vervielfachen die Versuchszahl nicht. |
+| Download-Limit                | KiB/s, 0 = unbegrenzt. Gemeinsames Limit über Git-, LFS- und Release-Downloads, einschließlich Transportdaten. API-JSON, Uploads und andere Anwendungen sind ausgenommen.                                                          |
+| Nur am Netzteil sichern       | Bei Akkubetrieb oder unbekanntem erforderlichem Stromstatus wartet die Warteschlange. Laufende Aufgaben werden fertiggestellt.                                                                                                     |
+| Erlaubte WLAN-Namen           | Exakter Name pro Zeile. Leer erlaubt alle Netzwerke. Bei nicht erlaubtem oder unbekanntem WLAN-Namen wartet die App.                                                                                                               |
 
 ![Leistung und Regeln](screenshots/performance-settings.png)
 
@@ -296,16 +295,15 @@ Unter **Darstellung** lässt sich **Hoher Kontrast** aktivieren. Tastaturbedienu
 
 ![Darstellung mit hohem Kontrast](screenshots/high-contrast.png)
 
-| Tastenkürzel | Funktion |
-| --- | --- |
-| Cmd/Ctrl + K | Übersicht und vorhandenes Suchfeld öffnen. |
-| Cmd/Ctrl + N | Quelle hinzufügen, wenn kein Lauf aktiv oder pausiert ist. |
-| Cmd/Ctrl + B | Prüfung starten, wenn Quellen vorhanden sind. |
-| Cmd/Ctrl + Umschalt + P | Pause anfordern beziehungsweise fortsetzen. |
-| Cmd/Ctrl + Komma | Einstellungen öffnen. |
-| F1 | Tastenkürzel anzeigen. |
-| Esc | Dialog schließen. |
-
+| Tastenkürzel            | Funktion                                                   |
+| ----------------------- | ---------------------------------------------------------- |
+| Cmd/Ctrl + K            | Übersicht und vorhandenes Suchfeld öffnen.                 |
+| Cmd/Ctrl + N            | Quelle hinzufügen, wenn kein Lauf aktiv oder pausiert ist. |
+| Cmd/Ctrl + B            | Prüfung starten, wenn Quellen vorhanden sind.              |
+| Cmd/Ctrl + Umschalt + P | Pause anfordern beziehungsweise fortsetzen.                |
+| Cmd/Ctrl + Komma        | Einstellungen öffnen.                                      |
+| F1                      | Tastenkürzel anzeigen.                                     |
+| Esc                     | Dialog schließen.                                          |
 
 ## 17. Eigene Prüfzeiten je Quelle
 
@@ -499,7 +497,6 @@ Nach einer erfolgreichen Sicherung werden zugehörige eigene Cache-Dateien entfe
 
 Weitere Detailansichten sind als [eigenes UI-Konzept](DETAILANSICHTEN.md) beschrieben. Die dort genannten zusätzlichen Funktionen sind noch keine implementierten Funktionen der Version 3.3.
 
-
 ## 32. Vorhandene Release-Dateien lokal übernehmen
 
 Die Wiederverwendung ist automatisch aktiv. Wenn sich Git-Dateien, Release-Beschreibungen oder andere Metadaten ändern, werden bereits gespeicherte, unveränderte Release-Dateien lokal in den neuen Stand übernommen. Vor der Übernahme prüft die App das vorhandene Dateimanifest, die Dateikennung und den kopierten Inhalt. Verfügbare SHA256-Werte des Anbieters haben Vorrang; ansonsten werden Dateiname, ID, Größe und vorhandene Änderungsangaben beziehungsweise URL gebunden. Beschädigte oder geänderte Dateien werden erneut geladen.
@@ -541,17 +538,18 @@ Diese Option aktualisiert **das Programm aus deiner gewählten Quelle**, nicht G
 
 Nach der erfolgreichen Sicherung prüft die App die tatsächlichen Release-Dateien erneut und bereitet das Programm getrennt vor. Erst danach wird die vorhandene zugeordnete Programmkopie ersetzt. Ist Version und Inhalt bereits aktuell, bleibt die vorhandene Installation bestehen. Fehler erhalten den bisherigen Programmstand und erscheinen zusätzlich zum Sicherungsstatus sowie im Fehlerzähler, Verlauf und den eingestellten Fehlermeldungen. Die Übersicht zeigt den installierten Tag und bietet **Programmordner öffnen**. Programme werden durch die Installation nicht automatisch gestartet.
 
-| System | Unterstützter automatischer Installationsweg |
-| --- | --- |
-| macOS | Ein eindeutig erkennbares `.app`-Bundle aus DMG oder ZIP. Signatur, Bundle und tatsächliche Prozessorarchitektur werden geprüft. Ad-hoc-signierte Bundles sind möglich; eigene Signierzertifikate werden nicht eingerichtet. Laufende Mac-Programme werden später erneut versucht. DMGs mit Lizenzdialog werden ohne Rückfrage über eine schreibgeschützte Kopie geöffnet; mit dem Einschalten der Installation stimmst du den Bedingungen dieses Herausgebers zu. Ein bereits im Finder geöffnetes DMG wird gelesen und bleibt geöffnet. Auf Apple-Silicon-Macs werden reine Intel-Programme nur gewählt, wenn kein natives Paket vorhanden ist; sie laufen über Rosetta 2. |
-| Windows | Als Portable gekennzeichnete EXE oder ZIP mit einem eindeutig erkennbaren Hauptprogramm und Begleitdateien. PE-Kopf und tatsächliche Architektur werden geprüft. |
-| Linux | AppImage mit passendem ELF-/AppImage-Kopf und Prozessorarchitektur. Die Datei wird ausführbar in der zugeordneten Ablage gespeichert. |
+| System  | Unterstützter automatischer Installationsweg                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS   | Ein eindeutig erkennbares `.app`-Bundle aus DMG oder ZIP. Signatur, Bundle und tatsächliche Prozessorarchitektur werden geprüft. Ad-hoc-signierte Bundles sind möglich; eigene Signierzertifikate werden nicht eingerichtet. Laufende Mac-Programme werden später erneut versucht. DMGs mit Lizenzdialog werden ohne Rückfrage über eine schreibgeschützte Kopie geöffnet; mit dem Einschalten der Installation stimmst du den Bedingungen dieses Herausgebers zu. Ein bereits im Finder geöffnetes DMG wird gelesen und bleibt geöffnet. Auf Apple-Silicon-Macs werden reine Intel-Programme nur gewählt, wenn kein natives Paket vorhanden ist; sie laufen über Rosetta 2. |
+| Windows | Als Portable gekennzeichnete EXE oder ZIP mit einem eindeutig erkennbaren Hauptprogramm und Begleitdateien. PE-Kopf und tatsächliche Architektur werden geprüft.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Linux   | AppImage mit passendem ELF-/AppImage-Kopf und Prozessorarchitektur. Die Datei wird ausführbar in der zugeordneten Ablage gespeichert.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 MSI-/NSIS-Systeminstallationen, PKG, DEB, RPM und beliebige Installationsskripte werden nicht automatisch ausgeführt. Es gibt keine automatische Rechteerhöhung. Wenn Rechte fehlen oder Windows eine verwendete Datei sperrt, bleibt der bisherige Stand erhalten. Bei importierten Einstellungen ist die Installation zunächst wieder deaktiviert und muss lokal je Quelle eingeschaltet werden.
 
 Nutze die Option nur für Herausgeber, denen du vertraust. Bewahre persönliche Daten und Einstellungen außerhalb der verwalteten Programmkopie auf. Zusätzliche Dateien direkt im verwalteten Ziel oder fremde temporäre Ordner blockieren den Austausch. Zielwechsel behalten vorhandene Installationen am alten Ort; sie werden nicht ungefragt verschoben oder gelöscht. Ein harter Abbruch kann eigene temporäre Arbeitsdaten hinterlassen; ein unterbrochener Austausch wird beim nächsten Installationsversuch anhand seiner Kennungen wieder aufgenommen.
 
 ![Ausdrückliche Programminstallation mit separatem Ziel](screenshots/program-installation.png)
+
 ## 36. Programmverknüpfungen
 
 Die Beispiele bleiben anonym: `beispiel-konto/programmsammlung`, ein selbst gewählter Sicherungsordner und ein davon getrennter Programmordner. Es wird kein Beispiel-Repository automatisch eingetragen.
@@ -587,11 +585,11 @@ Windows-Portable-Programme benötigen oft gemeinsame DLLs und Hilfsdateien: Der 
 
 **Einstellungen → Sicherung → Downloads & Speicher → Download-Verlauf anzeigen** öffnet die neue Übersicht. Sie liest den Verlauf erst beim Öffnen oder Aktualisieren und benötigt dafür keinen GitHub-Abruf.
 
-| Wert | Messgrundlage |
-| --- | --- |
-| Empfangene Release-Nutzdaten | Tatsächlich aus den Antwort-Streams gelesene Dateibytes, einschließlich fehlgeschlagener Versuche. HTTP-/TLS-Header und sonstiger Protokollverkehr sind nicht enthalten; komprimierte Antworten werden nach der Dekodierung gezählt. Git-Klon- und Metadatenverkehr gehört nicht zu diesem Wert. |
-| Datenabruf vermieden | Inhaltlich geprüfte lokal übernommene Dateien sowie bereits vor diesem Abruf vorhandene, später erfolgreich verwendete Downloadteile. Innerhalb desselben Versuchs neu empfangene Teile werden auch bei Wiederholungen nicht als Ersparnis gezählt. Unveränderte Repository-Prüfungen erzeugen keine erfundenen Dateieinsparungen. |
-| Cache-Dateibytes bereinigt | Vor erfolgreichem Entfernen gemessene Größen eigener temporärer Dateien einschließlich Cache-Kennungen. Automatische Bereinigung nach einem Backup und manuelle Bereinigung sind enthalten. Physisch freie Kapazität kann wegen Dateisystemblöcken, Kompression und gemeinsam belegten Blöcken abweichen. |
+| Wert                         | Messgrundlage                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Empfangene Release-Nutzdaten | Tatsächlich aus den Antwort-Streams gelesene Dateibytes, einschließlich fehlgeschlagener Versuche. HTTP-/TLS-Header und sonstiger Protokollverkehr sind nicht enthalten; komprimierte Antworten werden nach der Dekodierung gezählt. Git-Klon- und Metadatenverkehr gehört nicht zu diesem Wert.                                   |
+| Datenabruf vermieden         | Inhaltlich geprüfte lokal übernommene Dateien sowie bereits vor diesem Abruf vorhandene, später erfolgreich verwendete Downloadteile. Innerhalb desselben Versuchs neu empfangene Teile werden auch bei Wiederholungen nicht als Ersparnis gezählt. Unveränderte Repository-Prüfungen erzeugen keine erfundenen Dateieinsparungen. |
+| Cache-Dateibytes bereinigt   | Vor erfolgreichem Entfernen gemessene Größen eigener temporärer Dateien einschließlich Cache-Kennungen. Automatische Bereinigung nach einem Backup und manuelle Bereinigung sind enthalten. Physisch freie Kapazität kann wegen Dateisystemblöcken, Kompression und gemeinsam belegten Blöcken abweichen.                          |
 
 Nach Repository, Dateiname oder Tag suchen und nach **Ergebnis** oder **Zeitraum** filtern. Die Kennzahlen gelten immer für alle gefilterten Treffer, nicht nur für die sichtbare Seite. Jede Seite enthält höchstens 50 Einträge; der Verlauf behält maximal 2.000 Ereignisse. Es werden keine historischen Werte nachträglich erfunden und keine vermeintlich gemessenen Zeitgewinne geschätzt.
 

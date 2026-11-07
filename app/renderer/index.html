@@ -1,41 +1,82 @@
 <!doctype html>
 <html lang="de">
-<head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
-  <title>Git Cloner</title><link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <a class="skip-link" href="#main-content">Zum Inhalt / Skip to content</a>
-  <div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
-  <aside class="sidebar">
-    <a class="brand" href="#overview" aria-label="Git Cloner"><span class="brand-icon" id="brand-icon"></span><span>Git Cloner<small id="brand-tagline"></small></span></a>
-    <div class="nav-caption" id="nav-caption"></div><nav aria-label="Navigation" id="navigation"></nav>
-    <div class="sidebar-note" id="sidebar-note"></div>
-    <button class="version-card" data-view="settings" data-settings-tab="general"><span class="version-icon" id="version-icon"></span><span><strong id="version-label">Git Cloner</strong><small id="version-status"></small></span><span class="chevron">›</span></button>
-  </aside>
-  <div class="workspace">
-    <header class="topbar"><div class="breadcrumb"><span id="breadcrumb-root"></span> <span>/</span> <strong id="breadcrumb-current"></strong></div><div class="runtime-pill" id="runtime-status"></div></header>
-    <div id="update-banner" aria-live="polite"></div>
-    <main id="main-content" tabindex="-1"></main>
-    <footer class="app-footer"><span id="footer-privacy"></span><span id="footer-schedule"></span></footer>
-  </div>
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  <dialog id="source-dialog" aria-labelledby="source-dialog-title"></dialog>
-  <dialog id="password-dialog" aria-labelledby="password-dialog-title"></dialog>
-  <dialog id="import-dialog" aria-labelledby="import-dialog-title"></dialog>
-  <dialog id="wizard-dialog" aria-labelledby="wizard-title"></dialog>
-  <dialog id="preview-dialog" aria-labelledby="preview-title" class="wide-dialog"></dialog>
-  <dialog id="shortcuts-dialog" aria-labelledby="shortcuts-title"></dialog>
-  <dialog id="changes-dialog" aria-labelledby="changes-title" class="wide-dialog changes-dialog"></dialog>
-  <dialog id="studio-dialog" aria-labelledby="studio-title" class="wide-dialog"></dialog>
-  <dialog id="rotation-dialog" aria-labelledby="rotation-title" class="wide-dialog"></dialog>
-  <dialog id="groups-dialog" aria-labelledby="groups-title"></dialog>
-  <dialog id="repository-browser-dialog" aria-labelledby="repository-browser-title" class="wide-dialog repository-browser-dialog"></dialog>
-  <dialog id="bulk-sources-dialog" aria-labelledby="bulk-sources-title" class="wide-dialog"></dialog>
-  <dialog id="download-storage-dialog" class="repository-browser-dialog" aria-labelledby="download-storage-title"></dialog>
-  <dialog id="program-picker-dialog" class="repository-browser-dialog" aria-labelledby="program-picker-title"></dialog>
-  <dialog id="download-history-dialog" class="repository-browser-dialog" aria-labelledby="download-history-title"></dialog>
-  <script src="icons.js"></script><script src="source-input.js"></script><script src="features.js"></script><script src="enhancements.js"></script><script src="studio.js"></script><script src="workspace.js"></script><script src="program-library.js"></script><script src="release-tools.js"></script><script src="renderer.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'"
+    />
+    <title>Git Cloner</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Zum Inhalt / Skip to content</a>
+    <div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
+    <aside class="sidebar">
+      <a class="brand" href="#overview" aria-label="Git Cloner"
+        ><span class="brand-icon" id="brand-icon"></span><span>Git Cloner<small id="brand-tagline"></small></span
+      ></a>
+      <div class="nav-caption" id="nav-caption"></div>
+      <nav aria-label="Navigation" id="navigation"></nav>
+      <div class="sidebar-note" id="sidebar-note"></div>
+      <button class="version-card" data-view="settings" data-settings-tab="general">
+        <span class="version-icon" id="version-icon"></span
+        ><span><strong id="version-label">Git Cloner</strong><small id="version-status"></small></span
+        ><span class="chevron">›</span>
+      </button>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="breadcrumb">
+          <span id="breadcrumb-root"></span> <span>/</span> <strong id="breadcrumb-current"></strong>
+        </div>
+        <div class="runtime-pill" id="runtime-status"></div>
+      </header>
+      <div id="update-banner" aria-live="polite"></div>
+      <main id="main-content" tabindex="-1"></main>
+      <footer class="app-footer"><span id="footer-privacy"></span><span id="footer-schedule"></span></footer>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <dialog id="source-dialog" aria-labelledby="source-dialog-title"></dialog>
+    <dialog id="password-dialog" aria-labelledby="password-dialog-title"></dialog>
+    <dialog id="import-dialog" aria-labelledby="import-dialog-title"></dialog>
+    <dialog id="wizard-dialog" aria-labelledby="wizard-title"></dialog>
+    <dialog id="preview-dialog" aria-labelledby="preview-title" class="wide-dialog"></dialog>
+    <dialog id="shortcuts-dialog" aria-labelledby="shortcuts-title"></dialog>
+    <dialog id="changes-dialog" aria-labelledby="changes-title" class="wide-dialog changes-dialog"></dialog>
+    <dialog id="studio-dialog" aria-labelledby="studio-title" class="wide-dialog"></dialog>
+    <dialog id="rotation-dialog" aria-labelledby="rotation-title" class="wide-dialog"></dialog>
+    <dialog id="groups-dialog" aria-labelledby="groups-title"></dialog>
+    <dialog
+      id="repository-browser-dialog"
+      aria-labelledby="repository-browser-title"
+      class="wide-dialog repository-browser-dialog"
+    ></dialog>
+    <dialog id="bulk-sources-dialog" aria-labelledby="bulk-sources-title" class="wide-dialog"></dialog>
+    <dialog
+      id="download-storage-dialog"
+      class="repository-browser-dialog"
+      aria-labelledby="download-storage-title"
+    ></dialog>
+    <dialog
+      id="program-picker-dialog"
+      class="repository-browser-dialog"
+      aria-labelledby="program-picker-title"
+    ></dialog>
+    <dialog
+      id="download-history-dialog"
+      class="repository-browser-dialog"
+      aria-labelledby="download-history-title"
+    ></dialog>
+    <script src="icons.js"></script>
+    <script src="source-input.js"></script>
+    <script src="features.js"></script>
+    <script src="enhancements.js"></script>
+    <script src="studio.js"></script>
+    <script src="workspace.js"></script>
+    <script src="program-library.js"></script>
+    <script src="release-tools.js"></script>
+    <script src="renderer.js"></script>
+  </body>
 </html>

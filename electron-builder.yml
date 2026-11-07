@@ -53,7 +53,8 @@ linux:
       StartupWMClass: git-cloner
       Keywords: Git;GitHub;Backup;
 deb:
-  depends: [git, libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libdrm2, libgbm1, libasound2]
+  depends:
+    [git, libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libdrm2, libgbm1, libasound2]
 rpm:
   depends: [git, gtk3, libnotify, nss, libXScrnSaver, libXtst, xdg-utils, at-spi2-core, libdrm, mesa-libgbm, alsa-lib]
 flatpak:

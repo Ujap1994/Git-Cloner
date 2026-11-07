@@ -12,28 +12,28 @@ Git Cloner ist eine Electron-Desktop-App für macOS, Windows und Linux. Sie sich
 
 ## Funktionen
 
-| Bereich | Verhalten |
-| --- | --- |
-| Quellen | GitHub, GitLab und Forgejo: mehrere Konten und Repositories zeilenweise eintragen; eigene Zugangsdaten und bis zu zehn Speicherorte je Quelle. |
-| Filter | Forks und archivierte Repositories einschließen oder ausschließen; Namensmuster mit `*` und `?` verwenden. |
-| Git | Schnelle flache Arbeitskopie des aktuellen Standardbranches oder vollständiger Mirror mit allen Branches und Tags. Optional echte LFS-Dateien und rekursive Submodule. |
-| Metadaten | Optional Issues und Kommentare, Pull-/Merge-Requests mit den verfügbaren Review-/Kommentar- und Dateiänderungsdaten, Releases samt Dateien und Wiki-Mirrors exportieren. Anbieterabhängige Details stehen in der Anleitung. |
-| Schutz | Laufwerkskennung, Schutz fremder Ordner, Speicherreserve und Austausch erst nach erfolgreicher Prüfung. Ein erfolgreicher Stand je Ziel. |
-| Integrität | Git-Objekte und SHA256-Dateimanifeste prüfen, standardmäßig wöchentlich; beschädigte verwaltete Sicherungen beim nächsten Prüflauf neu erstellen. |
-| Verschlüsselung | Optional passwortgeschützte AES-256-GCM-Archive mit scrypt-Schlüsselableitung; Passwort auf Wunsch im OS-Schlüsselspeicher merken. |
-| Wiederherstellung | Assistent für verifizierte Kopien an einem neuen Arbeitsort, auch aus einer einzelnen GCB-Datei ohne GitHub-Anmeldung. |
-| Zeitplan | 1–24 tägliche Prüfzeiten, Nachholen der letzten verpassten Tagesprüfung, Hintergrundbetrieb, Autostart und optionale unabhängige OS-Zeitplanung. |
-| Laufwerke | Auf Wunsch konfigurierte Laufwerke beim Verbinden innerhalb von etwa 30 Sekunden erkennen. Mehrere Ziele einer Quelle bleiben getrennte Sicherungen. |
-| Komfort | Suche, Statusfilter, paginierte Listen, Import/Export der Einstellungen ohne Geheimnisse und anonymisierte Diagnoseprotokolle. |
-| Darstellung | Deutsch und Englisch, Hell-/Dunkelmodus oder Systemeinstellung sowie drei Schriftgrößen, hohen Kontrast und Tastenkürzel mit ausgerichteten Eingabefeldern. |
+| Bereich           | Verhalten                                                                                                                                                                                                                   |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Quellen           | GitHub, GitLab und Forgejo: mehrere Konten und Repositories zeilenweise eintragen; eigene Zugangsdaten und bis zu zehn Speicherorte je Quelle.                                                                              |
+| Filter            | Forks und archivierte Repositories einschließen oder ausschließen; Namensmuster mit `*` und `?` verwenden.                                                                                                                  |
+| Git               | Schnelle flache Arbeitskopie des aktuellen Standardbranches oder vollständiger Mirror mit allen Branches und Tags. Optional echte LFS-Dateien und rekursive Submodule.                                                      |
+| Metadaten         | Optional Issues und Kommentare, Pull-/Merge-Requests mit den verfügbaren Review-/Kommentar- und Dateiänderungsdaten, Releases samt Dateien und Wiki-Mirrors exportieren. Anbieterabhängige Details stehen in der Anleitung. |
+| Schutz            | Laufwerkskennung, Schutz fremder Ordner, Speicherreserve und Austausch erst nach erfolgreicher Prüfung. Ein erfolgreicher Stand je Ziel.                                                                                    |
+| Integrität        | Git-Objekte und SHA256-Dateimanifeste prüfen, standardmäßig wöchentlich; beschädigte verwaltete Sicherungen beim nächsten Prüflauf neu erstellen.                                                                           |
+| Verschlüsselung   | Optional passwortgeschützte AES-256-GCM-Archive mit scrypt-Schlüsselableitung; Passwort auf Wunsch im OS-Schlüsselspeicher merken.                                                                                          |
+| Wiederherstellung | Assistent für verifizierte Kopien an einem neuen Arbeitsort, auch aus einer einzelnen GCB-Datei ohne GitHub-Anmeldung.                                                                                                      |
+| Zeitplan          | 1–24 tägliche Prüfzeiten, Nachholen der letzten verpassten Tagesprüfung, Hintergrundbetrieb, Autostart und optionale unabhängige OS-Zeitplanung.                                                                            |
+| Laufwerke         | Auf Wunsch konfigurierte Laufwerke beim Verbinden innerhalb von etwa 30 Sekunden erkennen. Mehrere Ziele einer Quelle bleiben getrennte Sicherungen.                                                                        |
+| Komfort           | Suche, Statusfilter, paginierte Listen, Import/Export der Einstellungen ohne Geheimnisse und anonymisierte Diagnoseprotokolle.                                                                                              |
+| Darstellung       | Deutsch und Englisch, Hell-/Dunkelmodus oder Systemeinstellung sowie drei Schriftgrößen, hohen Kontrast und Tastenkürzel mit ausgerichteten Eingabefeldern.                                                                 |
 
 ## Neu in Version 3.5
 
-| Erweiterung | Verhalten |
-| --- | --- |
-| Programmverknüpfungen | Optional je Quelle einen eigenen Ordner wählen, beispielsweise den Desktop. macOS erhält Finder-Verknüpfungen, Windows echte `.lnk`-Dateien und Linux `.desktop`-Starter. Sie folgen der verwalteten Installation; fremde oder nachträglich bearbeitete Verknüpfungen werden erhalten. |
+| Erweiterung                     | Verhalten                                                                                                                                                                                                                                                                                                |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Programmverknüpfungen           | Optional je Quelle einen eigenen Ordner wählen, beispielsweise den Desktop. macOS erhält Finder-Verknüpfungen, Windows echte `.lnk`-Dateien und Linux `.desktop`-Starter. Sie folgen der verwalteten Installation; fremde oder nachträglich bearbeitete Verknüpfungen werden erhalten.                   |
 | Mehrere Programme eines Archivs | Nach der ersten Release-Sicherung den geprüften Inhalt anzeigen, ein bis 64 passende Programme auswählen und die Auswahl speichern. Gewählte Mac-Apps oder Windows-Portable-Programme werden gemeinsam vorbereitet und ausgetauscht. Fehlende oder inkompatible Programme erhalten den bisherigen Stand. |
-| Download-Verlauf | Empfangene Release-Dateibytes, lokal vermiedene Abrufe und tatsächlich entfernte Cache-Dateibytes anzeigen. Suche, Ergebnis-/Zeitraumfilter, 50 Einträge je Seite und höchstens 2.000 gespeicherte Ereignisse. Bei verschlüsselten Sicherungen bleiben Asset-Dateinamen verborgen. |
+| Download-Verlauf                | Empfangene Release-Dateibytes, lokal vermiedene Abrufe und tatsächlich entfernte Cache-Dateibytes anzeigen. Suche, Ergebnis-/Zeitraumfilter, 50 Einträge je Seite und höchstens 2.000 gespeicherte Ereignisse. Bei verschlüsselten Sicherungen bleiben Asset-Dateinamen verborgen.                       |
 
 ![Mehrere Programme einer Release-Datei auswählen](docs/screenshots/multiple-programs.png)
 
@@ -45,12 +45,12 @@ Die [anonymisierte Anleitung ab Abschnitt 36](docs/ANLEITUNG.md#36-programmverkn
 
 ## Bereits enthalten: Version 3.4
 
-| Erweiterung | Verhalten |
-| --- | --- |
-| Release-Dateien lokal wiederverwenden | Passende vorhandene Dateien anhand von Manifest, Kennung und verfügbaren SHA256-Werten prüfen und lokal übernehmen. Änderungen an Downloadzählern lösen keine neue Sicherung aus. Verschlüsselte Archive werden für die Wiederverwendung authentifiziert und vorübergehend entsperrt. |
-| Architektur- und Dateitypfilter | Alle, eigene oder gezielt ARM64/x64/x86/ARMv7 wählen; mehrere Formate wie DMG, ZIP oder AppImage kombinieren. Universal-Pakete und gemeinsame Prüfsummen berücksichtigen. Global und je Quelle einstellbar. |
-| Downloads & Speicher | Temporäre Teile samt Größe, Quelle und Verschlüsselungsstatus anzeigen. Ausgewählte Teile erst nach einer Vorschau bereinigen; geänderte Vorschauen, laufende Zugriffe und fremde Dateien bleiben geschützt. |
-| Programme automatisch installieren | Ausdrücklich je einzelnem Repository aktivieren, getrennten Programmordner wählen und optional den Release-Dateinamen eingrenzen. Nach erfolgreicher Sicherung die aktuelle Programmkopie ersetzen. Unterstützt macOS-App-Bundles aus DMG/ZIP, Windows Portable-EXE/ZIP und Linux AppImage. |
+| Erweiterung                           | Verhalten                                                                                                                                                                                                                                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Release-Dateien lokal wiederverwenden | Passende vorhandene Dateien anhand von Manifest, Kennung und verfügbaren SHA256-Werten prüfen und lokal übernehmen. Änderungen an Downloadzählern lösen keine neue Sicherung aus. Verschlüsselte Archive werden für die Wiederverwendung authentifiziert und vorübergehend entsperrt.       |
+| Architektur- und Dateitypfilter       | Alle, eigene oder gezielt ARM64/x64/x86/ARMv7 wählen; mehrere Formate wie DMG, ZIP oder AppImage kombinieren. Universal-Pakete und gemeinsame Prüfsummen berücksichtigen. Global und je Quelle einstellbar.                                                                                 |
+| Downloads & Speicher                  | Temporäre Teile samt Größe, Quelle und Verschlüsselungsstatus anzeigen. Ausgewählte Teile erst nach einer Vorschau bereinigen; geänderte Vorschauen, laufende Zugriffe und fremde Dateien bleiben geschützt.                                                                                |
+| Programme automatisch installieren    | Ausdrücklich je einzelnem Repository aktivieren, getrennten Programmordner wählen und optional den Release-Dateinamen eingrenzen. Nach erfolgreicher Sicherung die aktuelle Programmkopie ersetzen. Unterstützt macOS-App-Bundles aus DMG/ZIP, Windows Portable-EXE/ZIP und Linux AppImage. |
 
 Die Programminstallation startet **keine heruntergeladenen Apps** und verwendet keine automatischen Administratorrechte. macOS-Bundles werden auf Signatur und Prozessorarchitektur geprüft; laufende Mac-Programme werden später erneut versucht. Systeminstaller wie MSI, PKG, DEB oder RPM sind kein unterstützter automatischer Installationsweg. Git Cloner selbst zeigt weiterhin nur Versionshinweise an.
 
@@ -66,12 +66,12 @@ Die [anonymisierte Anleitung ab Abschnitt 32](docs/ANLEITUNG.md#32-vorhandene-re
 
 Die vier empfohlenen nächsten Schritte sind umgesetzt. Quellen und Gruppen bleiben beim ersten Start leer.
 
-| Erweiterung | Verhalten |
-| --- | --- |
-| Repository-Browser | GitHub-, GitLab- und Forgejo-Repositories beim Anbieter suchen, seitenweise laden und per Checkbox auswählen. Die Auswahl bleibt über Suchbegriffe und Seiten hinweg erhalten. Einen gemeinsamen Speicherort, eine Gruppe und Favoritenstatus vor dem Hinzufügen festlegen. |
-| Gruppen und Favoriten | Bis zu 30 eigene Gruppen, Favoritenfilter, Quellensuche und Seiten mit jeweils 25 Quellen. Die Organisation funktioniert auch während einer Sicherung oder bei abgezogenem Laufwerk. |
+| Erweiterung                    | Verhalten                                                                                                                                                                                                                                                                                                      |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repository-Browser             | GitHub-, GitLab- und Forgejo-Repositories beim Anbieter suchen, seitenweise laden und per Checkbox auswählen. Die Auswahl bleibt über Suchbegriffe und Seiten hinweg erhalten. Einen gemeinsamen Speicherort, eine Gruppe und Favoritenstatus vor dem Hinzufügen festlegen.                                    |
+| Gruppen und Favoriten          | Bis zu 30 eigene Gruppen, Favoritenfilter, Quellensuche und Seiten mit jeweils 25 Quellen. Die Organisation funktioniert auch während einer Sicherung oder bei abgezogenem Laufwerk.                                                                                                                           |
 | Fortsetzbare Release-Downloads | Geprüfte Dateiteile über Unterbrechungen und Neustarts behalten. HTTP-Range, ETag beziehungsweise sichere Änderungsdaten und vorhandene SHA256-Angaben prüfen. Bei ungeeigneten Serverantworten kontrolliert neu beginnen. Bei verschlüsselten Backups bleiben auch gespeicherte Download-Teile verschlüsselt. |
-| Gemeinsam bearbeiten | Ausgewählte Quellen mit gezielten Änderungen an Gruppe, Favoriten, Aktivierung, Ziel, Zugangsdaten, Filtern, Sicherungsumfang und Prüfzeiten bearbeiten. Erst die Vorschau mit **Bisher / Danach** prüfen, dann gemeinsam speichern. Zwischenzeitliche Änderungen machen eine alte Vorschau ungültig. |
+| Gemeinsam bearbeiten           | Ausgewählte Quellen mit gezielten Änderungen an Gruppe, Favoriten, Aktivierung, Ziel, Zugangsdaten, Filtern, Sicherungsumfang und Prüfzeiten bearbeiten. Erst die Vorschau mit **Bisher / Danach** prüfen, dann gemeinsam speichern. Zwischenzeitliche Änderungen machen eine alte Vorschau ungültig.          |
 
 GitHub-Adressen werden beim Einfügen auf **Owner/Repository** gekürzt. Konto- und Organisationshauptseiten öffnen die Einzelliste als **Sammelquelle**: neue Repositories automatisch entdecken, bestehende Einzelregeln erhalten und wiederholte Eingaben ohne Duplikate übernehmen. Eine feste Auswahl bleibt möglich.
 
@@ -89,14 +89,14 @@ Die [anonymisierte Anleitung ab Abschnitt 28](docs/ANLEITUNG.md#28-repositories-
 
 Die sechs Erweiterungen aus Version 3.2 sind umgesetzt:
 
-| Erweiterung | Verhalten |
-| --- | --- |
-| Verlauf durchsuchen | Nach Repository, lokalem Zeitraum und Fehlern/Änderungen filtern, Details seitenweise öffnen und gewählte Läufe anonymisiert exportieren. |
-| Konkrete Fehlerhilfe | Passende nächste Schritte für Zugriffsrechte, Netzwerk, API-Limits, Laufwerke, Speicherplatz, Git und Archivpasswörter direkt aus einer Fehlermeldung öffnen. |
-| Auf Speicher warten | Volle Datenträger pausieren die Warteschlange dauerhaft. Bei ausreichend freiem Platz automatisch fortsetzen und bereits abgeschlossene Ziele überspringen. Vorhandene Backups bleiben erhalten. |
-| Passwortwechsel-Assistent | Gewählte verschlüsselte Archive geprüft neu verschlüsseln, zwischen Archiven stoppen und unterbrochene Austausche wieder aufnehmen. Ältere benötigte Passwörter auf Wunsch im OS-Schlüsselspeicher behalten. |
-| GitLab und Forgejo | GitLab API v4 einschließlich Untergruppen und Forgejo API v1 als Quellen. Server und Zugangsdaten bleiben getrennt; identische Repository-Namen verschiedener Server erhalten getrennte Ablagen. |
-| LFS-/Submodul-Empfehlungen | Git-Dateibäume und kleine Attributdateien prüfen, Hinweise anzeigen und Optionen erst nach deiner Auswahl für diese Quelle übernehmen. |
+| Erweiterung                | Verhalten                                                                                                                                                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Verlauf durchsuchen        | Nach Repository, lokalem Zeitraum und Fehlern/Änderungen filtern, Details seitenweise öffnen und gewählte Läufe anonymisiert exportieren.                                                                    |
+| Konkrete Fehlerhilfe       | Passende nächste Schritte für Zugriffsrechte, Netzwerk, API-Limits, Laufwerke, Speicherplatz, Git und Archivpasswörter direkt aus einer Fehlermeldung öffnen.                                                |
+| Auf Speicher warten        | Volle Datenträger pausieren die Warteschlange dauerhaft. Bei ausreichend freiem Platz automatisch fortsetzen und bereits abgeschlossene Ziele überspringen. Vorhandene Backups bleiben erhalten.             |
+| Passwortwechsel-Assistent  | Gewählte verschlüsselte Archive geprüft neu verschlüsseln, zwischen Archiven stoppen und unterbrochene Austausche wieder aufnehmen. Ältere benötigte Passwörter auf Wunsch im OS-Schlüsselspeicher behalten. |
+| GitLab und Forgejo         | GitLab API v4 einschließlich Untergruppen und Forgejo API v1 als Quellen. Server und Zugangsdaten bleiben getrennt; identische Repository-Namen verschiedener Server erhalten getrennte Ablagen.             |
+| LFS-/Submodul-Empfehlungen | Git-Dateibäume und kleine Attributdateien prüfen, Hinweise anzeigen und Optionen erst nach deiner Auswahl für diese Quelle übernehmen.                                                                       |
 
 ![Verlaufssuche mit anonymisierten Beispielen](docs/screenshots/history-search.png)
 
@@ -106,14 +106,14 @@ Die [anonymisierte Anleitung ab Abschnitt 22](docs/ANLEITUNG.md#22-gitlab-und-fo
 
 ## Weiterhin enthalten: Version 3.1
 
-| Erweiterung | Verhalten |
-| --- | --- |
-| Eigene Prüfzeiten je Quelle | Allgemeine Zeiten übernehmen oder 1–24 eigene tägliche Uhrzeiten festlegen. Jede Quelle behält ihren eigenen Prüfstand; eine globale Pause gilt für alle Quellen. |
-| Änderungsvorschau | Gespeicherten Git-Stand vor dem Sichern mit dem aktuellen Standardbranch vergleichen. Dateiliste und Text-Diffs werden bei Bedarf geladen; vorhandene Backups bleiben unverändert. |
-| Bekannte Laufwerke wiederfinden | Ordnerkennungen auf verbundenen Laufwerken prüfen und geänderte Mountpfade beziehungsweise Laufwerksbuchstaben eindeutig neu zuordnen. Auch pausierte Warteschlangen bleiben nutzbar. |
-| Gezielte Benachrichtigungen | Alle Prüfungen, nur Fehler, Änderungen und Fehler oder keine Sicherungsmeldungen. Versionsmeldungen separat einstellen und tägliche Ruhezeiten über Mitternacht festlegen. |
-| Release-Dateien mit OS-Auswahl | Dateien des neuesten offiziellen Releases mitsichern: **alle Betriebssysteme** oder **nur das automatisch erkannte Windows, macOS oder Linux**. Funktioniert auch mit eigenen Optionen je Quelle. |
-| Release-Dateien wiederherstellen | Heruntergeladene Pakete gezielt auswählen und an einen neuen Ort kopieren, auch aus verschlüsselten Sicherungen und Mirrors. |
+| Erweiterung                      | Verhalten                                                                                                                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Eigene Prüfzeiten je Quelle      | Allgemeine Zeiten übernehmen oder 1–24 eigene tägliche Uhrzeiten festlegen. Jede Quelle behält ihren eigenen Prüfstand; eine globale Pause gilt für alle Quellen.                                 |
+| Änderungsvorschau                | Gespeicherten Git-Stand vor dem Sichern mit dem aktuellen Standardbranch vergleichen. Dateiliste und Text-Diffs werden bei Bedarf geladen; vorhandene Backups bleiben unverändert.                |
+| Bekannte Laufwerke wiederfinden  | Ordnerkennungen auf verbundenen Laufwerken prüfen und geänderte Mountpfade beziehungsweise Laufwerksbuchstaben eindeutig neu zuordnen. Auch pausierte Warteschlangen bleiben nutzbar.             |
+| Gezielte Benachrichtigungen      | Alle Prüfungen, nur Fehler, Änderungen und Fehler oder keine Sicherungsmeldungen. Versionsmeldungen separat einstellen und tägliche Ruhezeiten über Mitternacht festlegen.                        |
+| Release-Dateien mit OS-Auswahl   | Dateien des neuesten offiziellen Releases mitsichern: **alle Betriebssysteme** oder **nur das automatisch erkannte Windows, macOS oder Linux**. Funktioniert auch mit eigenen Optionen je Quelle. |
+| Release-Dateien wiederherstellen | Heruntergeladene Pakete gezielt auswählen und an einen neuen Ort kopieren, auch aus verschlüsselten Sicherungen und Mirrors.                                                                      |
 
 ![Release-Auswahl mit automatisch erkanntem Betriebssystem](docs/screenshots/release-filter.png)
 
@@ -125,18 +125,18 @@ Weitere Bilder und Schritt-für-Schritt-Erklärungen: [Eigene Prüfzeiten, Relea
 
 ## Weitere Funktionen aus Version 3
 
-| Erweiterung | Verhalten |
-| --- | --- |
-| Einrichtungsassistent | Drei Schritte für eigene Quellen, Laufwerk und Prüfzeiten; keine voreingestellten Repositories. |
-| Vorschau und Probelauf | Gefundene und ausgeschlossene Repositories, Zielpfade und Speicherbedarf anzeigen, ohne Backup-Dateien oder Laufwerkskennungen anzulegen. |
-| Pause und Fortsetzen | Nach laufenden Repositories pausieren, Warteschlange über Neustarts behalten und nur ausstehende Aufgaben fortsetzen. |
-| Einzeldateien wiederherstellen | Dateien und Ordner aus Snapshots, verschlüsselten Archiven oder dem HEAD eines Mirrors auswählen und einzeln verifizieren. |
-| Eigene Quellenoptionen | Mirror/Snapshot, LFS, Submodule, Metadaten, Integrität und Verschlüsselung je Quelle wählen oder die globalen Optionen übernehmen. |
-| Intelligente Warteschlange | Standardmäßig zwei kleine Repositories parallel, maximal vier konfigurierbar und höchstens zwei je erkanntem Datenträger. Große oder aufwendige Sicherungen laufen exklusiv. |
-| Netzwerkfehler wiederholen | Zunehmende Wartezeiten und begrenzte Wiederholungen; keine Wiederholung permanenter Berechtigungsfehler; Speicherknappheit wartet gezielt auf ausreichenden Platz. |
-| Ressourcenregeln | Gemeinsames Download-Limit, optional nur am Netzteil und nur in exakt benannten WLANs sichern. |
-| Dashboard | Laufzeit, geschätzte Restzeit, gemessene Downloads, Datenumfang, freier Speicher und Hinweise auf überfällige Sicherungen. |
-| Bedienung | Hoher Kontrast, Tastenkürzel, Überspringlink, Statusansagen und Tastaturnavigation in Einstellungsreitern. |
+| Erweiterung                    | Verhalten                                                                                                                                                                    |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Einrichtungsassistent          | Drei Schritte für eigene Quellen, Laufwerk und Prüfzeiten; keine voreingestellten Repositories.                                                                              |
+| Vorschau und Probelauf         | Gefundene und ausgeschlossene Repositories, Zielpfade und Speicherbedarf anzeigen, ohne Backup-Dateien oder Laufwerkskennungen anzulegen.                                    |
+| Pause und Fortsetzen           | Nach laufenden Repositories pausieren, Warteschlange über Neustarts behalten und nur ausstehende Aufgaben fortsetzen.                                                        |
+| Einzeldateien wiederherstellen | Dateien und Ordner aus Snapshots, verschlüsselten Archiven oder dem HEAD eines Mirrors auswählen und einzeln verifizieren.                                                   |
+| Eigene Quellenoptionen         | Mirror/Snapshot, LFS, Submodule, Metadaten, Integrität und Verschlüsselung je Quelle wählen oder die globalen Optionen übernehmen.                                           |
+| Intelligente Warteschlange     | Standardmäßig zwei kleine Repositories parallel, maximal vier konfigurierbar und höchstens zwei je erkanntem Datenträger. Große oder aufwendige Sicherungen laufen exklusiv. |
+| Netzwerkfehler wiederholen     | Zunehmende Wartezeiten und begrenzte Wiederholungen; keine Wiederholung permanenter Berechtigungsfehler; Speicherknappheit wartet gezielt auf ausreichenden Platz.           |
+| Ressourcenregeln               | Gemeinsames Download-Limit, optional nur am Netzteil und nur in exakt benannten WLANs sichern.                                                                               |
+| Dashboard                      | Laufzeit, geschätzte Restzeit, gemessene Downloads, Datenumfang, freier Speicher und Hinweise auf überfällige Sicherungen.                                                   |
+| Bedienung                      | Hoher Kontrast, Tastenkürzel, Überspringlink, Statusansagen und Tastaturnavigation in Einstellungsreitern.                                                                   |
 
 ![Ausgerichtete Leistungs- und Netzwerkeinstellungen](docs/screenshots/performance-settings.png)
 
@@ -170,15 +170,15 @@ Die Anleitung und die Dokumentationsbilder verwenden ausschließlich neutrale Be
 
 Lade passende Pakete von den [offiziellen GitHub-Releases](https://github.com/Ujap1994/Git-Cloner/releases). Eine fertige App benötigt kein separat installiertes Node.js. **Git muss im PATH erreichbar sein**, für die LFS-Option außerdem Git LFS. Das Flatpak enthält beides.
 
-| Betriebssystem | Architektur | Formate |
-| --- | --- | --- |
-| Windows | x64, ARM64 | NSIS-Installer und Portable `.exe` |
-| macOS | Universal, ARM64, x64 | `.dmg`, `.zip` |
-| Ubuntu / Mint | x64, ARM64 | `.deb` |
-| Fedora | x64, ARM64 | `.rpm` |
-| Arch / CachyOS | x86_64, aarch64¹ | `.pkg.tar.zst` |
-| Linux allgemein | x64, ARM64 | `.AppImage`, `.tar.gz` |
-| Flatpak | x64 | `.flatpak` mit Git und Git LFS |
+| Betriebssystem  | Architektur           | Formate                            |
+| --------------- | --------------------- | ---------------------------------- |
+| Windows         | x64, ARM64            | NSIS-Installer und Portable `.exe` |
+| macOS           | Universal, ARM64, x64 | `.dmg`, `.zip`                     |
+| Ubuntu / Mint   | x64, ARM64            | `.deb`                             |
+| Fedora          | x64, ARM64            | `.rpm`                             |
+| Arch / CachyOS  | x86_64, aarch64¹      | `.pkg.tar.zst`                     |
+| Linux allgemein | x64, ARM64            | `.AppImage`, `.tar.gz`             |
+| Flatpak         | x64                   | `.flatpak` mit Git und Git LFS     |
 
 ¹ ARM64 richtet sich an passende Arch-ARM-Systeme; CachyOS verwendet hauptsächlich x86_64. Paketbau ist keine Garantie für jedes historische Betriebssystemrelease. Die CI umfasst native Intel-/ARM64-Runner sowie Fedora-, Mint-, Arch- und CachyOS-Container. Tatsächliche Runner-Ergebnisse und manuelle Installationstests sind von der bloßen Workflow-Konfiguration zu unterscheiden.
 
@@ -231,18 +231,18 @@ npm start
 
 Unter Linux benötigen GUI-Tests eine grafische Sitzung, beispielsweise `xvfb-run -a npm run test:e2e`. Tests verwenden temporäre lokale Git-Repositories und isolierte Profile. Es werden keine privaten GitHub-Zugänge benötigt.
 
-| Befehl | Ergebnis |
-| --- | --- |
-| `npm run check` | ESLint sowie Logik-, Sicherheits-, Katalog- und echte Git-Integrationstests |
-| `npm run test:forgejo` | Privaten lokalen Forgejo-Server über echtes HTTPS prüfen; benötigt eine separat geprüfte Testserver-Binärdatei in `FORGEJO_BIN` (nur für Entwicklung/CI) |
-| `npm run test:e2e` | Echte Electron-Oberfläche, Versionsignorierung über Neustarts, Layout, Tastatur, Einrichtung, Probelauf, Pause über Neustarts und vollständige/selektive verschlüsselte Wiederherstellung |
-| `npm run test:coverage` | Node-Abdeckungsbericht |
-| `npm run screenshots` | Alle anonymisierten App-Screenshots aus den Screenshot- und neuen GUI-Abläufen |
-| `npm run build:dir` | Entpackte Anwendung für die aktuelle Plattform |
-| `npm run build:mac` | macOS DMG/ZIP für Universal, ARM64 und x64 auf macOS |
-| `npm run build:win` | Windows Installer und Portable für x64/ARM64 |
-| `npm run build:linux` | Linux AppImage, DEB, RPM und TAR.GZ |
-| `npm run catalogs -- --assets ORDNER --output ORDNER --commit SHA` | Paketverzeichnis-Vorlagen mit tatsächlichen Release-Prüfsummen |
+| Befehl                                                             | Ergebnis                                                                                                                                                                                  |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run check`                                                    | ESLint sowie Logik-, Sicherheits-, Katalog- und echte Git-Integrationstests                                                                                                               |
+| `npm run test:forgejo`                                             | Privaten lokalen Forgejo-Server über echtes HTTPS prüfen; benötigt eine separat geprüfte Testserver-Binärdatei in `FORGEJO_BIN` (nur für Entwicklung/CI)                                  |
+| `npm run test:e2e`                                                 | Echte Electron-Oberfläche, Versionsignorierung über Neustarts, Layout, Tastatur, Einrichtung, Probelauf, Pause über Neustarts und vollständige/selektive verschlüsselte Wiederherstellung |
+| `npm run test:coverage`                                            | Node-Abdeckungsbericht                                                                                                                                                                    |
+| `npm run screenshots`                                              | Alle anonymisierten App-Screenshots aus den Screenshot- und neuen GUI-Abläufen                                                                                                            |
+| `npm run build:dir`                                                | Entpackte Anwendung für die aktuelle Plattform                                                                                                                                            |
+| `npm run build:mac`                                                | macOS DMG/ZIP für Universal, ARM64 und x64 auf macOS                                                                                                                                      |
+| `npm run build:win`                                                | Windows Installer und Portable für x64/ARM64                                                                                                                                              |
+| `npm run build:linux`                                              | Linux AppImage, DEB, RPM und TAR.GZ                                                                                                                                                       |
+| `npm run catalogs -- --assets ORDNER --output ORDNER --commit SHA` | Paketverzeichnis-Vorlagen mit tatsächlichen Release-Prüfsummen                                                                                                                            |
 
 ## CI, Releases und Projektstatus
 

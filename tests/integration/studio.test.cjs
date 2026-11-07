@@ -1,138 +1,730 @@
-const {test}=require('node:test'),assert=require('node:assert/strict');
-const fs=require('node:fs/promises'),path=require('node:path');
-const {randomBytes,randomUUID,createCipheriv,createDecipheriv}=require('node:crypto');
-const {repository}=require('../helpers/repository.cjs');
-const {providerFixture}=require('../helpers/providers.cjs');
-const {managed,BackupService,verifyBackup}=require('../../app/core/backup.cjs');
-const {prepareDestination}=require('../../app/core/destinations.cjs');
-const {repositoryDestination}=require('../../app/core/provider-spec.cjs');
-const {ChangesPreview}=require('../../app/core/changes.cjs');
-const {RestoreBrowser}=require('../../app/core/selective-restore.cjs');
-const {inspectRecommendations}=require('../../app/core/recommendations.cjs');
-const {rotationInventory,rotatePasswords,finishRotation}=require('../../app/core/key-rotation.cjs');
-const {SecretVault}=require('../../app/core/vault.cjs');
-const {encryptArchive,decryptArchive}=require('../../app/core/archives.cjs');
-const {hashFile}=require('../../app/core/integrity.cjs');
-const {writeJson,readJson}=require('../../app/core/store.cjs');
-const OLD='old backup password 123',NEW='new backup password 456';
-function storage(){const key=Buffer.alloc(32,7);return{isEncryptionAvailable:()=>true,getSelectedStorageBackend:()=> 'test-keychain',encryptString:value=>{const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv),bytes=Buffer.concat([cipher.update(value,'utf8'),cipher.final()]);return Buffer.concat([iv,cipher.getAuthTag(),bytes]);},decryptString:value=>{const decipher=createDecipheriv('aes-256-gcm',key,value.subarray(0,12));decipher.setAuthTag(value.subarray(12,28));return Buffer.concat([decipher.update(value.subarray(28)),decipher.final()]).toString('utf8');}};}
-async function encrypted(t,{remember=true,mode='snapshot'}={}){const f=await repository(t);f.secure=storage();f.vault=new SecretVault(f.directory,f.secure);await f.vault.setPassword(OLD,remember);Object.assign(f.options,{encryption:true,encryptionKeyId:f.vault.encryptionKeyId,mode});f.record=await f.sync({passphrase:OLD});f.record.encryptionKeyId=f.vault.encryptionKeyId;f.state={repositories:{[f.record.id]:f.record},history:[]};f.save=value=>writeJson(path.join(f.directory,'state.json'),value);await f.save(f.state);return f;}
-for(const provider of ['gitlab','forgejo']){
-  test(`${provider} snapshots and mirrors clone actual Git data into separate provider paths`,async t=>{
-    const f=await providerFixture(t,provider);let record=await f.sync();assert.equal(record.status,'cloned');assert.equal(await fs.readFile(path.join(record.destination,'README.md'),'utf8'),'  old text  \n');assert.equal(record.destination,repositoryDestination(f.source,f.repository.full_name));assert.equal((await f.sync()).status,'unchanged');
-    await f.addFile('new.txt','new contents\n');record=await f.sync();assert.equal(record.status,'updated');assert.equal(await fs.readFile(path.join(record.destination,'new.txt'),'utf8'),'new contents\n');f.options.mode='mirror';record=await f.sync();assert.equal(await f.git.run(['-C',record.destination,'rev-parse','--is-bare-repository']),'true');assert.equal(await f.git.head(record.destination),(await f.command('rev-parse','HEAD')).stdout.trim());
+const { test } = require('node:test'),
+  assert = require('node:assert/strict');
+const fs = require('node:fs/promises'),
+  path = require('node:path');
+const { randomBytes, randomUUID, createCipheriv, createDecipheriv } = require('node:crypto');
+const { repository } = require('../helpers/repository.cjs');
+const { providerFixture } = require('../helpers/providers.cjs');
+const { managed, BackupService, verifyBackup } = require('../../app/core/backup.cjs');
+const { prepareDestination } = require('../../app/core/destinations.cjs');
+const { repositoryDestination } = require('../../app/core/provider-spec.cjs');
+const { ChangesPreview } = require('../../app/core/changes.cjs');
+const { RestoreBrowser } = require('../../app/core/selective-restore.cjs');
+const { inspectRecommendations } = require('../../app/core/recommendations.cjs');
+const { rotationInventory, rotatePasswords, finishRotation } = require('../../app/core/key-rotation.cjs');
+const { SecretVault } = require('../../app/core/vault.cjs');
+const { encryptArchive, decryptArchive } = require('../../app/core/archives.cjs');
+const { hashFile } = require('../../app/core/integrity.cjs');
+const { writeJson, readJson } = require('../../app/core/store.cjs');
+const OLD = 'old backup password 123',
+  NEW = 'new backup password 456';
+function storage() {
+  const key = Buffer.alloc(32, 7);
+  return {
+    isEncryptionAvailable: () => true,
+    getSelectedStorageBackend: () => 'test-keychain',
+    encryptString: value => {
+      const iv = randomBytes(12),
+        cipher = createCipheriv('aes-256-gcm', key, iv),
+        bytes = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+      return Buffer.concat([iv, cipher.getAuthTag(), bytes]);
+    },
+    decryptString: value => {
+      const decipher = createDecipheriv('aes-256-gcm', key, value.subarray(0, 12));
+      decipher.setAuthTag(value.subarray(12, 28));
+      return Buffer.concat([decipher.update(value.subarray(28)), decipher.final()]).toString('utf8');
+    }
+  };
+}
+async function encrypted(t, { remember = true, mode = 'snapshot' } = {}) {
+  const f = await repository(t);
+  f.secure = storage();
+  f.vault = new SecretVault(f.directory, f.secure);
+  await f.vault.setPassword(OLD, remember);
+  Object.assign(f.options, { encryption: true, encryptionKeyId: f.vault.encryptionKeyId, mode });
+  f.record = await f.sync({ passphrase: OLD });
+  f.record.encryptionKeyId = f.vault.encryptionKeyId;
+  f.state = { repositories: { [f.record.id]: f.record }, history: [] };
+  f.save = value => writeJson(path.join(f.directory, 'state.json'), value);
+  await f.save(f.state);
+  return f;
+}
+for (const provider of ['gitlab', 'forgejo']) {
+  test(`${provider} snapshots and mirrors clone actual Git data into separate provider paths`, async t => {
+    const f = await providerFixture(t, provider);
+    let record = await f.sync();
+    assert.equal(record.status, 'cloned');
+    assert.equal(await fs.readFile(path.join(record.destination, 'README.md'), 'utf8'), '  old text  \n');
+    assert.equal(record.destination, repositoryDestination(f.source, f.repository.full_name));
+    assert.equal((await f.sync()).status, 'unchanged');
+    await f.addFile('new.txt', 'new contents\n');
+    record = await f.sync();
+    assert.equal(record.status, 'updated');
+    assert.equal(await fs.readFile(path.join(record.destination, 'new.txt'), 'utf8'), 'new contents\n');
+    f.options.mode = 'mirror';
+    record = await f.sync();
+    assert.equal(await f.git.run(['-C', record.destination, 'rev-parse', '--is-bare-repository']), 'true');
+    assert.equal(await f.git.head(record.destination), (await f.command('rev-parse', 'HEAD')).stdout.trim());
   });
-  test(`${provider} exports issues, requests, releases and wiki while preserving only latest selected assets`,async t=>{
-    const f=await providerFixture(t,provider),asset={id:91,name:'program-linux.AppImage',size:7,browser_download_url:`${f.github.server}/attachments/file`,url:`${f.github.server}/attachments/file`};f.rawDownloads=new Map([['/attachments/file','payload']]);f.metadata.issues=[{iid:1,number:1,title:'Issue'}];f.metadata.pullRequests=[{iid:2,number:2,title:'Request'}];f.metadata.diffs=[{path:'README.md'}];f.metadata.releases=[{id:4,tag_name:'v1.0.0',published_at:'2026-01-01T00:00:00Z',...(provider==='gitlab'?{assets:{links:[asset]}}:{assets:[asset]})}];Object.assign(f.options,{metadata:{issues:true,pullRequests:true,releases:true,wiki:true}});
-    const record=await f.sync(),control=path.join(record.destination,'.git','git-cloner-metadata');assert.equal(record.releaseInfo.fileCount,1);assert.equal(await fs.readFile(path.join(record.destination,record.releaseInfo.assetDirectory,'program-linux.AppImage'),'utf8'),'payload');assert.equal((await readJson(path.join(control,'issue-1-comments.json')))[0].body,'example comment');assert.equal((await readJson(path.join(control,'pull-2.json'))).title,'Request');assert.equal(await f.git.run(['-C',path.join(control,'wiki.git'),'rev-parse','--is-bare-repository']),'true');
-    f.metadata.releases=[{id:5,tag_name:'v2.0.0',published_at:'2026-02-01T00:00:00Z',assets:provider==='gitlab'?{links:[]}:[]}];const next=await f.sync();assert.equal(next.status,'updated');assert.equal(next.releaseInfo.tag,'v2.0.0');assert.equal(await fs.stat(path.join(next.destination,record.releaseInfo.assetDirectory)).then(()=>true,()=>false),false);
+  test(`${provider} exports issues, requests, releases and wiki while preserving only latest selected assets`, async t => {
+    const f = await providerFixture(t, provider),
+      asset = {
+        id: 91,
+        name: 'program-linux.AppImage',
+        size: 7,
+        browser_download_url: `${f.github.server}/attachments/file`,
+        url: `${f.github.server}/attachments/file`
+      };
+    f.rawDownloads = new Map([['/attachments/file', 'payload']]);
+    f.metadata.issues = [{ iid: 1, number: 1, title: 'Issue' }];
+    f.metadata.pullRequests = [{ iid: 2, number: 2, title: 'Request' }];
+    f.metadata.diffs = [{ path: 'README.md' }];
+    f.metadata.releases = [
+      {
+        id: 4,
+        tag_name: 'v1.0.0',
+        published_at: '2026-01-01T00:00:00Z',
+        ...(provider === 'gitlab' ? { assets: { links: [asset] } } : { assets: [asset] })
+      }
+    ];
+    Object.assign(f.options, { metadata: { issues: true, pullRequests: true, releases: true, wiki: true } });
+    const record = await f.sync(),
+      control = path.join(record.destination, '.git', 'git-cloner-metadata');
+    assert.equal(record.releaseInfo.fileCount, 1);
+    assert.equal(
+      await fs.readFile(
+        path.join(record.destination, record.releaseInfo.assetDirectory, 'program-linux.AppImage'),
+        'utf8'
+      ),
+      'payload'
+    );
+    assert.equal((await readJson(path.join(control, 'issue-1-comments.json')))[0].body, 'example comment');
+    assert.equal((await readJson(path.join(control, 'pull-2.json'))).title, 'Request');
+    assert.equal(await f.git.run(['-C', path.join(control, 'wiki.git'), 'rev-parse', '--is-bare-repository']), 'true');
+    f.metadata.releases = [
+      {
+        id: 5,
+        tag_name: 'v2.0.0',
+        published_at: '2026-02-01T00:00:00Z',
+        assets: provider === 'gitlab' ? { links: [] } : []
+      }
+    ];
+    const next = await f.sync();
+    assert.equal(next.status, 'updated');
+    assert.equal(next.releaseInfo.tag, 'v2.0.0');
+    assert.equal(
+      await fs.stat(path.join(next.destination, record.releaseInfo.assetDirectory)).then(
+        () => true,
+        () => false
+      ),
+      false
+    );
   });
-  test(`${provider} change previews read real Git blobs lazily and preserve the existing backup`,async t=>{
-    const f=await providerFixture(t,provider),record=await f.sync();await f.addFile('README.md','new text\n');const browser=new RestoreBrowser({git:f.git}),changes=new ChangesPreview({browser});t.after(()=>changes.close());const opened=await changes.open({record,git:f.git,github:f.github});assert.equal(opened.modified,1);assert(!f.http.some(r=>r.url.includes('/blobs/')));const patch=await changes.file({sessionId:opened.sessionId,path:'README.md'});assert.equal(patch.kind,'text');assert(patch.patch.includes('+new text'));assert.equal(await f.git.head(record.destination),record.commit);if(provider==='gitlab')assert(f.http.some(r=>r.options.method==='HEAD'));
+  test(`${provider} change previews read real Git blobs lazily and preserve the existing backup`, async t => {
+    const f = await providerFixture(t, provider),
+      record = await f.sync();
+    await f.addFile('README.md', 'new text\n');
+    const browser = new RestoreBrowser({ git: f.git }),
+      changes = new ChangesPreview({ browser });
+    t.after(() => changes.close());
+    const opened = await changes.open({ record, git: f.git, github: f.github });
+    assert.equal(opened.modified, 1);
+    assert(!f.http.some(r => r.url.includes('/blobs/')));
+    const patch = await changes.file({ sessionId: opened.sessionId, path: 'README.md' });
+    assert.equal(patch.kind, 'text');
+    assert(patch.patch.includes('+new text'));
+    assert.equal(await f.git.head(record.destination), record.commit);
+    if (provider === 'gitlab') assert(f.http.some(r => r.options.method === 'HEAD'));
   });
-  test(`${provider} recommendations detect LFS and submodules without cloning or executing configuration`,async t=>{
-    const f=await providerFixture(t,provider);await f.addFile('.gitattributes','  # commented filter=lfs\n*.bin filter=lfs diff=lfs merge=lfs -text\n');const sha=(await f.command('rev-parse','HEAD')).stdout.trim();await f.command('update-index','--add','--cacheinfo',`160000,${sha},libraries/example`);await f.command('commit','-m','submodule reference');const before=await fs.readdir(f.backup);const result=await inspectRecommendations({source:f.source,repository:f.source.value,client:f.github,git:f.git});assert.equal(result.hasLfs,true);assert.equal(result.hasSubmodules,true);assert.equal(result.submoduleCount,1);assert.deepEqual(await fs.readdir(f.backup),before);assert.equal(f.options.lfs,false);
-    await f.addFile('.gitattributes','   # *.bin filter=lfs\n*.txt text\n');const second=await inspectRecommendations({source:f.source,repository:f.source.value,client:f.github,git:f.git});assert.equal(second.hasLfs,false);
+  test(`${provider} recommendations detect LFS and submodules without cloning or executing configuration`, async t => {
+    const f = await providerFixture(t, provider);
+    await f.addFile('.gitattributes', '  # commented filter=lfs\n*.bin filter=lfs diff=lfs merge=lfs -text\n');
+    const sha = (await f.command('rev-parse', 'HEAD')).stdout.trim();
+    await f.command('update-index', '--add', '--cacheinfo', `160000,${sha},libraries/example`);
+    await f.command('commit', '-m', 'submodule reference');
+    const before = await fs.readdir(f.backup);
+    const result = await inspectRecommendations({
+      source: f.source,
+      repository: f.source.value,
+      client: f.github,
+      git: f.git
+    });
+    assert.equal(result.hasLfs, true);
+    assert.equal(result.hasSubmodules, true);
+    assert.equal(result.submoduleCount, 1);
+    assert.deepEqual(await fs.readdir(f.backup), before);
+    assert.equal(f.options.lfs, false);
+    await f.addFile('.gitattributes', '   # *.bin filter=lfs\n*.txt text\n');
+    const second = await inspectRecommendations({
+      source: f.source,
+      repository: f.source.value,
+      client: f.github,
+      git: f.git
+    });
+    assert.equal(second.hasLfs, false);
   });
 }
-test('a disk-full queue survives restart, waits without API requests and skips completed jobs after resume',async t=>{
-  const f=await repository(t);f.names=['demo/project','demo/second','demo/third'];f.source.kind='owner';f.source.value='demo';const config=f.config(),calls=new Map();config.execution.concurrency=1;let blocked=true;
-  const service=new BackupService({git:f.git,github:f.github,state:{},saveState:value=>writeJson(path.join(f.root,'queue.json'),value),sync:async job=>{const name=job.repository.full_name;calls.set(name,(calls.get(name)||0)+1);if(name==='demo/second'&&blocked){const error=new Error('Disk full');error.code='ENOSPC';error.space={root:f.backup,requiredBytes:'1'};throw error;}return{fullName:name,destination:repositoryDestination(job.source,name),status:'cloned'};}});
-  let result=await service.run(config);assert.equal(result.reason,'space');assert.equal(service.state.queue.completed.length,2);assert.equal(service.state.history.length,0);assert.equal(calls.get('demo/project'),1);
-  const runtime=await f.runtime({config,state:service.state}),persisted=runtime.backup.state.queue;persisted.blockedSpaces[Object.keys(persisted.blockedSpaces)[0]].requiredBytes='999999999999999999999';f.requests=[];assert.equal((await runtime.resume()).reason,'space');assert.equal(f.requests.length,0);
-  blocked=false;persisted.blockedSpaces[Object.keys(persisted.blockedSpaces)[0]].requiredBytes='1';runtime.backup.sync=service.sync;result=await runtime.resume();assert.equal(result.resultCount,3);assert.equal(runtime.backup.state.queue,null);assert.equal(calls.get('demo/project'),1);assert.equal(calls.get('demo/second'),2);assert.equal(calls.get('demo/third'),1);assert.equal(runtime.backup.state.history.length,1);
+test('a disk-full queue survives restart, waits without API requests and skips completed jobs after resume', async t => {
+  const f = await repository(t);
+  f.names = ['demo/project', 'demo/second', 'demo/third'];
+  f.source.kind = 'owner';
+  f.source.value = 'demo';
+  const config = f.config(),
+    calls = new Map();
+  config.execution.concurrency = 1;
+  let blocked = true;
+  const service = new BackupService({
+    git: f.git,
+    github: f.github,
+    state: {},
+    saveState: value => writeJson(path.join(f.root, 'queue.json'), value),
+    sync: async job => {
+      const name = job.repository.full_name;
+      calls.set(name, (calls.get(name) || 0) + 1);
+      if (name === 'demo/second' && blocked) {
+        const error = new Error('Disk full');
+        error.code = 'ENOSPC';
+        error.space = { root: f.backup, requiredBytes: '1' };
+        throw error;
+      }
+      return { fullName: name, destination: repositoryDestination(job.source, name), status: 'cloned' };
+    }
+  });
+  let result = await service.run(config);
+  assert.equal(result.reason, 'space');
+  assert.equal(service.state.queue.completed.length, 2);
+  assert.equal(service.state.history.length, 0);
+  assert.equal(calls.get('demo/project'), 1);
+  const runtime = await f.runtime({ config, state: service.state }),
+    persisted = runtime.backup.state.queue;
+  persisted.blockedSpaces[Object.keys(persisted.blockedSpaces)[0]].requiredBytes = '999999999999999999999';
+  f.requests = [];
+  assert.equal((await runtime.resume()).reason, 'space');
+  assert.equal(f.requests.length, 0);
+  blocked = false;
+  persisted.blockedSpaces[Object.keys(persisted.blockedSpaces)[0]].requiredBytes = '1';
+  runtime.backup.sync = service.sync;
+  result = await runtime.resume();
+  assert.equal(result.resultCount, 3);
+  assert.equal(runtime.backup.state.queue, null);
+  assert.equal(calls.get('demo/project'), 1);
+  assert.equal(calls.get('demo/second'), 2);
+  assert.equal(calls.get('demo/third'), 1);
+  assert.equal(runtime.backup.state.history.length, 1);
 });
-test('password rotation authenticates and restores a full encrypted mirror with its new password',async t=>{
-  const f=await encrypted(t,{mode:'mirror'}),oldHash=await hashFile(path.join(f.record.destination,'backup.gcb'));const result=await rotatePasswords({state:f.state,vault:f.vault,git:f.git,ids:[f.record.id],oldPassword:OLD,newPassword:NEW,remember:true,save:f.save});assert.equal(result.completed,1);assert.notEqual(await hashFile(path.join(f.record.destination,'backup.gcb')),oldHash);const output=path.join(f.root,'decrypted-new');await decryptArchive(path.join(f.record.destination,'backup.gcb'),output,NEW);assert.equal(await f.git.run(['-C',output,'rev-parse','--is-bare-repository']),'true');await assert.rejects(decryptArchive(path.join(f.record.destination,'backup.gcb'),path.join(f.root,'wrong'),OLD),/Passwort/);assert.equal((await rotationInventory(f.state.repositories,f.vault)).items[0].current,true);assert(!(await fs.readdir(f.record.destination)).some(n=>n.startsWith('.git-cloner-')));
+test('password rotation authenticates and restores a full encrypted mirror with its new password', async t => {
+  const f = await encrypted(t, { mode: 'mirror' }),
+    oldHash = await hashFile(path.join(f.record.destination, 'backup.gcb'));
+  const result = await rotatePasswords({
+    state: f.state,
+    vault: f.vault,
+    git: f.git,
+    ids: [f.record.id],
+    oldPassword: OLD,
+    newPassword: NEW,
+    remember: true,
+    save: f.save
+  });
+  assert.equal(result.completed, 1);
+  assert.notEqual(await hashFile(path.join(f.record.destination, 'backup.gcb')), oldHash);
+  const output = path.join(f.root, 'decrypted-new');
+  await decryptArchive(path.join(f.record.destination, 'backup.gcb'), output, NEW);
+  assert.equal(await f.git.run(['-C', output, 'rev-parse', '--is-bare-repository']), 'true');
+  await assert.rejects(
+    decryptArchive(path.join(f.record.destination, 'backup.gcb'), path.join(f.root, 'wrong'), OLD),
+    /Passwort/
+  );
+  assert.equal((await rotationInventory(f.state.repositories, f.vault)).items[0].current, true);
+  assert(!(await fs.readdir(f.record.destination)).some(n => n.startsWith('.git-cloner-')));
 });
-test('remembered old keys keep unselected legacy archives usable across a vault restart',async t=>{
-  const f=await encrypted(t),otherRoot=path.join(f.root,'second');await fs.mkdir(otherRoot);const source=await prepareDestination({...f.source,destination:otherRoot,volumeId:undefined,volumeHint:undefined}),second=await f.sync({source,passphrase:OLD});delete second.encryptionKeyId;const marker=await managed(second.destination,second.fullName);delete marker.encryptionKeyId;await writeJson(path.join(second.destination,'git-cloner.json'),marker);f.state.repositories[second.id]=second;
-  const result=await rotatePasswords({state:f.state,vault:f.vault,git:f.git,ids:[f.record.id],oldPassword:OLD,newPassword:NEW,remember:true,save:f.save});assert.equal(result.remaining,1);const restored=new SecretVault(f.directory,f.secure);await restored.load();assert.equal(restored.archivePassword,NEW);assert.equal(restored.passwordFor(second),OLD);await verifyBackup(second,f.git,restored.passwordFor(second));const publicState=await fs.readFile(path.join(f.directory,'archive-keys.json'),'utf8');assert(!publicState.includes(OLD));assert(!publicState.includes(NEW));assert(!(await fs.readFile(path.join(f.directory,'secrets.enc'))).includes(Buffer.from(OLD)));
+test('remembered old keys keep unselected legacy archives usable across a vault restart', async t => {
+  const f = await encrypted(t),
+    otherRoot = path.join(f.root, 'second');
+  await fs.mkdir(otherRoot);
+  const source = await prepareDestination({
+      ...f.source,
+      destination: otherRoot,
+      volumeId: undefined,
+      volumeHint: undefined
+    }),
+    second = await f.sync({ source, passphrase: OLD });
+  delete second.encryptionKeyId;
+  const marker = await managed(second.destination, second.fullName);
+  delete marker.encryptionKeyId;
+  await writeJson(path.join(second.destination, 'git-cloner.json'), marker);
+  f.state.repositories[second.id] = second;
+  const result = await rotatePasswords({
+    state: f.state,
+    vault: f.vault,
+    git: f.git,
+    ids: [f.record.id],
+    oldPassword: OLD,
+    newPassword: NEW,
+    remember: true,
+    save: f.save
+  });
+  assert.equal(result.remaining, 1);
+  const restored = new SecretVault(f.directory, f.secure);
+  await restored.load();
+  assert.equal(restored.archivePassword, NEW);
+  assert.equal(restored.passwordFor(second), OLD);
+  await verifyBackup(second, f.git, restored.passwordFor(second));
+  const publicState = await fs.readFile(path.join(f.directory, 'archive-keys.json'), 'utf8');
+  assert(!publicState.includes(OLD));
+  assert(!publicState.includes(NEW));
+  assert(!(await fs.readFile(path.join(f.directory, 'secrets.enc'))).includes(Buffer.from(OLD)));
 });
-test('wrong old passwords cannot change keys, ciphertext or destination files',async t=>{
-  const f=await encrypted(t,{remember:false}),vault=new SecretVault(f.directory,f.secure);await vault.load();const before=await hashFile(path.join(f.record.destination,'backup.gcb')),key=vault.encryptionKeyId;await assert.rejects(rotatePasswords({state:f.state,vault,git:f.git,ids:[f.record.id],oldPassword:'incorrect password 123',newPassword:NEW,save:f.save}),/Passwort/);assert.equal(vault.encryptionKeyId,key);assert.equal(await hashFile(path.join(f.record.destination,'backup.gcb')),before);assert.deepEqual((await fs.readdir(f.record.destination)).sort(),['backup.gcb','git-cloner.json']);
+test('wrong old passwords cannot change keys, ciphertext or destination files', async t => {
+  const f = await encrypted(t, { remember: false }),
+    vault = new SecretVault(f.directory, f.secure);
+  await vault.load();
+  const before = await hashFile(path.join(f.record.destination, 'backup.gcb')),
+    key = vault.encryptionKeyId;
+  await assert.rejects(
+    rotatePasswords({
+      state: f.state,
+      vault,
+      git: f.git,
+      ids: [f.record.id],
+      oldPassword: 'incorrect password 123',
+      newPassword: NEW,
+      save: f.save
+    }),
+    /Passwort/
+  );
+  assert.equal(vault.encryptionKeyId, key);
+  assert.equal(await hashFile(path.join(f.record.destination, 'backup.gcb')), before);
+  assert.deepEqual((await fs.readdir(f.record.destination)).sort(), ['backup.gcb', 'git-cloner.json']);
 });
-test('an interrupted password swap is completed idempotently from persisted transaction metadata',async t=>{
-  const f=await encrypted(t),oldMarker=await managed(f.record.destination,f.record.fullName),id=randomUUID(),payload=path.join(f.root,'payload'),fresh=path.join(f.record.destination,`.git-cloner-rekey-${id}.gcb`);await decryptArchive(path.join(f.record.destination,'backup.gcb'),payload,OLD);await f.vault.setPassword(NEW,true,{forceRotate:true});await encryptArchive(payload,fresh,NEW);const next={...oldMarker,archiveHash:await hashFile(fresh),encryptionKeyId:f.vault.encryptionKeyId};f.record.rekeyPending={id,oldMarker,newMarker:next};await f.save(f.state);await fs.rename(path.join(f.record.destination,'backup.gcb'),path.join(f.record.destination,`.git-cloner-old-${id}.gcb`));
-  const runtime=await f.runtime({state:f.state,safeStorage:f.secure});assert.equal(runtime.record(f.record.id).rekeyPending,undefined);await runtime.verify(f.record.id);const hash=await hashFile(path.join(f.record.destination,'backup.gcb'));assert.equal(hash,next.archiveHash);assert.deepEqual((await fs.readdir(f.record.destination)).sort(),['backup.gcb','git-cloner.json']);const state=await readJson(path.join(f.directory,'state.json'));assert.equal(state.repositories[f.record.id].encryptionKeyId,next.encryptionKeyId);
+test('an interrupted password swap is completed idempotently from persisted transaction metadata', async t => {
+  const f = await encrypted(t),
+    oldMarker = await managed(f.record.destination, f.record.fullName),
+    id = randomUUID(),
+    payload = path.join(f.root, 'payload'),
+    fresh = path.join(f.record.destination, `.git-cloner-rekey-${id}.gcb`);
+  await decryptArchive(path.join(f.record.destination, 'backup.gcb'), payload, OLD);
+  await f.vault.setPassword(NEW, true, { forceRotate: true });
+  await encryptArchive(payload, fresh, NEW);
+  const next = { ...oldMarker, archiveHash: await hashFile(fresh), encryptionKeyId: f.vault.encryptionKeyId };
+  f.record.rekeyPending = { id, oldMarker, newMarker: next };
+  await f.save(f.state);
+  await fs.rename(
+    path.join(f.record.destination, 'backup.gcb'),
+    path.join(f.record.destination, `.git-cloner-old-${id}.gcb`)
+  );
+  const runtime = await f.runtime({ state: f.state, safeStorage: f.secure });
+  assert.equal(runtime.record(f.record.id).rekeyPending, undefined);
+  await runtime.verify(f.record.id);
+  const hash = await hashFile(path.join(f.record.destination, 'backup.gcb'));
+  assert.equal(hash, next.archiveHash);
+  assert.deepEqual((await fs.readdir(f.record.destination)).sort(), ['backup.gcb', 'git-cloner.json']);
+  const state = await readJson(path.join(f.directory, 'state.json'));
+  assert.equal(state.repositories[f.record.id].encryptionKeyId, next.encryptionKeyId);
 });
-test('foreign temporary archives block a key swap and remain untouched',async t=>{
-  const f=await encrypted(t),oldMarker=await managed(f.record.destination,f.record.fullName),id=randomUUID(),payload=path.join(f.root,'payload'),fresh=path.join(f.record.destination,`.git-cloner-rekey-${id}.gcb`),foreign=path.join(f.record.destination,`.git-cloner-old-${id}.gcb`);await decryptArchive(path.join(f.record.destination,'backup.gcb'),payload,OLD);await encryptArchive(payload,fresh,NEW);await fs.writeFile(foreign,'personal content');f.record.rekeyPending={id,oldMarker,newMarker:{...oldMarker,archiveHash:await hashFile(fresh),encryptionKeyId:randomUUID()}};await assert.rejects(finishRotation(f.record,f.vault),/fremdes/);assert.equal(await fs.readFile(foreign,'utf8'),'personal content');assert.equal(await hashFile(path.join(f.record.destination,'backup.gcb')),oldMarker.archiveHash);
+test('foreign temporary archives block a key swap and remain untouched', async t => {
+  const f = await encrypted(t),
+    oldMarker = await managed(f.record.destination, f.record.fullName),
+    id = randomUUID(),
+    payload = path.join(f.root, 'payload'),
+    fresh = path.join(f.record.destination, `.git-cloner-rekey-${id}.gcb`),
+    foreign = path.join(f.record.destination, `.git-cloner-old-${id}.gcb`);
+  await decryptArchive(path.join(f.record.destination, 'backup.gcb'), payload, OLD);
+  await encryptArchive(payload, fresh, NEW);
+  await fs.writeFile(foreign, 'personal content');
+  f.record.rekeyPending = {
+    id,
+    oldMarker,
+    newMarker: { ...oldMarker, archiveHash: await hashFile(fresh), encryptionKeyId: randomUUID() }
+  };
+  await assert.rejects(finishRotation(f.record, f.vault), /fremdes/);
+  assert.equal(await fs.readFile(foreign, 'utf8'), 'personal content');
+  assert.equal(await hashFile(path.join(f.record.destination, 'backup.gcb')), oldMarker.archiveHash);
 });
-test('a password transaction on an initially offline drive recovers before a later backup even with relocation disabled',async t=>{
-  const f=await encrypted(t),oldMarker=await managed(f.record.destination,f.record.fullName),id=randomUUID(),payload=path.join(f.root,'payload'),fresh=path.join(f.record.destination,`.git-cloner-rekey-${id}.gcb`);await decryptArchive(path.join(f.record.destination,'backup.gcb'),payload,OLD);await f.vault.setPassword(NEW,true,{forceRotate:true});await encryptArchive(payload,fresh,NEW);f.record.rekeyPending={id,oldMarker,newMarker:{...oldMarker,archiveHash:await hashFile(fresh),encryptionKeyId:f.vault.encryptionKeyId}};await f.save(f.state);await fs.rename(path.join(f.record.destination,'backup.gcb'),path.join(f.record.destination,`.git-cloner-old-${id}.gcb`));const offline=path.join(f.root,'offline-drive');await fs.rename(f.mount,offline);
-  const config={...f.config(),backup:{...f.options},autoRelocate:false},runtime=await f.runtime({config,state:f.state,safeStorage:f.secure});assert(runtime.backup.state.repositories[f.record.id].rekeyPending);await fs.rename(offline,f.mount);const result=await runtime.run();assert.equal(result.errorCount,0);assert.equal(runtime.record(f.record.id).rekeyPending,undefined);await require('../../app/core/archives.cjs').authenticateArchive(path.join(f.record.destination,'backup.gcb'),NEW);assert.deepEqual((await fs.readdir(f.record.destination)).sort(),['backup.gcb','git-cloner.json']);
+test('a password transaction on an initially offline drive recovers before a later backup even with relocation disabled', async t => {
+  const f = await encrypted(t),
+    oldMarker = await managed(f.record.destination, f.record.fullName),
+    id = randomUUID(),
+    payload = path.join(f.root, 'payload'),
+    fresh = path.join(f.record.destination, `.git-cloner-rekey-${id}.gcb`);
+  await decryptArchive(path.join(f.record.destination, 'backup.gcb'), payload, OLD);
+  await f.vault.setPassword(NEW, true, { forceRotate: true });
+  await encryptArchive(payload, fresh, NEW);
+  f.record.rekeyPending = {
+    id,
+    oldMarker,
+    newMarker: { ...oldMarker, archiveHash: await hashFile(fresh), encryptionKeyId: f.vault.encryptionKeyId }
+  };
+  await f.save(f.state);
+  await fs.rename(
+    path.join(f.record.destination, 'backup.gcb'),
+    path.join(f.record.destination, `.git-cloner-old-${id}.gcb`)
+  );
+  const offline = path.join(f.root, 'offline-drive');
+  await fs.rename(f.mount, offline);
+  const config = { ...f.config(), backup: { ...f.options }, autoRelocate: false },
+    runtime = await f.runtime({ config, state: f.state, safeStorage: f.secure });
+  assert(runtime.backup.state.repositories[f.record.id].rekeyPending);
+  await fs.rename(offline, f.mount);
+  const result = await runtime.run();
+  assert.equal(result.errorCount, 0);
+  assert.equal(runtime.record(f.record.id).rekeyPending, undefined);
+  await require('../../app/core/archives.cjs').authenticateArchive(path.join(f.record.destination, 'backup.gcb'), NEW);
+  assert.deepEqual((await fs.readdir(f.record.destination)).sort(), ['backup.gcb', 'git-cloner.json']);
 });
-test('an initial state-write failure leaves the original archive and no orphan rekey ciphertext',async t=>{
-  const f=await encrypted(t),before=await hashFile(path.join(f.record.destination,'backup.gcb'));await assert.rejects(rotatePasswords({state:f.state,vault:f.vault,git:f.git,ids:[f.record.id],newPassword:NEW,remember:false,save:async()=>{throw new Error('profile write failed');}}),/profile write failed/);assert.equal(await hashFile(path.join(f.record.destination,'backup.gcb')),before);assert.deepEqual((await fs.readdir(f.record.destination)).sort(),['backup.gcb','git-cloner.json']);
+test('an initial state-write failure leaves the original archive and no orphan rekey ciphertext', async t => {
+  const f = await encrypted(t),
+    before = await hashFile(path.join(f.record.destination, 'backup.gcb'));
+  await assert.rejects(
+    rotatePasswords({
+      state: f.state,
+      vault: f.vault,
+      git: f.git,
+      ids: [f.record.id],
+      newPassword: NEW,
+      remember: false,
+      save: async () => {
+        throw new Error('profile write failed');
+      }
+    }),
+    /profile write failed/
+  );
+  assert.equal(await hashFile(path.join(f.record.destination, 'backup.gcb')), before);
+  assert.deepEqual((await fs.readdir(f.record.destination)).sort(), ['backup.gcb', 'git-cloner.json']);
 });
-test('rotation can stop between archives while preserving the remaining old-password backup',async t=>{
-  const f=await encrypted(t),otherRoot=path.join(f.root,'second');await fs.mkdir(otherRoot);const source=await prepareDestination({...f.source,destination:otherRoot,volumeId:undefined,volumeHint:undefined}),second=await f.sync({source,passphrase:OLD});second.encryptionKeyId=f.vault.encryptionKeyId;f.state.repositories[second.id]=second;const before=await hashFile(path.join(second.destination,'backup.gcb'));let stop=false;const result=await rotatePasswords({state:f.state,vault:f.vault,git:f.git,ids:[f.record.id,second.id],newPassword:NEW,remember:true,save:f.save,onProgress:p=>{if(p.completed===1)stop=true;},shouldStop:()=>stop});assert.equal(result.completed,1);assert.equal(result.remaining,1);assert.equal(await hashFile(path.join(second.destination,'backup.gcb')),before);await verifyBackup(second,f.git,f.vault.passwordFor(second));
+test('rotation can stop between archives while preserving the remaining old-password backup', async t => {
+  const f = await encrypted(t),
+    otherRoot = path.join(f.root, 'second');
+  await fs.mkdir(otherRoot);
+  const source = await prepareDestination({
+      ...f.source,
+      destination: otherRoot,
+      volumeId: undefined,
+      volumeHint: undefined
+    }),
+    second = await f.sync({ source, passphrase: OLD });
+  second.encryptionKeyId = f.vault.encryptionKeyId;
+  f.state.repositories[second.id] = second;
+  const before = await hashFile(path.join(second.destination, 'backup.gcb'));
+  let stop = false;
+  const result = await rotatePasswords({
+    state: f.state,
+    vault: f.vault,
+    git: f.git,
+    ids: [f.record.id, second.id],
+    newPassword: NEW,
+    remember: true,
+    save: f.save,
+    onProgress: p => {
+      if (p.completed === 1) stop = true;
+    },
+    shouldStop: () => stop
+  });
+  assert.equal(result.completed, 1);
+  assert.equal(result.remaining, 1);
+  assert.equal(await hashFile(path.join(second.destination, 'backup.gcb')), before);
+  await verifyBackup(second, f.git, f.vault.passwordFor(second));
 });
 
-test('unlocking an existing archive authenticates the password without replacing its active key',async t=>{
- const f=await encrypted(t,{remember:false}),runtime=await f.runtime({state:f.state,safeStorage:f.secure}),before=await hashFile(path.join(f.record.destination,'backup.gcb')),key=runtime.vault.encryptionKeyId;
- await assert.rejects(runtime.setPassword(NEW,false),/Passwort/);assert.equal(runtime.vault.archivePassword,'');assert.equal(runtime.vault.encryptionKeyId,key);assert.equal(await hashFile(path.join(f.record.destination,'backup.gcb')),before);
- await runtime.setPassword(OLD,false);assert.equal(runtime.vault.passwordFor(f.record),OLD);assert.equal(runtime.vault.encryptionKeyId,key);
+test('unlocking an existing archive authenticates the password without replacing its active key', async t => {
+  const f = await encrypted(t, { remember: false }),
+    runtime = await f.runtime({ state: f.state, safeStorage: f.secure }),
+    before = await hashFile(path.join(f.record.destination, 'backup.gcb')),
+    key = runtime.vault.encryptionKeyId;
+  await assert.rejects(runtime.setPassword(NEW, false), /Passwort/);
+  assert.equal(runtime.vault.archivePassword, '');
+  assert.equal(runtime.vault.encryptionKeyId, key);
+  assert.equal(await hashFile(path.join(f.record.destination, 'backup.gcb')), before);
+  await runtime.setPassword(OLD, false);
+  assert.equal(runtime.vault.passwordFor(f.record), OLD);
+  assert.equal(runtime.vault.encryptionKeyId, key);
 });
-test('an API limit pauses the queue, keeps finished jobs and waits for the reset before automatic resume',async t=>{
-  const f=await repository(t);f.names=['demo/project','demo/second','demo/third'];f.source.kind='owner';f.source.value='demo';const config=f.config(),calls=new Map();config.execution.concurrency=1;let limited=true;const until=new Date(Date.now()+3600000).toISOString();
-  const sync=async job=>{const name=job.repository.full_name;calls.set(name,(calls.get(name)||0)+1);if(name==='demo/second'&&limited){const error=new Error('GitHub-API-Limit erreicht (HTTP 403). Der Lauf wartet bis zur Freigabe.');Object.assign(error,{rateLimited:true,helpCode:'rate',rateLimitUntil:until});throw error;}return{fullName:name,destination:repositoryDestination(job.source,name),status:'cloned'};};
-  const service=new BackupService({git:f.git,github:f.github,state:{},saveState:value=>writeJson(path.join(f.root,'queue.json'),value),sync});
-  let result=await service.run(config);assert.equal(result.reason,'rate');assert.equal(service.state.queue.rateLimitUntil,until);assert.equal(service.state.queue.completed.length,1);assert.equal(service.state.history.length,0);assert.equal(calls.get('demo/third'),undefined);
-  const waiting=Object.values(service.state.repositories).find(r=>r.fullName==='demo/second');assert.equal(waiting.status,'waiting');assert.equal(waiting.helpCode,'rate');
-  let now=new Date();const runtime=await f.runtime({config,state:service.state,now:()=>now});runtime.backup.sync=sync;f.requests=[];
-  assert.equal((await runtime.resume()).reason,'rate');assert.equal(runtime.snapshot().queue.rateLimitUntil,until);await runtime.scheduledRun();assert.equal(f.requests.length,0);assert.equal(calls.get('demo/second'),1);
-  limited=false;now=new Date(Date.parse(until)+1000);result=await runtime.resume();assert.equal(result.resultCount,3);assert.equal(result.errorCount,0);assert.equal(runtime.backup.state.queue,null);assert.equal(calls.get('demo/project'),1);assert.equal(calls.get('demo/second'),2);assert.equal(calls.get('demo/third'),1);
-  const record=Object.values(runtime.backup.state.repositories).find(r=>r.fullName==='demo/second');assert.equal(record.status,'cloned');assert.equal(record.rateLimitUntil,undefined);
+test('an API limit pauses the queue, keeps finished jobs and waits for the reset before automatic resume', async t => {
+  const f = await repository(t);
+  f.names = ['demo/project', 'demo/second', 'demo/third'];
+  f.source.kind = 'owner';
+  f.source.value = 'demo';
+  const config = f.config(),
+    calls = new Map();
+  config.execution.concurrency = 1;
+  let limited = true;
+  const until = new Date(Date.now() + 3600000).toISOString();
+  const sync = async job => {
+    const name = job.repository.full_name;
+    calls.set(name, (calls.get(name) || 0) + 1);
+    if (name === 'demo/second' && limited) {
+      const error = new Error('GitHub-API-Limit erreicht (HTTP 403). Der Lauf wartet bis zur Freigabe.');
+      Object.assign(error, { rateLimited: true, helpCode: 'rate', rateLimitUntil: until });
+      throw error;
+    }
+    return { fullName: name, destination: repositoryDestination(job.source, name), status: 'cloned' };
+  };
+  const service = new BackupService({
+    git: f.git,
+    github: f.github,
+    state: {},
+    saveState: value => writeJson(path.join(f.root, 'queue.json'), value),
+    sync
+  });
+  let result = await service.run(config);
+  assert.equal(result.reason, 'rate');
+  assert.equal(service.state.queue.rateLimitUntil, until);
+  assert.equal(service.state.queue.completed.length, 1);
+  assert.equal(service.state.history.length, 0);
+  assert.equal(calls.get('demo/third'), undefined);
+  const waiting = Object.values(service.state.repositories).find(r => r.fullName === 'demo/second');
+  assert.equal(waiting.status, 'waiting');
+  assert.equal(waiting.helpCode, 'rate');
+  let now = new Date();
+  const runtime = await f.runtime({ config, state: service.state, now: () => now });
+  runtime.backup.sync = sync;
+  f.requests = [];
+  assert.equal((await runtime.resume()).reason, 'rate');
+  assert.equal(runtime.snapshot().queue.rateLimitUntil, until);
+  await runtime.scheduledRun();
+  assert.equal(f.requests.length, 0);
+  assert.equal(calls.get('demo/second'), 1);
+  limited = false;
+  now = new Date(Date.parse(until) + 1000);
+  result = await runtime.resume();
+  assert.equal(result.resultCount, 3);
+  assert.equal(result.errorCount, 0);
+  assert.equal(runtime.backup.state.queue, null);
+  assert.equal(calls.get('demo/project'), 1);
+  assert.equal(calls.get('demo/second'), 2);
+  assert.equal(calls.get('demo/third'), 1);
+  const record = Object.values(runtime.backup.state.repositories).find(r => r.fullName === 'demo/second');
+  assert.equal(record.status, 'cloned');
+  assert.equal(record.rateLimitUntil, undefined);
 });
-test('the scheduled worker waits for the API-limit reset itself and then completes the queue',async t=>{
-  const f=await repository(t);f.names=['demo/project','demo/second','demo/third'];f.source.kind='owner';f.source.value='demo';const config=f.config(),calls=new Map();config.execution.concurrency=1;let limited=true,until=new Date(Date.now()+3600000).toISOString();
-  const sync=async job=>{const name=job.repository.full_name;calls.set(name,(calls.get(name)||0)+1);if(name==='demo/second'&&limited){const error=new Error('GitHub-API-Limit erreicht (HTTP 403). Der Lauf wartet bis zur Freigabe.');Object.assign(error,{rateLimited:true,helpCode:'rate',rateLimitUntil:until});throw error;}return{fullName:name,destination:repositoryDestination(job.source,name),status:'cloned'};};
-  const service=new BackupService({git:f.git,github:f.github,state:{},saveState:async()=>{},sync});assert.equal((await service.run(config)).reason,'rate');
-  let now=new Date();const runtime=await f.runtime({config,state:structuredClone(service.state),now:()=>now});runtime.backup.sync=sync;const slept=[],waits=[];
-  const sleep=async ms=>{slept.push(ms);now=new Date(Number(now)+ms);limited=false;};
-  const result=await runtime.scheduledRunUntilSettled({sleep,onWait:value=>waits.push(value)});
-  assert.equal(result.resultCount,3);assert.equal(result.errorCount,0);assert.equal(runtime.backup.state.queue,null);assert.equal(slept.length,1);assert(slept[0]>=3590000&&slept[0]<=3605000);assert.equal(calls.get('demo/second'),2);assert.equal(waits.length,2);assert.equal(waits[1],null);
-  limited=true;until=new Date(Number(now)+3*3600000).toISOString();const later=await f.runtime({config,state:{...structuredClone(service.state),queue:{...structuredClone(service.state.queue),rateLimitUntil:until}},now:()=>now});later.backup.sync=sync;slept.length=0;
-  assert.equal((await later.scheduledRunUntilSettled({sleep})).reason,'rate');assert.equal(slept.length,0);
-  const stop=new AbortController();stop.abort();until=new Date(Number(now)+60000).toISOString();later.backup.state.queue.rateLimitUntil=until;
-  assert.equal((await later.scheduledRunUntilSettled({sleep,signal:stop.signal})).reason,'rate');assert.equal(slept.length,0);
+test('the scheduled worker waits for the API-limit reset itself and then completes the queue', async t => {
+  const f = await repository(t);
+  f.names = ['demo/project', 'demo/second', 'demo/third'];
+  f.source.kind = 'owner';
+  f.source.value = 'demo';
+  const config = f.config(),
+    calls = new Map();
+  config.execution.concurrency = 1;
+  let limited = true,
+    until = new Date(Date.now() + 3600000).toISOString();
+  const sync = async job => {
+    const name = job.repository.full_name;
+    calls.set(name, (calls.get(name) || 0) + 1);
+    if (name === 'demo/second' && limited) {
+      const error = new Error('GitHub-API-Limit erreicht (HTTP 403). Der Lauf wartet bis zur Freigabe.');
+      Object.assign(error, { rateLimited: true, helpCode: 'rate', rateLimitUntil: until });
+      throw error;
+    }
+    return { fullName: name, destination: repositoryDestination(job.source, name), status: 'cloned' };
+  };
+  const service = new BackupService({ git: f.git, github: f.github, state: {}, saveState: async () => {}, sync });
+  assert.equal((await service.run(config)).reason, 'rate');
+  let now = new Date();
+  const runtime = await f.runtime({ config, state: structuredClone(service.state), now: () => now });
+  runtime.backup.sync = sync;
+  const slept = [],
+    waits = [];
+  const sleep = async ms => {
+    slept.push(ms);
+    now = new Date(Number(now) + ms);
+    limited = false;
+  };
+  const result = await runtime.scheduledRunUntilSettled({ sleep, onWait: value => waits.push(value) });
+  assert.equal(result.resultCount, 3);
+  assert.equal(result.errorCount, 0);
+  assert.equal(runtime.backup.state.queue, null);
+  assert.equal(slept.length, 1);
+  assert(slept[0] >= 3590000 && slept[0] <= 3605000);
+  assert.equal(calls.get('demo/second'), 2);
+  assert.equal(waits.length, 2);
+  assert.equal(waits[1], null);
+  limited = true;
+  until = new Date(Number(now) + 3 * 3600000).toISOString();
+  const later = await f.runtime({
+    config,
+    state: {
+      ...structuredClone(service.state),
+      queue: { ...structuredClone(service.state.queue), rateLimitUntil: until }
+    },
+    now: () => now
+  });
+  later.backup.sync = sync;
+  slept.length = 0;
+  assert.equal((await later.scheduledRunUntilSettled({ sleep })).reason, 'rate');
+  assert.equal(slept.length, 0);
+  const stop = new AbortController();
+  stop.abort();
+  until = new Date(Number(now) + 60000).toISOString();
+  later.backup.state.queue.rateLimitUntil = until;
+  assert.equal((await later.scheduledRunUntilSettled({ sleep, signal: stop.signal })).reason, 'rate');
+  assert.equal(slept.length, 0);
 });
-test('an API limit during a release download keeps the previous backup and the partial download for later',async t=>{
-  const {GitHubClient}=require('../../app/core/github.cjs');
-  const f=await repository(t);f.options={...f.options,metadata:{...f.options.metadata,releases:true}};f.releases=[{id:1,tag_name:'v1',assets:[f.asset(11,'app-1.0.zip','first')]}];const first=await f.sync();
-  f.releases=[{id:2,tag_name:'v2',assets:[f.asset(21,'app-2.0.zip','second')]},f.releases[0]];const reset=String(Math.floor(Date.now()/1000)+1800);
-  const limitedClient=new GitHubClient({retryOptions:{retries:0},fetchImpl:async()=>new Response(JSON.stringify({message:'API rate limit exceeded'}),{status:403,headers:{'x-ratelimit-remaining':'0','x-ratelimit-reset':reset}})});
-  const original=f.github.downloadAsset;f.github.downloadAsset=(...args)=>limitedClient.downloadAsset(...args);
-  await assert.rejects(f.sync(),error=>error.rateLimited&&Date.parse(error.rateLimitUntil)===Number(reset)*1000);
-  assert.equal((await managed(first.destination,'demo/project')).releaseInfo.tag,'v1');
-  f.github.downloadAsset=original;const next=await f.sync();assert.equal(next.releaseInfo.tag,'v2');assert.equal(next.status,'updated');
-  assert.deepEqual((await fs.readdir(path.join(next.destination,'Git-Cloner-Releases'))).sort(),['.git-cloner-release.json','app-2.0.zip']);
+test('an API limit during a release download keeps the previous backup and the partial download for later', async t => {
+  const { GitHubClient } = require('../../app/core/github.cjs');
+  const f = await repository(t);
+  f.options = { ...f.options, metadata: { ...f.options.metadata, releases: true } };
+  f.releases = [{ id: 1, tag_name: 'v1', assets: [f.asset(11, 'app-1.0.zip', 'first')] }];
+  const first = await f.sync();
+  f.releases = [{ id: 2, tag_name: 'v2', assets: [f.asset(21, 'app-2.0.zip', 'second')] }, f.releases[0]];
+  const reset = String(Math.floor(Date.now() / 1000) + 1800);
+  const limitedClient = new GitHubClient({
+    retryOptions: { retries: 0 },
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ message: 'API rate limit exceeded' }), {
+        status: 403,
+        headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': reset }
+      })
+  });
+  const original = f.github.downloadAsset;
+  f.github.downloadAsset = (...args) => limitedClient.downloadAsset(...args);
+  await assert.rejects(
+    f.sync(),
+    error => error.rateLimited && Date.parse(error.rateLimitUntil) === Number(reset) * 1000
+  );
+  assert.equal((await managed(first.destination, 'demo/project')).releaseInfo.tag, 'v1');
+  f.github.downloadAsset = original;
+  const next = await f.sync();
+  assert.equal(next.releaseInfo.tag, 'v2');
+  assert.equal(next.status, 'updated');
+  assert.deepEqual((await fs.readdir(path.join(next.destination, 'Git-Cloner-Releases'))).sort(), [
+    '.git-cloner-release.json',
+    'app-2.0.zip'
+  ]);
 });
-test('an API limit while listing sources keeps the queue unresolved and an explicit resume may retry early',async t=>{
-  const f=await repository(t);const config=f.config(),until=new Date(Date.now()+600000).toISOString();let limited=true;
-  const github=source=>({repository:async name=>{if(limited){const error=new Error('GitHub-API-Limit erreicht (HTTP 429). Der Lauf wartet bis zur Freigabe.');Object.assign(error,{rateLimited:true,rateLimitUntil:until});throw error;}return f.github.repository(name);},repositories:owner=>f.github.repositories(owner),withTransfer(){return this;},source});
-  const service=new BackupService({git:f.git,github,state:{},saveState:async()=>{},sync:async job=>({fullName:job.repository.full_name,destination:repositoryDestination(job.source,job.repository.full_name),status:'cloned'})});
-  const result=await service.run(config);assert.equal(result.reason,'rate');assert.equal(service.state.queue.unresolved,true);assert.equal(service.state.queue.rateLimitUntil,until);assert.equal(service.state.queue.results.length,0);
-  limited=false;const done=await service.run(config,{resume:true});assert.equal(done.resultCount,1);assert.equal(done.errorCount,0);
+test('an API limit while listing sources keeps the queue unresolved and an explicit resume may retry early', async t => {
+  const f = await repository(t);
+  const config = f.config(),
+    until = new Date(Date.now() + 600000).toISOString();
+  let limited = true;
+  const github = source => ({
+    repository: async name => {
+      if (limited) {
+        const error = new Error('GitHub-API-Limit erreicht (HTTP 429). Der Lauf wartet bis zur Freigabe.');
+        Object.assign(error, { rateLimited: true, rateLimitUntil: until });
+        throw error;
+      }
+      return f.github.repository(name);
+    },
+    repositories: owner => f.github.repositories(owner),
+    withTransfer() {
+      return this;
+    },
+    source
+  });
+  const service = new BackupService({
+    git: f.git,
+    github,
+    state: {},
+    saveState: async () => {},
+    sync: async job => ({
+      fullName: job.repository.full_name,
+      destination: repositoryDestination(job.source, job.repository.full_name),
+      status: 'cloned'
+    })
+  });
+  const result = await service.run(config);
+  assert.equal(result.reason, 'rate');
+  assert.equal(service.state.queue.unresolved, true);
+  assert.equal(service.state.queue.rateLimitUntil, until);
+  assert.equal(service.state.queue.results.length, 0);
+  limited = false;
+  const done = await service.run(config, { resume: true });
+  assert.equal(done.resultCount, 1);
+  assert.equal(done.errorCount, 0);
 });
-test('idle policy ticks avoid repeated window updates and drive searches while all drives are present',async t=>{
-  const f=await repository(t),config=f.config();config.autoRelocate=true;let roots=0;const runtime=await f.runtime({config,mountedRoots:async()=>{roots++;return[];}});
-  await runtime.policyTick();let changes=0;runtime.on('change',()=>changes++);runtime.lastDisksAt=0;runtime.lastLocationCheck=0;await runtime.policyTick();runtime.lastLocationCheck=0;await runtime.policyTick();
-  assert.equal(changes,0);assert.equal(roots,0);assert.equal(runtime.operation,null);
+test('idle policy ticks avoid repeated window updates and drive searches while all drives are present', async t => {
+  const f = await repository(t),
+    config = f.config();
+  config.autoRelocate = true;
+  let roots = 0;
+  const runtime = await f.runtime({
+    config,
+    mountedRoots: async () => {
+      roots++;
+      return [];
+    }
+  });
+  await runtime.policyTick();
+  let changes = 0;
+  runtime.on('change', () => changes++);
+  runtime.lastDisksAt = 0;
+  runtime.lastLocationCheck = 0;
+  await runtime.policyTick();
+  runtime.lastLocationCheck = 0;
+  await runtime.policyTick();
+  assert.equal(changes, 0);
+  assert.equal(roots, 0);
+  assert.equal(runtime.operation, null);
 });
-test('a run interrupted by a crash continues once per scheduled time while a pause by the user still waits',async t=>{
-  const f=await repository(t);f.names=['demo/project','demo/second','demo/third'];f.source.kind='owner';f.source.value='demo';const config=f.config(),calls=new Map();config.execution.concurrency=1;
-  const sync=async job=>{const name=job.repository.full_name;calls.set(name,(calls.get(name)||0)+1);return{fullName:name,destination:repositoryDestination(job.source,name),status:'cloned'};};
-  let pauseFirst=true;const service=new BackupService({git:f.git,github:f.github,state:{},saveState:async()=>{},sync:async job=>{if(pauseFirst){pauseFirst=false;await service.pause();}return sync(job);}});
-  assert.equal((await service.run(config)).reason,'user');const interrupted=structuredClone(service.state);interrupted.queue.pauseReason=null;calls.clear();
-  const runtime=await f.runtime({config,state:interrupted});runtime.backup.sync=sync;let scans=0;runtime.locateDrives=async()=>{scans++;return{};};const failing=runtime.backup.git.version;
-  assert.equal(runtime.backup.state.queue.pauseReason,'restart');
-  runtime.backup.git.version=async()=>{throw new Error('Git kurz nicht erreichbar.');};
-  assert.equal((await runtime.scheduler.run('2026-11-07T17:00:00.000Z',{})).paused,true);assert.equal(runtime.backup.state.queue.pauseReason,'error');
-  const scanned=scans;assert.deepEqual(await runtime.scheduler.run('2026-11-07T17:00:00.000Z',{}),{paused:true,reason:'error'});assert.equal(scans,scanned);
-  runtime.backup.git.version=failing;const result=await runtime.scheduler.run('2026-11-07T23:00:00.000Z',{});assert.equal(result.resultCount,3);assert.equal(runtime.backup.state.queue,null);assert.deepEqual([...calls.values()],[1,1]);
-  pauseFirst=true;const fresh=new BackupService({git:f.git,github:f.github,state:{},saveState:async()=>{},sync:async job=>{if(pauseFirst){pauseFirst=false;await fresh.pause();}return sync(job);}});assert.equal((await fresh.run(config)).reason,'user');const paused=await f.runtime({config,state:structuredClone(fresh.state)});
-  assert.deepEqual(await paused.scheduler.run('2026-11-08T05:00:00.000Z',{}),{paused:true,reason:'user'});assert.equal((await paused.scheduledRun()).paused,true);assert.equal(paused.backup.state.queue.pauseReason,'user');
+test('a run interrupted by a crash continues once per scheduled time while a pause by the user still waits', async t => {
+  const f = await repository(t);
+  f.names = ['demo/project', 'demo/second', 'demo/third'];
+  f.source.kind = 'owner';
+  f.source.value = 'demo';
+  const config = f.config(),
+    calls = new Map();
+  config.execution.concurrency = 1;
+  const sync = async job => {
+    const name = job.repository.full_name;
+    calls.set(name, (calls.get(name) || 0) + 1);
+    return { fullName: name, destination: repositoryDestination(job.source, name), status: 'cloned' };
+  };
+  let pauseFirst = true;
+  const service = new BackupService({
+    git: f.git,
+    github: f.github,
+    state: {},
+    saveState: async () => {},
+    sync: async job => {
+      if (pauseFirst) {
+        pauseFirst = false;
+        await service.pause();
+      }
+      return sync(job);
+    }
+  });
+  assert.equal((await service.run(config)).reason, 'user');
+  const interrupted = structuredClone(service.state);
+  interrupted.queue.pauseReason = null;
+  calls.clear();
+  const runtime = await f.runtime({ config, state: interrupted });
+  runtime.backup.sync = sync;
+  let scans = 0;
+  runtime.locateDrives = async () => {
+    scans++;
+    return {};
+  };
+  const failing = runtime.backup.git.version;
+  assert.equal(runtime.backup.state.queue.pauseReason, 'restart');
+  runtime.backup.git.version = async () => {
+    throw new Error('Git kurz nicht erreichbar.');
+  };
+  assert.equal((await runtime.scheduler.run('2026-11-07T17:00:00.000Z', {})).paused, true);
+  assert.equal(runtime.backup.state.queue.pauseReason, 'error');
+  const scanned = scans;
+  assert.deepEqual(await runtime.scheduler.run('2026-11-07T17:00:00.000Z', {}), { paused: true, reason: 'error' });
+  assert.equal(scans, scanned);
+  runtime.backup.git.version = failing;
+  const result = await runtime.scheduler.run('2026-11-07T23:00:00.000Z', {});
+  assert.equal(result.resultCount, 3);
+  assert.equal(runtime.backup.state.queue, null);
+  assert.deepEqual([...calls.values()], [1, 1]);
+  pauseFirst = true;
+  const fresh = new BackupService({
+    git: f.git,
+    github: f.github,
+    state: {},
+    saveState: async () => {},
+    sync: async job => {
+      if (pauseFirst) {
+        pauseFirst = false;
+        await fresh.pause();
+      }
+      return sync(job);
+    }
+  });
+  assert.equal((await fresh.run(config)).reason, 'user');
+  const paused = await f.runtime({ config, state: structuredClone(fresh.state) });
+  assert.deepEqual(await paused.scheduler.run('2026-11-08T05:00:00.000Z', {}), { paused: true, reason: 'user' });
+  assert.equal((await paused.scheduledRun()).paused, true);
+  assert.equal(paused.backup.state.queue.pauseReason, 'user');
 });

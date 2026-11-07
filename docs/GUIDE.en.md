@@ -117,32 +117,31 @@ The overview adds elapsed time, approximate remaining time, measured downloads, 
 
 **High contrast** is available under Appearance. Tabs support arrows/Home/End, a skip link leads to main content, and state changes have accessible announcements. This is not a claim of external accessibility certification.
 
-| Shortcut | Action |
-| --- | --- |
-| Cmd/Ctrl + K | Open the overview and existing search field. |
-| Cmd/Ctrl + N | Add a source when no queue is active/waiting. |
-| Cmd/Ctrl + B | Start a check with configured sources. |
-| Cmd/Ctrl + Shift + P | Request pause or resume. |
-| Cmd/Ctrl + comma | Open settings. |
-| F1 | Show shortcuts. |
-| Escape | Close a dialog. |
+| Shortcut             | Action                                        |
+| -------------------- | --------------------------------------------- |
+| Cmd/Ctrl + K         | Open the overview and existing search field.  |
+| Cmd/Ctrl + N         | Add a source when no queue is active/waiting. |
+| Cmd/Ctrl + B         | Start a check with configured sources.        |
+| Cmd/Ctrl + Shift + P | Request pause or resume.                      |
+| Cmd/Ctrl + comma     | Open settings.                                |
+| F1                   | Show shortcuts.                               |
+| Escape               | Close a dialog.                               |
 
 ## Troubleshooting
 
-| Issue | Action |
-| --- | --- |
-| Git not found | Install Git, check PATH and restart. Finder-started macOS apps may have a different environment from the terminal. |
-| Drive missing/identity mismatch | Connect the original drive or deliberately configure a new destination. |
-| Existing foreign folder | Choose a new target or move your own data safely. The app will not overwrite it. |
-| GitHub 401/403 | Check token validity, permissions, organization SSO and rate limits. |
-| Waiting for API limit | The queue resumes automatically after the displayed release time and keeps finished repositories, including limits hit while downloading release files. The running app checks every 30 seconds; the OS worker waits for resets up to about one hour itself. Without a token GitHub allows 60 requests per hour; a repository with release backup needs about three requests per run plus one per new release file, so two runs of 10 repositories within an hour can reach the limit. A read token under Settings → Accounts raises the limit to 5,000 per hour; Resume retries immediately. |
-| DMG not installed | Check the overview message: a missing/invalid signature, a program for another CPU or several different packages that match equally block replacement. Narrow the release filename, for example `*arm64.dmg`. The same file published under two names (identical SHA-256) counts as one package. |
-| Missing LFS | Install Git LFS or disable the option. The previous successful backup stays intact. |
-| Password error | Enter this archive's original password, including the old password after a recent change if applicable. |
-| No automatic check | Confirm enabled sources, saved times, awake computer, running app or enabled native worker. |
+| Issue                           | Action                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Git not found                   | Install Git, check PATH and restart. Finder-started macOS apps may have a different environment from the terminal.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Drive missing/identity mismatch | Connect the original drive or deliberately configure a new destination.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Existing foreign folder         | Choose a new target or move your own data safely. The app will not overwrite it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| GitHub 401/403                  | Check token validity, permissions, organization SSO and rate limits.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Waiting for API limit           | The queue resumes automatically after the displayed release time and keeps finished repositories, including limits hit while downloading release files. The running app checks every 30 seconds; the OS worker waits for resets up to about one hour itself. Without a token GitHub allows 60 requests per hour; a repository with release backup needs about three requests per run plus one per new release file, so two runs of 10 repositories within an hour can reach the limit. A read token under Settings → Accounts raises the limit to 5,000 per hour; Resume retries immediately. |
+| DMG not installed               | Check the overview message: a missing/invalid signature, a program for another CPU or several different packages that match equally block replacement. Narrow the release filename, for example `*arm64.dmg`. The same file published under two names (identical SHA-256) counts as one package.                                                                                                                                                                                                                                                                                              |
+| Missing LFS                     | Install Git LFS or disable the option. The previous successful backup stays intact.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Password error                  | Enter this archive's original password, including the old password after a recent change if applicable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| No automatic check              | Confirm enabled sources, saved times, awake computer, running app or enabled native worker.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 For deeper setup, additional screenshots and OS details, see the [German guide](ANLEITUNG.md). [Architecture](ENTWICKLUNG.md), [distribution catalogs](PAKETVERZEICHNISSE.md) and [validation results](VALIDIERUNG.md) describe technical details and outstanding external publication/hardware steps.
-
 
 ## New in 3.1: schedules, releases and previews
 
@@ -248,7 +247,6 @@ Owned cache entries are removed after a successful backup. Unused entries older 
 
 The planned layout of further detail views is documented separately in the German [UI concept](DETAILANSICHTEN.md). Those additional views are not implemented features of version 3.3.
 
-
 ## 32. Reuse existing release assets
 
 Reuse is automatic when Git or metadata changes but selected assets remain identical. Stored manifests, asset identities and copied bytes are verified, using upstream SHA256 when available. Damaged or changed files are downloaded again. Download counters alone do not change backup identity. Unchanged backups retain their normal fast path. Encrypted old archives are authenticated and temporarily decrypted for reuse; failures fall back to a fresh download. Temporary plaintext is removed afterwards, subject to the documented crash and secure-erasure limitations.
@@ -287,6 +285,7 @@ macOS supports one signed/ad-hoc `.app` from DMG/ZIP, validating its signature a
 Trust the selected publisher and keep personal data outside managed program copies. Additional files in the managed root and foreign staging directories block replacement. Changing destinations retains old installations at their current location. Interrupted swaps recover through ownership markers on the next installation attempt; hard termination can leave temporary working data.
 
 ![Opt-in program installation](screenshots/program-installation.png)
+
 ## 36. Program shortcuts
 
 All examples are anonymous, such as `example-owner/program-suite`, a backup folder and a separate program folder. No example repository is preconfigured.

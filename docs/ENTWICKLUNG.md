@@ -10,21 +10,21 @@ Die Oberfläche gliedert sich in Übersicht, Quellen, Zeitplan, Wiederherstellun
 
 ## Kernmodule
 
-| Modul in `app/core/` | Aufgabe |
-| --- | --- |
-| `config.cjs`, `filters.cjs` | Leere Standardkonfiguration, Migration durch Defaults, strenge Validierung und Repository-Namensfilter. |
-| `github.cjs` | REST-Pagination, begrenzter ETag-Cache, accountbezogene Clients, kontrollierte Asset-Downloads. |
-| `git.cjs` | Git per `execFile`, flache Klone, Mirror-Refs, inkrementeller Fetch, LFS und sichere Submodule. |
-| `backup.cjs` | Quellen/Ziele auflösen, atomarer Austausch, Absturzerholung, Integritäts- und Metadatenplanung. |
-| `destinations.cjs` | Laufwerkskennungen, sichere Unterpfade, freier Platz und Reserve. |
-| `integrity.cjs`, `restore.cjs` | Streaming-SHA256, Git-fsck, Wiederherstellung ohne Überschreiben vorhandener Ordner. |
-| `metadata.cjs` | JSON-Exporte, Release-Dateien, Wiki-Mirror und Änderungsdigest. |
-| `archives.cjs` | Streaming-TAR/Gzip, AES-256-GCM, scrypt und authentifizierte Extraktion. |
-| `vault.cjs`, `device-flow.cjs` | OS-verschlüsselte Zugangsdaten und GitHub Device Flow. |
-| `schedule.cjs`, `native-schedule.cjs` | Lokale Termine und launchd-/Windows-/systemd-Benutzeraufgaben. |
-| `lease.cjs`, `drive-monitor.cjs` | Prozessübergreifende Sperre und auf Zielpfade begrenzte Wiederanschlusserkennung. |
-| `updates.cjs` | Offizielle Release-Prüfung mit dauerhaftem Überspringen, ohne Download oder Installation. |
-| `transfer.cjs`, `store.cjs` | Geheimnisfreie Konfigurationsübertragung, anonymisierte Diagnose und atomare JSON-Dateien. |
+| Modul in `app/core/`                  | Aufgabe                                                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `config.cjs`, `filters.cjs`           | Leere Standardkonfiguration, Migration durch Defaults, strenge Validierung und Repository-Namensfilter. |
+| `github.cjs`                          | REST-Pagination, begrenzter ETag-Cache, accountbezogene Clients, kontrollierte Asset-Downloads.         |
+| `git.cjs`                             | Git per `execFile`, flache Klone, Mirror-Refs, inkrementeller Fetch, LFS und sichere Submodule.         |
+| `backup.cjs`                          | Quellen/Ziele auflösen, atomarer Austausch, Absturzerholung, Integritäts- und Metadatenplanung.         |
+| `destinations.cjs`                    | Laufwerkskennungen, sichere Unterpfade, freier Platz und Reserve.                                       |
+| `integrity.cjs`, `restore.cjs`        | Streaming-SHA256, Git-fsck, Wiederherstellung ohne Überschreiben vorhandener Ordner.                    |
+| `metadata.cjs`                        | JSON-Exporte, Release-Dateien, Wiki-Mirror und Änderungsdigest.                                         |
+| `archives.cjs`                        | Streaming-TAR/Gzip, AES-256-GCM, scrypt und authentifizierte Extraktion.                                |
+| `vault.cjs`, `device-flow.cjs`        | OS-verschlüsselte Zugangsdaten und GitHub Device Flow.                                                  |
+| `schedule.cjs`, `native-schedule.cjs` | Lokale Termine und launchd-/Windows-/systemd-Benutzeraufgaben.                                          |
+| `lease.cjs`, `drive-monitor.cjs`      | Prozessübergreifende Sperre und auf Zielpfade begrenzte Wiederanschlusserkennung.                       |
+| `updates.cjs`                         | Offizielle Release-Prüfung mit dauerhaftem Überspringen, ohne Download oder Installation.               |
+| `transfer.cjs`, `store.cjs`           | Geheimnisfreie Konfigurationsübertragung, anonymisierte Diagnose und atomare JSON-Dateien.              |
 
 Das alte `secrets.cjs` bleibt für die Kompatibilität des bisherigen Einzel-Token-Formats erhalten; die Runtime migriert diesen Zugang in den neuen Vault.
 
@@ -100,7 +100,6 @@ Für eine neue Version Paketversion und Lockfile, Release-Notizen und AppStream 
 
 Verifizierte Signierung, Apple-Notarisierung und automatische Updates sind auf Wunsch ausgeschlossen. macOS verwendet lediglich Ad-hoc-Signierung mit den nötigen Electron-Entitlements. `electron-updater` und ein automatischer Update-Installer sind nicht Teil der Anwendung.
 
-
 ## Version 3: Warteschlange und Ressourcen
 
 `state.json` enthält zusätzlich die gespeicherte Warteschlange: unveränderlichen Sicherungsumfang, aufgelöste Jobs, abgeschlossene Job-IDs, bisherige Ergebnisse und Pausengrund. Keine Tokens oder Archivpasswörter. Vor Freigabe einer Ressourcenregel bleibt eine Warteschlange zunächst unaufgelöst; dadurch findet auch die erste GitHub-Abfrage erst nach Freigabe statt. Nach einem ungeplanten Neustart wird ein unvollständiger aktiver Lauf ausdrücklich fortgesetzt. Benutzerpausen werden nie automatisch aufgehoben.
@@ -125,7 +124,6 @@ Verschlüsselte Picker-Sitzungen authentifizieren das komplette Archiv und halte
 
 Die GUI-Suite erzeugt 16 anonymisierte Bilder aus echten Fenstern und neutralen Testprofilen. Fixtures für Repository-Antworten und lokale Git-Remotes sind ausschließlich in ungepackten E2E-Profilen aktiv. Die veröffentlichte App ignoriert diese Testvariablen. Testumfang und tatsächlich ausgeführte Plattformen stehen in [VALIDIERUNG.md](VALIDIERUNG.md).
 
-
 ## Erweiterungen in 3.1
 
 - `schedule.cjs` berechnet fällige Quellen mit `lastScheduledBySource`. Nur passende Quellen werden aufgelöst; einzelne Repository-Overrides behalten auch zwischen unterschiedlichen Quellenterminen Vorrang. `native-schedule.cjs` registriert die Vereinigung aktiver Zeiten und teilt Windows-Aufgaben oberhalb der 48-Trigger-Grenze auf. `native-tasks.json` hält die eigene Aufgabenzahl für die Bereinigung fest.
@@ -135,6 +133,7 @@ Die GUI-Suite erzeugt 16 anonymisierte Bilder aus echten Fenstern und neutralen 
 - `notifications.cjs` enthält die Regeln für Ergebnisse und lokale Ruhezeiten. `UpdateMonitor` verbraucht während stummer Phasen keine Versionsmeldung; persistente Schreibvorgänge werden geordnet. Die GUI prüft ausstehende Meldungen ohne zusätzliche API-Abfrage erneut.
 - `enhancements.js` ergänzt die Oberfläche um getrennte Benachrichtigungsoptionen, Quellenzeiten, OS-Auswahl und die maskierte Diff-Ansicht. Ausgerichtete Feldraster verwenden dieselben Kontrollhöhen und Subgrid-Zeilen wie die bestehenden Einstellungen.
 - `scripts/publish-release.cjs` veröffentlicht zunächst einen Entwurf, wiederholt begrenzt vorübergehende GitHub-Fehler und prüft alle Uploads gegen Größen und SHA256-Digests. Erst danach wird der Release offiziell. Erneute Aufrufe verändern einen bereits vollständig geprüften offiziellen Release nicht.
+
 ## Vorhandene Release-Pakete finalisieren
 
 Wenn alle Paketbauten erfolgreich waren und nur die Veröffentlichung scheitert, können die vorhandenen Artefakte weiterverwendet werden. Der normale Publisher findet Entwürfe auch ohne bereits veröffentlichten Git-Tag und prüft sie anschließend über ihre Release-ID. Vorübergehende HTTP-Fehler werden begrenzt wiederholt. Katalog-ZIPs erhalten feste Zeitstempel aus ihrem Quellcommit, damit eine Wiederholung identische Prüfsummen erzeugt.
@@ -142,7 +141,6 @@ Wenn alle Paketbauten erfolgreich waren und nur die Veröffentlichung scheitert,
 Für eine Korrektur am Publisher die Datei [`.github/release-recovery.json`](../.github/release-recovery.json) mit Run-ID, ursprünglichem Quellcommit und Paketversion bewusst aktualisieren und auf `main` committen. Alternativ den Workflow **Finalize verified release** manuell ausführen. Der Workflow prüft eine erfolgreiche CI für diesen Quellcommit und alle acht erfolgreichen Paketjobs des angegebenen Release-Laufs. Er prüft außerdem Repository, Hauptbranch und Paketversion. Erst danach lädt er die Originalartefakte, erzeugt Kataloge und Hinweise aus dem ursprünglichen Quellstand und führt den getesteten aktuellen Publisher aus. Die Anwendung wird dabei nicht neu gebaut; der Release bleibt seinem ursprünglichen geprüften App-Commit zugeordnet.
 
 Bereits offizielle Releases werden nicht überschrieben. Ein Entwurf für einen anderen Quellcommit wird abgelehnt. Ein reiner Wiederanlauf nach einem vorübergehenden Fehler kann weiterhin direkt über den fehlgeschlagenen Veröffentlichungsjob in Actions erfolgen. Zugangsdaten gehören weder in die Anfrage-Datei noch ins Repository.
-
 
 ## Version 3.2: Anbieter, Verlauf und Archivschlüssel
 
@@ -153,6 +151,7 @@ Bereits offizielle Releases werden nicht überschrieben. Ein Entwurf für einen 
 `key-rotation.cjs` authentifiziert Archive vor dem Passwortwechsel, erstellt und prüft neue verschlüsselte Stände und nutzt gespeicherte Austauschzustände für die Wiederaufnahme. Die Vault verwahrt Passwortwerte nur im RAM oder ausdrücklich per OS-Schlüsselspeicher; `archive-keys.json` enthält ausschließlich Kennungen/Zuordnungen. Ein gewöhnliches Entsperren authentifiziert den aktuellen Archivschlüssel über einen verworfenen Klartext-Stream ohne zusätzliche Extraktion. `recommendations.cjs` lädt begrenzte Dateibäume/Attributdateien und aktiviert keine Optionen selbst.
 
 Zusatzprüfung: `FORGEJO_BIN=/pfad/zur/geprüften/forgejo npm run test:forgejo`. Das optionale Entwicklerskript erzeugt eine private lokale HTTPS-Instanz samt temporärem Zertifikat, Dummy-Konto und Dummy-Repository, prüft die echten APIs/Git-/Asset-Zugriffe und entfernt den Testbestand anschließend. Es bewahrt die geerbte CA-Vertrauenskette und ergänzt ausschließlich den Testprozess. Die CI pinnt Forgejo 17.0.1 und dessen SHA256. Produktpakete enthalten diesen Testserver nicht.
+
 ## Quellenarbeitsbereich und Downloads in Version 3.3
 
 `source-workspace.cjs` enthält Gruppen/Favoriten, die reine Bulk-Vorschau und die begrenzte Repository-Browser-Sitzung. Anbieter-Kontexte werden einmal aufgelöst; Seiten enthalten maximal 50 Einträge, die Sitzung hält maximal 30 Seiten und 10.000 kompakte Repository-Beschreibungen. Auswahl und Erzeugung neuer Quellen werden serverseitig validiert. Bulk-Übernahmen beziehen sich auf eine fünf Minuten gültige, an die aktuelle Konfiguration gebundene Vorschau. Organisatorische Änderungen schreiben keine Sicherungsdaten oder OS-Aufgaben.
@@ -165,11 +164,9 @@ Fortsetzen erfordert passende Content-Range-Angaben sowie eine starke ETag-Kennu
 
 Die macOS-Paketjobs verwenden Intel-Runner für x64, ARM64 und Universal, um zusätzliche Abhängigkeit vom zeitweise knappen ARM64-Paketrunner-Pool zu vermeiden. Die native macOS-ARM64-CI mit echten Electron-Tests bleibt erhalten; reine Paketmontage und native Ausführung werden getrennt geprüft. Herausgebersignierung, Notarisierung und automatische Update-Installation werden weiterhin nicht eingerichtet.
 
-
 `renderer/source-input.js` wird von Renderer und Kern gemeinsam genutzt: URLs und Organisationshauptseiten werden vor der bestehenden Namensvalidierung normalisiert. Dynamische Owner-Quellen verwenden die vorhandene paginierte Auflösung je Prüfung; wiederholte Importe ändern keine vorhandenen Regeln. Deaktivierte einzelne Repository-Regeln behalten ihren Vorrang.
 
 `release-layout.cjs` legt fertige Dateien sichtbar in `Git-Cloner-Releases` oder einer freien nummerierten Alternative ab und erhält ursprüngliche portable Namen. Das Manifest deckt auch diesen Ordner ab. Die Plan-Anwendung liefert Ablageinformationen je Ziel zurück; Ergebnisse verschiedener Ziele teilen kein veränderliches Release-Objekt. Alte interne Assets werden beim Neuaufbau entfernt; Wiederherstellung akzeptiert alte und neue Ablagen. Verschlüsselte Archive umfassen den sichtbaren Ordner innerhalb des verschlüsselten Payloads.
-
 
 ## Release-Verwaltung und Programme in 3.4
 

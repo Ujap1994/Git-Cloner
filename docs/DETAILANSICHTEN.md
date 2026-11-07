@@ -29,22 +29,22 @@ flowchart LR
 
 ## Quellen
 
-| Reiter | Inhalt | Hauptaktion |
-| --- | --- | --- |
-| Überblick | Anbieter, zugewiesenes Konto, Laufwerke, letzte/kommende Prüfung und aktuelle Hinweise. | Jetzt prüfen |
-| Repositories | Suchbare, paginierte Liste der zugehörigen Repositories mit Sicherungsstatus. Bei einer Kontoquelle erst nach Bedarf beim Anbieter laden. | Repository öffnen |
-| Optionen | Zielordner, Filter, Umfang und Zeitplan; sichtbar zwischen übernommenen globalen und eigenen Werten unterscheiden. | Änderungen prüfen / speichern |
-| Verlauf | Auf diese Quelle begrenzte Läufe und Fehler. Die Aufbewahrungsgrenzen werden sichtbar ausgewiesen. | Details / anonymisierter Export |
+| Reiter       | Inhalt                                                                                                                                    | Hauptaktion                     |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| Überblick    | Anbieter, zugewiesenes Konto, Laufwerke, letzte/kommende Prüfung und aktuelle Hinweise.                                                   | Jetzt prüfen                    |
+| Repositories | Suchbare, paginierte Liste der zugehörigen Repositories mit Sicherungsstatus. Bei einer Kontoquelle erst nach Bedarf beim Anbieter laden. | Repository öffnen               |
+| Optionen     | Zielordner, Filter, Umfang und Zeitplan; sichtbar zwischen übernommenen globalen und eigenen Werten unterscheiden.                        | Änderungen prüfen / speichern   |
+| Verlauf      | Auf diese Quelle begrenzte Läufe und Fehler. Die Aufbewahrungsgrenzen werden sichtbar ausgewiesen.                                        | Details / anonymisierter Export |
 
 Gruppen/Favoriten stehen im Kopf statt als weiterer Reiter. Bei einer Mehrfachauswahl erscheint die gemeinsame Aktionsleiste; individuelle Unterschiede bleiben bis zur ausdrücklichen Änderung erhalten.
 
 ## Einzelne Repository-Sicherungen
 
-| Reiter | Inhalt |
-| --- | --- |
-| Status | Aktueller Commit, Git-Modus, Datenumfang, Verschlüsselung, letzte Integritätsprüfung und nächste geplante Prüfung. |
-| Dateien | Vorhandene Dateien und Ordner seitenweise durchsuchen; spätere Text-/Bildvorschau mit Größenbegrenzung. |
-| Releases | Aktueller gesicherter Release, OS-Auswahl, Dateinamen, Größen und Prüfergebnisse. App-Versionsmeldungen bleiben davon getrennt. |
+| Reiter           | Inhalt                                                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status           | Aktueller Commit, Git-Modus, Datenumfang, Verschlüsselung, letzte Integritätsprüfung und nächste geplante Prüfung.                          |
+| Dateien          | Vorhandene Dateien und Ordner seitenweise durchsuchen; spätere Text-/Bildvorschau mit Größenbegrenzung.                                     |
+| Releases         | Aktueller gesicherter Release, OS-Auswahl, Dateinamen, Größen und Prüfergebnisse. App-Versionsmeldungen bleiben davon getrennt.             |
 | Wiederherstellen | Gesamte Sicherung oder ausdrücklich ausgewählte Dateien an einen neuen Ort wiederherstellen. Ziel und Auswahl vor dem Start zusammenfassen. |
 
 Eine spätere automatische Probe-Wiederherstellung erhält hier ein eigenes Ergebnis mit Datum und Fehlerhilfe. Bis diese Funktion implementiert ist, erscheinen dafür keine leeren Platzhalter oder fiktiven Erfolgsanzeigen.
