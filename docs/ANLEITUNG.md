@@ -189,7 +189,7 @@ Entwickle ausschließlich in einem separaten Arbeitsordner. Änderungen innerhal
 
 ## 9. Neue Versionen melden und überspringen
 
-Die Seitenleiste zeigt die ausgeführte Version. Beim Start und danach alle sechs Stunden vergleicht die automatische Versionsprüfung diese mit dem letzten offiziellen stabilen Release von `Ujap1994/Git-Cloner`. Unter **Einstellungen → Allgemein** kannst du manuell prüfen oder die automatische Prüfung deaktivieren.
+Die Seitenleiste zeigt die ausgeführte Version. Beim Start und danach alle sechs Stunden vergleicht die automatische Versionsprüfung diese mit dem letzten offiziellen stabilen Release von `Ujap1994/Git-Cloner`. Unter **Einstellungen → Allgemein** kannst du manuell prüfen oder die automatische Prüfung deaktivieren. Ist das GitHub-API-Limit aufgebraucht, zeigt die Seitenleiste **Versionsprüfung wartet auf API-Limit**; nach der Freigabe wird automatisch erneut geprüft, statt einen Fehler anzuzeigen.
 
 Eine neuere Version erscheint als Hinweis mit einem Link zur offiziellen Release-Seite. Wenn Benachrichtigungen aktiv sind, gibt es einmalig eine Systemmeldung. **Diese Version überspringen** speichert die Auswahl dauerhaft. Dieselbe oder eine niedrigere Version erzeugt auch nach einem Neustart keine erneute Update-Info. Erst eine höhere Version löst wieder einen Hinweis aus. **Übersprungene Version zurücksetzen** hebt die Auswahl auf.
 
@@ -214,8 +214,8 @@ Der Diagnoseexport entfernt Konto-/Repository-Namen, Pfade, Commit-IDs und rohe 
 | Fremder Ordner blockiert Ziel | Neuen Zielordner wählen oder vorhandene Daten selbst sicher verschieben. |
 | Platzmangel | Platz für den alten und neuen Stand sowie Reserve freigeben; Metadaten/LFS können größer als die Schätzung sein. |
 | GitHub 401 / 403 | Gültigkeit, Repository-Freigabe, Org-SSO und API-Limit prüfen. |
-| Wartet auf API-Limit | Freigabezeitpunkt abwarten; die Warteschlange setzt automatisch fort und behält erledigte Repositories. Ein Lesetoken unter Einstellungen → Konten erhöht das Limit, danach sofort **Fortsetzen** möglich. |
-| DMG wird nicht installiert | Meldung in der Übersicht prüfen: Eine fehlende oder ungültige Signatur, ein Programm für eine andere CPU oder mehrere gleichwertige Pakete verhindern den Austausch. Im letzten Fall den **Release-Dateinamen** eingrenzen, etwa `*arm64.dmg`. |
+| Wartet auf API-Limit | Freigabezeitpunkt abwarten; die Warteschlange setzt automatisch fort und behält erledigte Repositories. Ohne Token erlaubt GitHub 60 Anfragen pro Stunde; ein Repository mit Release-Sicherung braucht etwa drei Anfragen pro Lauf plus eine je neuer Release-Datei, zwei Läufe mit 10 Repositories innerhalb einer Stunde können das Limit also erreichen. Ein Lesetoken unter Einstellungen → Konten erhöht das Limit, danach sofort **Fortsetzen** möglich. |
+| DMG wird nicht installiert | Meldung in der Übersicht prüfen: Eine fehlende oder ungültige Signatur, ein Programm für eine andere CPU oder mehrere verschiedene, gleichwertige Pakete verhindern den Austausch. Im letzten Fall den **Release-Dateinamen** eingrenzen, etwa `*arm64.dmg`. Dieselbe Datei unter zwei Namen (gleiche SHA-256) zählt als ein Paket. Finder-Metadaten im DMG (`com.apple.FinderInfo`) sind kein Signaturfehler mehr. |
 | LFS fehlt | Git LFS installieren oder die Option abschalten; vorhandener erfolgreicher Stand bleibt erhalten. |
 | Passwort fehlt/falsch | Das Passwort dieses Archivs eingeben. Nach einem Wechsel kann für ältere Archive noch das alte gelten. |
 | Kein automatischer Lauf | Quelle und Zeitplan aktiviert/gespeichert? Rechner wach? App im Hintergrund oder OS-Worker aktiv? |
@@ -242,7 +242,7 @@ Während eines Durchlaufs **Nach laufenden Repos pausieren** wählen. Bereits ge
 
 ![Gespeicherte pausierte Warteschlange](screenshots/paused-queue.png)
 
-**Fortsetzen** überspringt die in diesem Lauf bereits abgeschlossenen Ziele. **Warteschlange verwerfen** entfernt ausschließlich den ausstehenden Lauf; vorhandene Backups bleiben erhalten. Während eine Warteschlange wartet, bleiben Quellen und Sicherungsumfang fest. Leistungsregeln, Darstellung und zukünftige Prüfzeiten lassen sich ändern. Für einen anderen Sicherungsumfang zunächst den Lauf abschließen oder verwerfen.
+**Fortsetzen** überspringt die in diesem Lauf bereits abgeschlossenen Ziele. Ein durch Absturz, erzwungenes Beenden oder Herunterfahren unterbrochener Lauf (**Nach Neustart bereit zum Fortsetzen**) oder ein durch einen unerwarteten Fehler gestoppter Lauf setzt zu jedem späteren Zeitplan einmal automatisch fort, damit geplante Sicherungen nicht unbemerkt stehen bleiben. Nur eine selbst gewählte Pause wartet auf **Fortsetzen**. **Warteschlange verwerfen** entfernt ausschließlich den ausstehenden Lauf; vorhandene Backups bleiben erhalten. Während eine Warteschlange wartet, bleiben Quellen und Sicherungsumfang fest. Leistungsregeln, Darstellung und zukünftige Prüfzeiten lassen sich ändern. Für einen anderen Sicherungsumfang zunächst den Lauf abschließen oder verwerfen.
 
 Eine Regelpause durch Strom/WLAN wird im laufenden Hintergrundbetrieb etwa alle 30 Sekunden neu geprüft und bei erlaubten Bedingungen automatisch fortgesetzt. Nach einer bewusst gewählten Pause, einem Neustart während eines aktiven Laufs oder einem allgemeinen Laufabbruch bleibt das Fortsetzen ausdrücklich bei dir. Ein unabhängiger Worker prüft Regelpausen bei seinen nächsten Starts. Er startet keine dauerhaft laufende Überwachung einer beendeten GUI.
 

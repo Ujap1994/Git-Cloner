@@ -84,3 +84,22 @@ test('GitHub cache stays bounded and transport-scoped clients share the same bud
   const client=new GitHubClient({cacheLimit:180,fetchImpl:async()=>({ok:true,status:200,headers:{get:key=>key==='etag'?'tag':null},json:async()=>({value:'x'.repeat(100)})})});
   await client.request('/first');await client.withTransfer(null).request('/second');assert.ok(client.cacheStats.bytes<=180);assert.equal(client.cache.size,1);assert.equal(client.cache.has('/first'),false);
 });
+test('a version check hit by the GitHub API limit waits for the reset and then checks again',async()=>{
+  const {GitHubClient}=require('../../app/core/github.cjs'),reset=Math.floor(Date.now()/1000)+600;let limited=true,requests=0;
+  const fetchImpl=async()=>{requests++;return limited?{ok:false,status:403,headers:new Headers({'x-ratelimit-remaining':'0','x-ratelimit-reset':String(reset)})}:{ok:true,status:200,headers:new Headers(),json:async()=>({tag_name:'v3.1.0'})};};
+  const monitor=new UpdateMonitor({currentVersion:'3.0.0',github:new GitHubClient({fetchImpl,retryOptions:{retries:0}}),canNotify:()=>false});
+  const waiting=await monitor.check();assert.equal(waiting.status,'waiting');assert.equal(waiting.retryAt,new Date(reset*1000).toISOString());
+  assert.equal(monitor.retryDue(reset*1000-1),false);assert.equal(monitor.retryDue(reset*1000),true);
+  limited=false;const checked=await monitor.check();assert.equal(checked.status,'available');assert.equal(checked.retryAt,undefined);assert.equal(monitor.retryDue(reset*1000),false);assert.equal(requests,2);
+  const failed=new UpdateMonitor({currentVersion:'3.0.0',github:{request:async()=>{throw new Error('offline');}}});assert.equal((await failed.check()).status,'error');assert.equal(failed.retryDue(Date.now()+86400000),false);
+});
+test('API clients keep cached lists as text, answer unchanged lists from 304 and evict the least recently used list first',async()=>{
+  const {GitHubClient}=require('../../app/core/github.cjs'),{HostedClient}=require('../../app/core/hosted-client.cjs'),bodies={'/a':JSON.stringify([{n:'a'.repeat(60)}]),'/b':JSON.stringify([{n:'b'.repeat(60)}]),'/c':JSON.stringify([{n:'c'.repeat(60)}])};
+  const make=Client=>{const seen=[];const fetchImpl=async(url,{headers})=>{const key='/'+new URL(url).pathname.split('/').pop(),tag=`"${key}"`;seen.push(headers['If-None-Match']===tag?'304':'200');return headers['If-None-Match']===tag?{ok:false,status:304,headers:new Headers({etag:tag})}:{ok:true,status:200,headers:new Headers({etag:tag}),text:async()=>bodies[key]};};return {seen,client:Client===GitHubClient?new GitHubClient({fetchImpl,cacheLimit:150}):new HostedClient({provider:'forgejo',server:'https://codeberg.org',fetchImpl,cacheLimit:150,resolveHost:async()=>[{address:'1.1.1.1',family:4}]})};};
+  for(const Client of [GitHubClient,HostedClient]){
+    const {client,seen}=make(Client),first=await client.request('/a');first[0].n='changed';
+    assert.equal((await client.request('/a'))[0].n,'a'.repeat(60));assert.equal(typeof client.cache.get('/a').text,'string');
+    await client.request('/b');await client.request('/a');await client.request('/c');assert.deepEqual([...client.cache.keys()],['/a','/c']);assert.ok(client.cacheStats.bytes<=150);
+    assert.deepEqual(seen,['200','304','200','304','200'],Client.name);
+  }
+});

@@ -6,6 +6,7 @@ const { lookup } = require('node:dns/promises');
 const { isIP } = require('node:net');
 const { retry } = require('./retry.cjs');
 const { responseRateLimit } = require('./rate-limit.cjs');
+const { readBody, cachedData, remember, CACHE_LIMIT } = require('./response-cache.cjs');
 const { providerSpec,parseHostedSource,cloneURL } = require('./provider-spec.cjs');
 function privateAddress(value) {
   const ip=value.toLowerCase().replace(/^\[|\]$/g,'');
@@ -13,7 +14,7 @@ function privateAddress(value) {
   return ip==='::'||ip==='::1'||/^f[cd]|^fe[89ab]|^::ffff:/.test(ip);
 }
 class HostedClient {
-  constructor({provider,server,token='',username='',fetchImpl=fetch,resolveHost=lookup,cacheLimit=16*1048576,retryOptions={}}) {
+  constructor({provider,server,token='',username='',fetchImpl=fetch,resolveHost=lookup,cacheLimit=CACHE_LIMIT,retryOptions={}}) {
     Object.assign(this,providerSpec({provider,server}),{token,username,fetchImpl,resolveHost,cacheLimit,retryOptions});
     this.apiBase=this.server+(provider==='gitlab'?'/api/v4':'/api/v1');this.cache=new Map();this.cacheStats={bytes:0};this.pagination=new Map();
   }
@@ -28,14 +29,14 @@ class HostedClient {
     if(typeof endpoint!=='string'||!endpoint.startsWith('/')||endpoint.startsWith('//')||endpoint.includes('://')||/[\\\r\n\0]/.test(endpoint))throw new Error('Ungültiger API-Endpunkt.');
     signal?.throwIfAborted();const url=this.apiBase+endpoint,cached=this.cache.get(endpoint);
     const response=await this.fetchImpl(url,{headers:{...this.headers(url),Accept:'application/json',...(cached?.etag?{'If-None-Match':cached.etag}:{})},redirect:'error',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(30000)]):AbortSignal.timeout(30000)});
-    if(response.status===304&&cached)return structuredClone(cached.data);
+    if(response.status===304&&cached)return cachedData(this,endpoint,cached);
     if(response.status===404&&allow404)return null;
     if(!response.ok){const limited=await responseRateLimit(response,{label:this.label()});if(limited)throw limited;const error=new Error([401,403].includes(response.status)?'Zugriff nicht erlaubt. Token und Repository-Berechtigungen prüfen.':response.status===404?'Git-Quelle nicht gefunden oder keine Zugriffsberechtigung.':`Der Git-Server antwortet mit HTTP ${response.status}.`);error.helpCode=[401,403].includes(response.status)?'authentication':response.status===429?'rate':'network';error.retryable=[429,500,502,503,504].includes(response.status);error.retryAfterMs=Number(response.headers?.get('retry-after')||0)*1000;throw error;}
-    const data=await response.json(),etag=response.headers?.get('etag'),next=response.headers?.get('x-next-page'),link=response.headers?.get('link'),total=response.headers?.get('x-total-count');
+    const body=await readBody(response),etag=response.headers?.get('etag'),next=response.headers?.get('x-next-page'),link=response.headers?.get('link'),total=response.headers?.get('x-total-count');
     this.pagination.set(endpoint,{next:next!=null?Boolean(next):link!=null?/rel="?next"?/.test(link):null,total:total==null?null:Number(total)});
     if(this.pagination.size>2000)this.pagination.delete(this.pagination.keys().next().value);
-    if(etag){const size=Buffer.byteLength(JSON.stringify(data));if(size<=this.cacheLimit){const old=this.cache.get(endpoint);if(old){this.cacheStats.bytes-=old.size;this.cache.delete(endpoint);}while(this.cache.size&&(this.cache.size>=2000||this.cacheStats.bytes+size>this.cacheLimit)){const key=this.cache.keys().next().value;this.cacheStats.bytes-=this.cache.get(key).size;this.cache.delete(key);}this.cache.set(endpoint,{etag,data,size});this.cacheStats.bytes+=size;}}
-    return structuredClone(data);
+    remember(this,endpoint,etag,body);
+    return body.data;
   }
   async collection(endpoint,{signal}={}) {
     const items=[];

@@ -122,3 +122,17 @@ test('idle policy ticks avoid repeated window updates and drive searches while a
   await runtime.policyTick();let changes=0;runtime.on('change',()=>changes++);runtime.lastDisksAt=0;runtime.lastLocationCheck=0;await runtime.policyTick();runtime.lastLocationCheck=0;await runtime.policyTick();
   assert.equal(changes,0);assert.equal(roots,0);assert.equal(runtime.operation,null);
 });
+test('a run interrupted by a crash continues once per scheduled time while a pause by the user still waits',async t=>{
+  const f=await repository(t);f.names=['demo/project','demo/second','demo/third'];f.source.kind='owner';f.source.value='demo';const config=f.config(),calls=new Map();config.execution.concurrency=1;
+  const sync=async job=>{const name=job.repository.full_name;calls.set(name,(calls.get(name)||0)+1);return{fullName:name,destination:repositoryDestination(job.source,name),status:'cloned'};};
+  let pauseFirst=true;const service=new BackupService({git:f.git,github:f.github,state:{},saveState:async()=>{},sync:async job=>{if(pauseFirst){pauseFirst=false;await service.pause();}return sync(job);}});
+  assert.equal((await service.run(config)).reason,'user');const interrupted=structuredClone(service.state);interrupted.queue.pauseReason=null;calls.clear();
+  const runtime=await f.runtime({config,state:interrupted});runtime.backup.sync=sync;let scans=0;runtime.locateDrives=async()=>{scans++;return{};};const failing=runtime.backup.git.version;
+  assert.equal(runtime.backup.state.queue.pauseReason,'restart');
+  runtime.backup.git.version=async()=>{throw new Error('Git kurz nicht erreichbar.');};
+  assert.equal((await runtime.scheduler.run('2026-11-07T17:00:00.000Z',{})).paused,true);assert.equal(runtime.backup.state.queue.pauseReason,'error');
+  const scanned=scans;assert.deepEqual(await runtime.scheduler.run('2026-11-07T17:00:00.000Z',{}),{paused:true,reason:'error'});assert.equal(scans,scanned);
+  runtime.backup.git.version=failing;const result=await runtime.scheduler.run('2026-11-07T23:00:00.000Z',{});assert.equal(result.resultCount,3);assert.equal(runtime.backup.state.queue,null);assert.deepEqual([...calls.values()],[1,1]);
+  pauseFirst=true;const fresh=new BackupService({git:f.git,github:f.github,state:{},saveState:async()=>{},sync:async job=>{if(pauseFirst){pauseFirst=false;await fresh.pause();}return sync(job);}});assert.equal((await fresh.run(config)).reason,'user');const paused=await f.runtime({config,state:structuredClone(fresh.state)});
+  assert.deepEqual(await paused.scheduler.run('2026-11-08T05:00:00.000Z',{}),{paused:true,reason:'user'});assert.equal((await paused.scheduledRun()).paused,true);assert.equal(paused.backup.state.queue.pauseReason,'user');
+});

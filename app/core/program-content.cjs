@@ -9,10 +9,16 @@ const label = file => path.basename(file).replace(/\.(app|exe|AppImage)$/i, '');
 const XML = { lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' };
 const plistStrings = (xml, key) => [...String(xml).matchAll(new RegExp(`<key>${key}</key>\\s*<string>([^<]*)</string>`, 'g'))].map(match => match[1].replace(/&(lt|gt|quot|apos|amp);/g, (_value, name) => XML[name]));
 function toolMessage(error, file = '') { const line = String(error?.stderr || error?.message || '').split('\n').map(value => value.trim()).find(Boolean) ?? ''; return (file ? line.split(file + ': ').join('') : line).slice(0, 300); }
-async function verifySignature(run, file) {
-  try { await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', file], { timeout: 120000, maxBuffer: 1048576 }); }
+// DMG tools often store Finder layout data (com.apple.FinderInfo) on every file of the image. It is not signed content and
+// Gatekeeper accepts it, but codesign's "sideband" rule rejects it. A mounted image is read-only, so apps are checked there
+// with every other strict rule; the installed copy is cleaned and then has to pass all strict rules.
+const SIDEBAND = ['com.apple.FinderInfo', 'com.apple.ResourceFork'];
+async function verifySignature(run, file, { sideband = true } = {}) {
+  try { await run('/usr/bin/codesign', ['--verify', '--deep', sideband ? '--strict' : '--strict=symlinks', file], { timeout: 120000, maxBuffer: 1048576 }); }
   catch (error) { throw new Error(`Die Signaturprüfung von ${path.basename(file)} ist fehlgeschlagen${toolMessage(error, file) ? ` (${toolMessage(error, file)})` : ''}. Unsignierte oder veränderte Programme werden nicht automatisch installiert.`); }
 }
+// -s keeps the walk inside the bundle; other attributes such as signatures of non-Mach-O helpers stay untouched.
+async function removeSideband(run, file) { for (const name of SIDEBAND) await run('/usr/bin/xattr', ['-r', '-s', '-d', name, file], { timeout: 120000, maxBuffer: 1048576 }); }
 // Mount points come from hdiutil itself: an image that is already open in Finder is read where it is and left mounted.
 async function attachImage(file, temporary, run) {
   const mounts = path.join(temporary, 'mount'); await fs.mkdir(mounts);
@@ -61,7 +67,7 @@ async function validateBinary(file, platform, arch) {
 async function validateCandidate(candidate, { platform, arch, run }) {
   if (platform !== 'darwin') return validateBinary(candidate.file, platform, arch);
   await validateTree(candidate.file);
-  await verifySignature(run, candidate.file);
+  await verifySignature(run, candidate.file, { sideband: false });
   const { stdout } = await run('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleExecutable', path.join(candidate.file, 'Contents', 'Info.plist')], { timeout: 10000 });
   const name = stdout.trim(); if (!name || path.basename(name) !== name || /[\\/\0]/.test(name)) throw new Error('Ungültiges macOS-Programmbundle.');
   const binary = path.join(candidate.file, 'Contents', 'MacOS', name), stat = await fs.lstat(binary);
@@ -108,8 +114,8 @@ async function preparePrograms(asset, output, keys, options) {
       for (const item of selected) {
         const basename = path.basename(item.file), duplicate = selected.some(other => other !== item && path.basename(other.file).toLowerCase() === basename.toLowerCase());
         const folder = duplicate ? 'app-' + shortHash(item.key) : '', parent = path.join(output, folder); if (folder) await fs.mkdir(parent);
-        const executable = path.join(folder, basename); await fs.cp(item.file, path.join(output, executable), { recursive: true, verbatimSymlinks: true, errorOnExist: true, force: false });
-        await verifySignature(options.run, path.join(output, executable)); result.push({ key: item.key, name: item.name, executable });
+        const executable = path.join(folder, basename), copy = path.join(output, executable); await fs.cp(item.file, copy, { recursive: true, verbatimSymlinks: true, errorOnExist: true, force: false });
+        await removeSideband(options.run, copy); await verifySignature(options.run, copy); result.push({ key: item.key, name: item.name, executable });
       }
       return result;
     }
@@ -119,4 +125,4 @@ async function preparePrograms(asset, output, keys, options) {
     return selected.map(item => { const parent = parents.find(parent => item.file.startsWith(parent + path.sep)); return { key: item.key, name: item.name, executable: path.join(folders.get(parent), path.relative(parent, item.file)) }; });
   });
 }
-module.exports = { preparePrograms, inspectPrograms, attachImage };
+module.exports = { preparePrograms, inspectPrograms, attachImage, verifySignature };

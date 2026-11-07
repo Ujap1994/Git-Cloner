@@ -40,3 +40,24 @@ for (const extension of ['zip', 'dmg']) test(`native macOS installs a real ad-ho
   const output = path.join(f.root, 'installed'); await fs.mkdir(output); const name = await new ProgramInstaller().prepare({ name: path.basename(file), file }, output); assert.equal(name, 'Example.app'); await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', path.join(output, name)]); assert(await fs.stat(path.join(output, name, 'Contents', 'MacOS', 'Example')));
   if(extension==='zip'){const child=spawn(path.join(output,name,'Contents','MacOS','Example'),['30']);await once(child,'spawn');try{await assert.rejects(new ProgramInstaller().ensureNotRunning(output,{executable:name}),{code:'PROGRAM_RUNNING'});}finally{const ended=once(child,'exit');child.kill();await ended;}}
 });
+test('native macOS installs and keeps a signed app from a DMG whose files carry Finder layout data', { skip: process.platform !== 'darwin', timeout: 180000 }, async t => {
+  const f = await repository(t), image = path.join(f.root, 'image'), app = path.join(image, 'Layout.app'), contents = path.join(app, 'Contents'), programs = path.join(f.root, 'programs'); await fs.mkdir(path.join(contents, 'MacOS'), { recursive: true }); await fs.mkdir(programs);
+  const code = path.join(f.root, 'fixture.c'); await fs.writeFile(code, '#include <unistd.h>\nint main(void) { sleep(30); return 0; }\n');
+  await run('/usr/bin/clang', ['-arch', process.arch === 'x64' ? 'x86_64' : 'arm64', code, '-o', path.join(contents, 'MacOS', 'Layout')]);
+  await fs.writeFile(path.join(contents, 'Info.plist'), '<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>org.example.layout</string><key>CFBundleExecutable</key><string>Layout</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleVersion</key><string>1</string></dict></plist>');
+  await run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', app]);
+  // The bytes real DMG tools store on every file and folder: a Finder icon position of (-1, -1).
+  const finderInfo = '00'.repeat(10) + 'ffffffff' + '00'.repeat(18), finder = target => run('/usr/bin/xattr', ['-wx', 'com.apple.FinderInfo', finderInfo, target]);
+  for (const target of [app, contents, path.join(contents, 'MacOS'), path.join(contents, 'MacOS', 'Layout'), path.join(contents, 'Info.plist')]) await finder(target);
+  const file = path.join(f.root, 'layout-macos-universal.dmg'); await run('/usr/bin/hdiutil', ['create', '-quiet', '-fs', 'HFS+', '-srcfolder', image, '-volname', 'Layout', file], { timeout: 60000 });
+  const { attachImage } = require('../../app/core/program-content.cjs'), mount = await fs.mkdtemp(path.join(f.root, 'mount-')), mounted = await attachImage(file, mount, run);
+  try { await assert.rejects(run('/usr/bin/codesign', ['--verify', '--deep', '--strict', path.join(mounted.roots[0], 'Layout.app')]), /detritus/); }
+  finally { for (const root of mounted.owned) await run('/usr/bin/hdiutil', ['detach', '-force', root]); }
+  f.source.installation = { enabled: true, destination: programs, pattern: '*.dmg' }; f.options.metadata.releases = true; f.releases = [{ tag_name: 'v1', assets: [f.asset(1, path.basename(file), await fs.readFile(file))] }];
+  const installer = new ProgramInstaller(), record = await f.sync(), preview = await installer.inspect({ source: f.source, record, git: f.git }); assert.deepEqual(preview.candidates.map(item => item.available), [true]);
+  const installed = await installer.install({ source: f.source, record, git: f.git }); assert.equal(installed.status, 'installed');
+  await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', installed.executable]); assert.doesNotMatch((await run('/usr/bin/xattr', ['-r', '-s', installed.executable])).stdout, /FinderInfo/);
+  // A later Finder label on the installed app or a .DS_Store in its folder keeps the installation current instead of reinstalling it on every check.
+  await finder(installed.executable); await fs.writeFile(path.join(installed.destination, '.DS_Store'), 'finder');
+  assert.equal((await installer.install({ source: f.source, record, git: f.git })).status, 'current');
+});
