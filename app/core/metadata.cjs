@@ -17,7 +17,10 @@ async function metadataPlan(repository, options, github, git, { releaseScope = '
   if (options.pullRequests) data.pullRequests = await github.collection(`${base}/pulls?state=all&sort=updated&direction=desc`);
   if (options.releases) data.releases = await github.collection(`${base}/releases`);
   const release = options.releases && data.releases.length ? await github.request(`${base}/releases/latest`, { allow404: true }) : null;
-  const assets = Number.isSafeInteger(release?.id) ? await github.collection(`${base}/releases/${release.id}/assets`) : release?.assets ?? [];
+  // The release already lists its assets with the same fields as the assets endpoint; only very large lists are paged
+  // separately. This saves one API request per repository, which matters with 60 requests per hour without a token.
+  const embedded = Array.isArray(release?.assets) && release.assets.length < 100;
+  const assets = Number.isSafeInteger(release?.id) && !embedded ? await github.collection(`${base}/releases/${release.id}/assets`) : release?.assets ?? [];
   const releaseSelection = narrowToProgram(selectReleaseAssets(assets,releaseScope,platform,{releaseArchitecture,releaseFileTypes,arch}), options.releases ? releaseProgram : null, platform, arch);
   const estimatedBytes = releaseSelection.selected.reduce((sum,a) => sum + (Number.isSafeInteger(a.size) && a.size >= 0 ? a.size : 0),0);
   const releaseInfo = release ? {architecture:releaseSelection.architecture,fileTypes:releaseFileTypes,tag:release.tag_name,scope:releaseScope,platform,fileCount:releaseSelection.selected.length,bytes:estimatedBytes,excludedCount:releaseSelection.excluded.length} : null;

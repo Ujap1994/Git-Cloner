@@ -106,3 +106,7 @@ API-Limits pausieren die Warteschlange bis zur Freigabe, statt die übrigen Repo
 ## Version 3.6.0
 
 API-Limits beim Release-Download und GitHub-Sekundärlimits ohne Kopfzeilen pausieren ebenfalls die Warteschlange. Der OS-Worker wartet kurze Freigabezeiten selbst ab und übergibt an ein geöffnetes App-Fenster. Die DMG-Installation liest echte Mountpunkte, öffnet Abbilder mit Lizenzdialog ohne Rückfrage, lässt Finder-Mounts geöffnet und erlaubt Intel-Programme über Rosetta 2 als Rückfall. Mit automatischer Installation bleibt nur die installierte Datei des neuesten Releases gespeichert.
+
+## Wartung in Version 3.6.1
+
+DMG-Programme mit Finder-Layoutdaten werden wieder installiert und aktualisiert; dieselbe Datei unter zwei Namen zählt als ein Programm; `.DS_Store` blockiert keine Updates mehr. Release-Dateilisten kommen aus der Release-Antwort (drei statt vier API-Anfragen je Repository). Die Versionsprüfung wartet auf das API-Limit, unterbrochene Läufe setzen zum nächsten Zeitplan fort, und der API-Cache speichert kompakten Text statt Objekten.

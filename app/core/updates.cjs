@@ -24,11 +24,15 @@ class UpdateMonitor {
       try {
         this.result = await checkForUpdates(this.currentVersion, this.github, this.state);
         await this.notifyAvailable();
-      } catch (error) { this.result = { ...this.result, status: 'error', message: error.message }; }
+      } catch (error) {
+        // Without a token, backups can use up GitHub's 60 requests per hour; the check then waits for the release instead of failing for six hours.
+        this.result = error.rateLimited && error.rateLimitUntil ? { ...this.result, status: 'waiting', retryAt: error.rateLimitUntil, message: error.message } : { ...this.result, status: 'error', message: error.message };
+      }
       return this.result;
     })();
     try { return await this.checking; } finally { this.checking = null; }
   }
+  retryDue(now = Date.now()) { return this.result.status === 'waiting' && !this.checking && Date.parse(this.result.retryAt) <= Number(now); }
   persist() { this.saving = (this.saving ?? Promise.resolve()).catch(() => {}).then(() => this.save(structuredClone(this.state))); return this.saving; }
   async notifyAvailable() {
     if (this.notifying) return this.notifying;

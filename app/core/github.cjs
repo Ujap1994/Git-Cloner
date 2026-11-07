@@ -1,9 +1,10 @@
 const { parseSource } = require('./config.cjs');
 const { retry } = require('./retry.cjs');
 const { responseRateLimit } = require('./rate-limit.cjs');
+const { readBody, cachedData, remember, CACHE_LIMIT } = require('./response-cache.cjs');
 
 class GitHubClient {
-  constructor({ token = '', fetchImpl = fetch, retryOptions = {}, cacheLimit = 16 * 1048576 } = {}) { Object.assign(this, { token, fetchImpl, retryOptions, cacheLimit }); this.cache = new Map(); this.cacheStats = {bytes:0}; this.pagination = new Map(); }
+  constructor({ token = '', fetchImpl = fetch, retryOptions = {}, cacheLimit = CACHE_LIMIT } = {}) { Object.assign(this, { token, fetchImpl, retryOptions, cacheLimit }); this.cache = new Map(); this.cacheStats = {bytes:0}; this.pagination = new Map(); }
   withTransfer(transfer, retries = 2) { const client = Object.create(this); client.transfer = transfer; client.retryOptions = { ...this.retryOptions, retries }; return client; }
   async request(endpoint, { allow404 = false, signal } = {}) {
     return retry(() => this.requestOnce(endpoint, { allow404, signal }), this.retryOptions);
@@ -16,7 +17,7 @@ class GitHubClient {
       headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'Git-Cloner', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...(cached?.etag ? { 'If-None-Match': cached.etag } : {}) },
       signal: signal ? AbortSignal.any([signal,AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000), redirect: 'error'
     });
-    if (response.status === 304 && cached) return structuredClone(cached.data);
+    if (response.status === 304 && cached) return cachedData(this, endpoint, cached);
     if (allow404 && response.status === 404) return null;
     if (!response.ok) {
       const limited = await responseRateLimit(response, { label: 'GitHub' }); if (limited) throw limited;
@@ -30,20 +31,12 @@ class GitHubClient {
       if (response.status === 404) throw new Error('GitHub-Quelle nicht gefunden oder keine Zugriffsberechtigung.');
       throw new Error(`GitHub antwortet mit HTTP ${response.status}.`);
     }
-    const data = await response.json();
+    const body = await readBody(response);
     const link = response.headers?.get('link');
     this.pagination.set(endpoint, { next: link == null ? null : /rel="?next"?/.test(link) });
     if (this.pagination.size > 2000) this.pagination.delete(this.pagination.keys().next().value);
-    const etag = response.headers?.get('etag');
-    if (etag) {
-      const size = Buffer.byteLength(JSON.stringify(data));
-      if (size <= this.cacheLimit) {
-        const old = this.cache.get(endpoint); if (old) { this.cacheStats.bytes -= old.size ?? 0; this.cache.delete(endpoint); }
-        while (this.cache.size && (this.cache.size >= 2000 || this.cacheStats.bytes + size > this.cacheLimit)) { const key = this.cache.keys().next().value; this.cacheStats.bytes -= this.cache.get(key).size ?? 0; this.cache.delete(key); }
-        this.cache.set(endpoint, { etag, data, size }); this.cacheStats.bytes += size;
-      }
-    }
-    return structuredClone(data);
+    remember(this, endpoint, response.headers?.get('etag'), body);
+    return body.data;
   }
   async repository(value, options) {
     const name = parseSource(value, 'repository');

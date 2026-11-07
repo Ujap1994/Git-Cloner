@@ -10,7 +10,7 @@ const { repositoryParts, providerKey } = require('./provider-spec.cjs');
 const { selectProgram } = require('./program-select.cjs');
 const { RestoreBrowser } = require('./selective-restore.cjs');
 const { RELEASE_OWNER } = require('./release-layout.cjs');
-const { preparePrograms, inspectPrograms } = require('./program-content.cjs');
+const { preparePrograms, inspectPrograms, verifySignature } = require('./program-content.cjs');
 const { acquireLease } = require('./lease.cjs');
 const { validateInstallation } = require('./program-options.cjs');
 const runFile = promisify(execFile), MARKER = '.git-cloner-program.json';
@@ -21,7 +21,8 @@ async function owned(directory, identity) {
   const file = path.join(directory, MARKER), info = await fs.lstat(file); if (!info.isFile() || info.isSymbolicLink()) throw new Error('Unbekannte Programmzuordnung.');
   const marker = await readJson(file);
   if (marker.format !== 'git-cloner-program' || marker.identity !== identity || !Array.isArray(marker.files) || marker.files.some(name => typeof name !== 'string' || path.basename(name) !== name || /[\\/\0]/.test(name))) throw new Error('Eine fremde Installation wird nicht ersetzt.');
-  if ((await fs.readdir(directory)).some(name => name !== MARKER && !marker.files.includes(name))) throw new Error('Zusätzliche Dateien im Programmordner bleiben erhalten. Bitte getrennt ablegen.');
+  // Finder writes .DS_Store when the program folder is opened; it must not block later updates.
+  if ((await fs.readdir(directory)).some(name => name !== MARKER && name !== '.DS_Store' && !marker.files.includes(name))) throw new Error('Zusätzliche Dateien im Programmordner bleiben erhalten. Bitte getrennt ablegen.');
   for (const name of marker.files) { const entry = await fs.lstat(path.join(directory, name)); if (entry.isSymbolicLink() || !entry.isDirectory() && !entry.isFile()) throw new Error('Ein fremder Programmpfad bleibt erhalten.'); }
   return marker;
 }
@@ -43,7 +44,8 @@ class ProgramInstaller {
       const manifest = await readJson(path.join(require('./integrity.cjs').controlDirectory(opened.source, opened.marker.mode), 'git-cloner-manifest.json'));
       const ownerPath = path.relative(opened.source, ownerFile).split(path.sep).join('/');
       if (await hashFile(ownerFile) !== manifest.entries.find(entry => entry.path === ownerPath)?.sha256) throw new Error('Die Release-Dateizuordnung ist beschädigt.');
-      const info = await readJson(ownerFile), chosen = selectProgram(info.files, this.platform, this.arch, source.installation?.pattern || '');
+      const info = await readJson(ownerFile), files = (Array.isArray(info.files) ? info.files : []).map(file => ({ ...file, digest: opened.entries.find(item => item.path === file.storedName)?.sha256 }));
+      const chosen = selectProgram(files, this.platform, this.arch, source.installation?.pattern || '');
       if (typeof chosen.storedName !== 'string' || path.basename(chosen.storedName) !== chosen.storedName || /[\\/\0]/.test(chosen.storedName)) throw new Error('Unsichere Release-Datei.');
       const asset = path.join(opened.filesRoot, chosen.storedName), entry = opened.entries.find(item => item.path === chosen.storedName), stat = await fs.lstat(asset);
       if (!stat.isFile() || stat.isSymbolicLink() || !entry?.sha256 || await hashFile(asset) !== entry.sha256) throw new Error('Die Programmdatei hat ihre Integritätsprüfung nicht bestanden.');
@@ -81,7 +83,8 @@ class ProgramInstaller {
         for (const item of programs) {
           const executable = path.resolve(target, item.executable);
           if (!executable.startsWith(target + path.sep)) throw new Error('Ungültiger gespeicherter Programmpfad.');
-          try { if (this.platform === 'darwin') await this.run('/usr/bin/codesign', ['--verify', '--deep', '--strict', executable], { timeout: 120000, maxBuffer: 1048576 }); else if (!item.executableHash || await hashFile(executable) !== item.executableHash) valid = false; }
+          // Finder may later add a label or icon to the installed app; that is no reason to reinstall it on every check.
+          try { if (this.platform === 'darwin') await verifySignature(this.run, executable, { sideband: false }); else if (!item.executableHash || await hashFile(executable) !== item.executableHash) valid = false; }
           catch (_error) { valid = false; }
         }
         if (valid) return { status: 'current', tag: current.tag, destination: target, executable: path.join(target, programs[0].executable), programs: programs.map(item => ({ ...item, executable: path.join(target, item.executable) })) };

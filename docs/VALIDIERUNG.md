@@ -1,6 +1,17 @@
 # Tatsächlich ausgeführte Prüfungen
 
-Stand: 6. November 2026, Git Cloner **3.6.0**. Prüfungen mit GitHub-Antworten aus Test-Fixtures und tatsächliche Plattformläufe werden getrennt ausgewiesen.
+Stand: 7. November 2026, Git Cloner **3.6.1**. Prüfungen mit GitHub-Antworten aus Test-Fixtures und tatsächliche Plattformläufe werden getrennt ausgewiesen.
+
+## Lokale Prüfung von Version 3.6.1
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| macOS 27 (Apple Silicon), Node 24, `npm run lint` und `npm test` | ESLint ohne Befund, **273 Tests erfolgreich**, keine Fehler; fünf Windows-/Linux-Prüfungen übersprungen. Drei Wiederholungen mit identischem Ergebnis (je etwa 129 s), keine instabilen Tests. |
+| Echte Electron-GUI macOS (Playwright) | Alle Spezifikationen: **61 Tests erfolgreich**. |
+| Echte Release-Dateien | Installation aus den tatsächlichen Sicherungen von DeckCraft 0.16.0, FilmCraft 0.18.0, PhotoCraft 0.21.0, SolidCraft 0.30.1 und EffectCraft 0.22.0 in einen Testordner: alle installiert, zweite Prüfung jeweils „aktuell“, installierte Kopien bestehen `codesign --verify --deep --strict`, Gatekeeper meldet „Notarized Developer ID“. |
+| Neue gezielte Tests | DMG mit `com.apple.FinderInfo` wie im DeckCraft-Abbild (scheitert mit 3.6.0, besteht mit 3.6.1), gleiche Datei unter zwei Namen mit gleicher und abweichender SHA-256, `.DS_Store` im Programmordner, Release-Dateiliste aus der Release-Antwort (3/99/100/130 Dateien), Versionsprüfung wartet auf API-Limit, unterbrochener Lauf setzt einmal je Zeitplan fort und Nutzerpause bleibt bestehen, Text-Cache mit 304 und LRU für GitHub und Forgejo. |
+| Live-Messung 3.6.0 | API-Limit um 18:00 nach 3 von 10 Repositories, automatische Fortsetzung 13 s nach der Freigabe, 7 Repositories in 31 s; 3 API-Anfragen je Repository beim Fortsetzen; Leerlauf etwa 0,3 % CPU. |
+| Speicher-Nachstellung | Echte Release-Listen von zehn Repositories (17 MB JSON), fünf Läufe: Prozessspeicher 342 → 242 MB, Spitzen-Heap 172 → 122 MB, 304-Antworten 0 → 20 von 20, CPU je Lauf 155 → 103 ms. |
 
 ## Lokale Prüfung von Version 3.6.0
 

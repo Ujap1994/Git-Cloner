@@ -89,3 +89,27 @@ test('installer tools receive a closed input instead of waiting for an interacti
   const { ProgramInstaller } = require('../../app/core/program-installation.cjs');
   const { stdout } = await new ProgramInstaller().run('cat', [], { timeout: 10000 }); assert.equal(stdout, '');
 });
+test('a release file published under a second name counts as one program only with the same SHA-256', () => {
+  const { narrowToProgram } = require('../../app/core/program-select.cjs'), digest = 'sha256:' + 'dc'.repeat(32);
+  const twins = [{ id: 1, name: 'solidcraft-macos-universal.dmg', digest }, { id: 2, name: 'solidcraft-0.30.1-macos-universal.dmg', digest: digest.toUpperCase().replace('SHA256:', 'sha256:') }, { id: 3, name: 'solidcraft-cli-0.30.1-macos-universal.zip', digest: 'sha256:' + '1e'.repeat(32) }];
+  assert.equal(selectProgram(twins, 'darwin', 'arm64').name, 'solidcraft-0.30.1-macos-universal.dmg'); assert.equal(selectProgram([...twins].reverse(), 'darwin', 'arm64').id, 2);
+  assert.equal(selectProgram(twins.map(file => ({ ...file, digest: file.digest.slice(7) })), 'darwin', 'arm64').id, 2);
+  assert.throws(() => selectProgram([twins[0], { ...twins[1], digest: 'sha256:' + 'ab'.repeat(32) }], 'darwin', 'arm64'), /Mehrere/); assert.throws(() => selectProgram([twins[0], { ...twins[1], digest: undefined }], 'darwin', 'arm64'), /Mehrere/); assert.throws(() => selectProgram(twins.map(file => ({ ...file, digest: 'sha256:short' })), 'darwin', 'arm64'), /Mehrere/);
+  const narrowed = narrowToProgram(selectReleaseAssets(twins, 'all', 'darwin'), { pattern: '' }, 'darwin', 'arm64'); assert.deepEqual(narrowed.selected.map(file => file.id), [2]); assert.deepEqual(narrowed.excluded.map(file => file.id), [1, 3]);
+});
+test('a Finder .DS_Store in the program folder does not block updates while other foreign files still do', async t => {
+  const fs = require('node:fs/promises'), { owned } = require('../../app/core/program-installation.cjs');
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'gc-owned-')); t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  await fs.mkdir(path.join(directory, 'Example.app')); await fs.writeFile(path.join(directory, '.git-cloner-program.json'), JSON.stringify({ format: 'git-cloner-program', identity: 'github:example', files: ['Example.app'] }));
+  await fs.writeFile(path.join(directory, '.DS_Store'), 'finder'); assert.deepEqual((await owned(directory, 'github:example')).files, ['Example.app']);
+  await fs.writeFile(path.join(directory, 'notes.txt'), 'mine'); await assert.rejects(owned(directory, 'github:example'), /Zusätzliche Dateien/);
+});
+test('release assets come from the latest release response and only very large lists use the assets endpoint', async () => {
+  const { metadataPlan } = require('../../app/core/metadata.cjs'), asset = id => ({ id, name: `app-${id}-macos-arm64.dmg`, size: 1, digest: 'sha256:' + String(id).padStart(64, '0') });
+  for (const count of [3, 99, 100, 130]) {
+    const assets = Array.from({ length: count }, (_value, index) => asset(index + 1)), requested = [];
+    const github = { collection: async endpoint => { requested.push(endpoint); return endpoint.endsWith('/assets') ? assets : [{ id: 7, tag_name: 'v1', assets }]; }, request: async endpoint => { requested.push(endpoint); return { id: 7, tag_name: 'v1', assets }; } };
+    const plan = await metadataPlan({ full_name: 'demo/app' }, { releases: true }, github, null, { releaseScope: 'all', platform: 'darwin', arch: 'arm64' });
+    assert.equal(plan.releaseInfo.fileCount, count); assert.equal(requested.includes('/repos/demo/app/releases/7/assets'), count >= 100, `${count} assets`);
+  }
+});

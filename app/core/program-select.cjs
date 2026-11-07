@@ -9,9 +9,12 @@ function selectProgram(files, platform = process.platform, arch = process.arch, 
   const score = file => (native(file.name, arch) ? 0 : 100) + allowed.indexOf(assetType(file.name)) * 10 + (assetArchitecture(file.name).length === 1 ? 0 : assetArchitecture(file.name).length ? 1 : 2);
   candidates.sort((a, b) => score(a) - score(b));
   if (!candidates.length) throw new Error('Kein installierbares Programm für dieses System gefunden. Unterstützt: macOS DMG/App-ZIP, Windows Portable-EXE/ZIP, Linux AppImage.');
-  if (candidates[1] && score(candidates[0]) === score(candidates[1])) throw new Error('Mehrere Programme passen. Bitte den Release-Dateinamen in der Quelle genauer eingrenzen.');
-  return candidates[0];
+  // Releases often publish one file twice, versioned and under a stable "latest" name. Files with the same SHA-256 are one program.
+  const best = candidates.filter(file => score(file) === score(candidates[0])), digest = sha256(best[0]);
+  if (best.length > 1 && (!digest || best.some(file => sha256(file) !== digest))) throw new Error('Mehrere Programme passen. Bitte den Release-Dateinamen in der Quelle genauer eingrenzen.');
+  return best.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)[0];
 }
+function sha256(file) { const match = /^(?:sha256:)?([a-f\d]{64})$/i.exec(typeof file.digest === 'string' ? file.digest : ''); return match ? match[1].toLowerCase() : null; }
 // With automatic installation, only the file that will actually be installed is kept; unclear selections keep the filtered files.
 function programRelease(source) { return source?.installation?.enabled && !source.installation.keepAllReleaseFiles ? { pattern: source.installation.pattern || '' } : null; }
 function narrowToProgram(selection, program, platform = process.platform, arch = process.arch) {

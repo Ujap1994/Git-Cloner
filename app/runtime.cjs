@@ -169,7 +169,7 @@ class Runtime extends EventEmitter {
       state: await readJson(path.join(this.directory, 'updates.json'), {}),
       save: value => writeJson(path.join(this.directory, 'updates.json'), value), notify: result => this.notifyUpdate(result), canNotify: () => this.notificationsAvailable() && notificationAllowed(this.config,'update',{},this.now())
     });
-    this.scheduler = new Scheduler({ getConfig: () => this.config, getLastRun: () => this.backup.state, run: (due,scheduledSources) => this.run({ scheduledAt: due, scheduledSources }), onError: error => { this.notice = error.message; this.changed(); } });
+    this.scheduler = new Scheduler({ getConfig: () => this.config, getLastRun: () => this.backup.state, run: (due,scheduledSources) => this.continueInterrupted(due) ?? this.run({ scheduledAt: due, scheduledSources }), onError: error => { this.notice = error.message; this.changed(); } });
     this.drives = new DriveMonitor({ getConfig: () => this.config, run: onlyTargets => this.run({ trigger: 'drive', onlyTargets }), onError: error => { this.notice = error.message; this.changed(); } });
     this.deviceFlow = new DeviceFlow({ fetchImpl: this.fetchImpl });
     this.browser = new RestoreBrowser({ git: this.git });
@@ -208,15 +208,25 @@ class Runtime extends EventEmitter {
     if(!this.backup.busy&&Object.values(this.backup.state.repositories).some(record=>record.rekeyPending))await this.withOperation('recovering-archives',async()=>{});
     if(options.resume&&this.backup.state.queue?.pauseReason==='space'&&!await spaceReady(this.backup.state.queue))return{paused:true,reason:'space'};
     if(options.resume&&!options.manual&&this.backup.state.queue?.pauseReason==='rate'&&!rateReady(this.backup.state.queue,this.now()))return{paused:true,reason:'rate',until:this.backup.state.queue.rateLimitUntil};
+    // A due schedule asks every 15 seconds while a queue is paused; it neither scans drives nor locks the data folder for that.
+    if(!options.resume&&this.backup.state.queue&&!this.backup.busy)return{paused:true,reason:this.backup.state.queue.pauseReason};
     if (!this.backup.busy && this.config.autoRelocate) await this.locateDrives({automatic:true});
     const config = structuredClone(this.config);
     config.backup.encryptionKeyId = this.vault.encryptionKeyId;
     const runOptions = { ...options }; delete runOptions.manual;
     return this.backup.run(config, runOptions);
   }
+  // A run interrupted by a crash or shutdown, or stopped by an unexpected error, continues once at every later scheduled
+  // time instead of blocking all future backups. Only a pause chosen by the user waits for a manual resume.
+  continueInterrupted(scheduledAt) {
+    const q = this.backup.state.queue;
+    if (!q || !['restart','error'].includes(q.pauseReason)) return null;
+    if (!scheduledAt || q.autoResumedFor === scheduledAt || this.busy() || this.saving) return Promise.resolve({ paused: true, reason: q.pauseReason });
+    q.autoResumedFor = scheduledAt; return this.resume();
+  }
   async scheduledRun() {
-    if (this.backup.state.queue) return this.backup.state.queue.pauseReason === 'user' || this.backup.state.queue.pauseReason === 'restart' || this.backup.state.queue.pauseReason === 'error' ? { paused: true } : this.resume();
     const plan = dueSources(this.config,this.backup.state);
+    if (this.backup.state.queue) return this.continueInterrupted(plan.scheduledAt) ?? (this.backup.state.queue.pauseReason === 'user' ? { paused: true } : this.resume());
     if (plan.scheduledAt) return this.run({ scheduledAt: plan.scheduledAt, scheduledSources: plan.sources });
     return { skipped: true };
   }
@@ -249,6 +259,7 @@ class Runtime extends EventEmitter {
     try {
       const disks = this.diskSignature(); if (Date.now() - this.lastDisksAt >= 60000) await this.refreshDisks(); if (this.changes.current?.expiresAt <= Date.now()) await this.closeChanges();
       if (this.config.autoRelocate && !this.busy() && !this.saving && Date.now() - (this.lastLocationCheck ?? 0) >= 60000) { this.lastLocationCheck = Date.now(); if (await this.relocationPending()) await this.locateDrives({automatic:true}).catch(error => { this.relocationKey = null; throw error; }); }
+      if (this.config.checkUpdates && this.updates.retryDue(this.now())) void this.checkUpdates();
       await this.updates.notifyAvailable(); const q = this.backup.state.queue; if (q && !this.busy() && !['user','restart','error'].includes(q.pauseReason) && (q.pauseReason!=='rate'||rateReady(q,this.now())) && !await this.checkRules(this.config.execution)&&(q.pauseReason!=='space'||await spaceReady(q))) await this.resume();
       // Idle ticks only notify the window when visible values changed or a periodic dashboard refresh is due.
       if (disks !== this.diskSignature() || Date.now() - (this.lastIdleChange ?? 0) >= 300000) { this.lastIdleChange = Date.now(); this.changed(); }
