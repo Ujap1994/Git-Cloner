@@ -148,25 +148,8 @@ function date(value, onlyTime = false) {
     : '—';
 }
 function errorText(value) {
-  const message = value.replace(/^Error invoking remote method '[^']+': Error: /, '');
-  if (t('de', 'en') === 'de') return message;
-  const errors = {
-    'Bitte den laufenden Vorgang abwarten.': 'Please wait for the running operation.',
-    'Bitte zuerst eine Quelle hinzufügen und aktivieren.': 'Add and enable a source first.',
-    'Für jede Prüfung eine eigene, gültige Uhrzeit eintragen.': 'Enter a separate, valid time for every check.',
-    'Bitte einen absoluten Zielordner auswählen.': 'Choose an absolute destination folder.',
-    'Diese Quelle ist bereits eingetragen.': 'This source has already been added.',
-    'Falsches Passwort oder beschädigtes Archiv.': 'Incorrect password or damaged archive.',
-    'Bitte zuerst das Archivpasswort setzen oder entsperren.': 'Set or unlock the archive password first.',
-    'Die Integritätsprüfung hat fehlende oder veränderte Dateien erkannt.':
-      'Integrity verification detected missing or modified files.',
-    'Kein sicherer Schlüsselspeicher verfügbar.': 'No secure key store is available.',
-    'Die unabhängige Zeitplanung benötigt eine installierte native App.':
-      'Independent scheduling requires an installed native application.',
-    'Der Zielordner existiert bereits. Es werden keine Dateien überschrieben.':
-      'The destination already exists. No files will be overwritten.'
-  };
-  return errors[message] || message;
+  const message = String(value ?? '').replace(/^Error invoking remote method '[^']+': Error: /, '');
+  return t('de', 'en') === 'de' ? message : window.gitClonerMessages.translate(message);
 }
 function toast(message, error = false) {
   const node = document.getElementById('toast');
@@ -374,7 +357,7 @@ function repositoryTable() {
   const visible = all.slice(pageIndex * size, (pageIndex + 1) * size);
   if (!visible.length)
     return `<div class="empty-small">${t('Keine passenden Sicherungen gefunden.', 'No matching backups found.')}</div>`;
-  return `<div class="table-wrap"><table class="table"><thead><tr><th scope="col">${t('REPOSITORY / SPEICHERORT', 'REPOSITORY / DESTINATION')}</th><th scope="col">STATUS</th><th scope="col">${t('PRÜFUNG', 'CHECKED')}</th><th scope="col">${t('AKTIONEN', 'ACTIONS')}</th></tr></thead><tbody>${visible.map(record => `<tr><td><div class="repo-cell"><span class="repo-avatar">${icon(record.encrypted ? 'shield' : 'branch')}</span><div><div class="repo-name">${esc(record.fullName)}</div><div class="repo-detail">${esc(record.destination)}</div><div class="repo-detail">${record.encrypted ? t('Verschlüsselt · ', 'Encrypted · ') : ''}${record.mode === 'mirror' ? 'Mirror' : t('Arbeitskopie', 'Working copy')}${record.commit ? ` · ${esc(record.commit.slice(0, 7))}` : ''}</div></div></div>${record.releaseInfo ? `<div class="repo-detail">${esc(record.releaseInfo.tag)} · ${record.releaseInfo.fileCount} ${t('Release-Dateien', 'release assets')}${record.releaseInfo.scope === 'system' ? ` · ${esc({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' }[record.releaseInfo.platform] || record.releaseInfo.platform)}` : ''}</div>${record.releaseInfo.fileCount ? `<div class="repo-detail release-location">${record.encrypted ? t('Im verschlüsselten Archiv · über Wiederherstellung öffnen', 'Inside the encrypted archive · open through Restore') : record.releaseInfo.assetDirectory ? esc(record.releaseInfo.assetDirectory) + '/' : t('Ältere Ablage · mit der nächsten Prüfung in den sichtbaren Ordner übernehmen', 'Legacy location · moved to the visible folder on the next check')}</div>` : ''}` : ''}${record.message ? `<div class="inline-error">${esc(errorText(record.message))}</div>` : ''}${record.message ? studio.helpButton(record) : ''}${studio.sourceBadge(record)}${record.warning ? `<div class="inline-warning">${esc(record.warning)}</div>` : ''}${programStatus(record)}</td><td>${statusLabel(record.status)}${record.verificationStatus === 'ok' ? `<small class="verified">✓ ${t('Geprüft', 'Verified')}</small>` : record.verificationStatus === 'error' ? `<small class="inline-error">${t('Integrität fehlerhaft', 'Integrity failed')}</small>` : ''}</td><td class="nowrap">${date(record.checkedAt)}</td><td><div class="actions"><button class="icon-button" data-open-source="${esc(record.id)}" aria-label="${t('Ordner öffnen', 'Open folder')}">${icon('folder')}</button><button class="icon-button" data-changes="${esc(record.id)}" aria-label="${t('Änderungen ansehen', 'Review changes')}"${appState.busy || !record.commit ? ' disabled' : ''}>${icon('file')}</button><button class="icon-button" data-verify="${esc(record.id)}" aria-label="${t('Integrität prüfen', 'Verify integrity')}"${appState.busy ? ' disabled' : ''}>${icon('shield')}</button>${record.releaseInfo?.fileCount ? `${!record.encrypted && record.releaseInfo.assetDirectory ? `<button class="icon-button" data-open-releases="${esc(record.id)}" aria-label="${t('Release-Ordner öffnen', 'Open release folder')}" title="${t('Release-Ordner öffnen', 'Open release folder')}">${icon('external')}</button>` : ''}<button class="icon-button" data-restore-releases="${esc(record.id)}" aria-label="${t('Release-Dateien wiederherstellen', 'Restore release assets')}"${appState.busy ? ' disabled' : ''}>${icon('download')}</button>` : ''}<button class="icon-button" data-restore="${esc(record.id)}" aria-label="${t('Diese Sicherung wiederherstellen', 'Restore this backup')}"${appState.busy ? ' disabled' : ''}>${icon('history')}</button></div></td></tr>`).join('')}</tbody></table></div><div class="pagination"><span>${all.length} ${t('Sicherungen', 'backups')}</span><div>${button('‹', 'previous-page', '', 'secondary', pageIndex === 0)}<span>${pageIndex + 1} / ${Math.ceil(all.length / size)}</span>${button('›', 'next-page', '', 'secondary', (pageIndex + 1) * size >= all.length)}</div></div>`;
+  return `<div class="table-wrap"><table class="table"><thead><tr><th scope="col">${t('REPOSITORY / SPEICHERORT', 'REPOSITORY / DESTINATION')}</th><th scope="col">STATUS</th><th scope="col">${t('PRÜFUNG', 'CHECKED')}</th><th scope="col">${t('AKTIONEN', 'ACTIONS')}</th></tr></thead><tbody>${visible.map(record => `<tr><td><div class="repo-cell"><span class="repo-avatar">${icon(record.encrypted ? 'shield' : 'branch')}</span><div><div class="repo-name">${esc(record.fullName)}</div><div class="repo-detail">${esc(record.destination)}</div><div class="repo-detail">${record.encrypted ? t('Verschlüsselt · ', 'Encrypted · ') : ''}${record.mode === 'mirror' ? 'Mirror' : t('Arbeitskopie', 'Working copy')}${record.commit ? ` · ${esc(record.commit.slice(0, 7))}` : ''}</div></div></div>${record.releaseInfo ? `<div class="repo-detail">${esc(record.releaseInfo.tag)} · ${record.releaseInfo.fileCount} ${t('Release-Dateien', 'release assets')}${record.releaseInfo.scope === 'system' ? ` · ${esc({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' }[record.releaseInfo.platform] || record.releaseInfo.platform)}` : ''}</div>${record.releaseInfo.fileCount ? `<div class="repo-detail release-location">${record.encrypted ? t('Im verschlüsselten Archiv · über Wiederherstellung öffnen', 'Inside the encrypted archive · open through Restore') : record.releaseInfo.assetDirectory ? esc(record.releaseInfo.assetDirectory) + '/' : t('Ältere Ablage · mit der nächsten Prüfung in den sichtbaren Ordner übernehmen', 'Legacy location · moved to the visible folder on the next check')}</div>` : ''}` : ''}${record.message ? `<div class="inline-error">${esc(errorText(record.message))}</div>` : ''}${record.message ? studio.helpButton(record) : ''}${studio.sourceBadge(record)}${record.warning ? `<div class="inline-warning">${esc(errorText(record.warning))}</div>` : ''}${programStatus(record)}</td><td>${statusLabel(record.status)}${record.verificationStatus === 'ok' ? `<small class="verified">✓ ${t('Geprüft', 'Verified')}</small>` : record.verificationStatus === 'error' ? `<small class="inline-error">${t('Integrität fehlerhaft', 'Integrity failed')}</small>` : ''}</td><td class="nowrap">${date(record.checkedAt)}</td><td><div class="actions"><button class="icon-button" data-open-source="${esc(record.id)}" aria-label="${t('Ordner öffnen', 'Open folder')}">${icon('folder')}</button><button class="icon-button" data-changes="${esc(record.id)}" aria-label="${t('Änderungen ansehen', 'Review changes')}"${appState.busy || !record.commit ? ' disabled' : ''}>${icon('file')}</button><button class="icon-button" data-verify="${esc(record.id)}" aria-label="${t('Integrität prüfen', 'Verify integrity')}"${appState.busy ? ' disabled' : ''}>${icon('shield')}</button>${record.releaseInfo?.fileCount ? `${!record.encrypted && record.releaseInfo.assetDirectory ? `<button class="icon-button" data-open-releases="${esc(record.id)}" aria-label="${t('Release-Ordner öffnen', 'Open release folder')}" title="${t('Release-Ordner öffnen', 'Open release folder')}">${icon('external')}</button>` : ''}<button class="icon-button" data-restore-releases="${esc(record.id)}" aria-label="${t('Release-Dateien wiederherstellen', 'Restore release assets')}"${appState.busy ? ' disabled' : ''}>${icon('download')}</button>` : ''}<button class="icon-button" data-restore="${esc(record.id)}" aria-label="${t('Diese Sicherung wiederherstellen', 'Restore this backup')}"${appState.busy ? ' disabled' : ''}>${icon('history')}</button></div></td></tr>`).join('')}</tbody></table></div><div class="pagination"><span>${all.length} ${t('Sicherungen', 'backups')}</span><div>${button('‹', 'previous-page', '', 'secondary', pageIndex === 0)}<span>${pageIndex + 1} / ${Math.ceil(all.length / size)}</span>${button('›', 'next-page', '', 'secondary', (pageIndex + 1) * size >= all.length)}</div></div>`;
 }
 function historyList() {
   return appState.history
@@ -893,7 +876,7 @@ document.addEventListener('paste', event => {
     normalizeSourceForm();
   } catch (error) {
     const node = document.getElementById('source-error');
-    node.textContent = error.message;
+    node.textContent = errorText(error.message);
     node.hidden = false;
   }
 });
@@ -903,7 +886,7 @@ document.addEventListener('focusout', event => {
     normalizeSourceForm();
   } catch (error) {
     const node = document.getElementById('source-error');
-    node.textContent = error.message;
+    node.textContent = errorText(error.message);
     node.hidden = false;
   }
 });

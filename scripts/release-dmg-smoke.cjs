@@ -15,7 +15,7 @@ const { hashFile } = require('../app/core/integrity.cjs');
 const run = promisify(execFile);
 async function main() {
   if (process.platform !== 'darwin') throw new Error('This live installation check requires macOS.');
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'gc-wordcraft-install-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'gc-release-dmg-install-'));
   try {
     const backup = path.join(root, 'backup'),
       programs = path.join(root, 'programs'),
@@ -24,12 +24,12 @@ async function main() {
     await fs.mkdir(programs);
     await fs.mkdir(desktop);
     const client = new GitHubClient({ token: process.env.GITHUB_TOKEN || '' }),
-      repository = await client.repository('storytold/wordcraft');
-    const release = await client.request('/repos/storytold/wordcraft/releases/tags/v0.15.1');
-    const asset = release.assets.find(item => item.name === 'wordcraft-0.15.1-macos-universal.dmg');
+      repository = await client.repository('Ujap1994/Git-Cloner');
+    const release = await client.request('/repos/Ujap1994/Git-Cloner/releases/tags/v3.6.1');
+    const asset = release.assets.find(item => item.name === 'Git-Cloner-3.6.1-mac-universal.dmg');
     assert(asset);
-    const expected = '8ee59436328e24518386c6cf1407f7c6c081fcaca703ce5e5310938af7dab12f';
-    // Pin the public release so this check never silently trusts a newly replaced binary.
+    const expected = '1921f23ab244aae09355dc3b8764eb9f886fda5234ac3b3f680abe8905b67b82';
+    // The project's own published DMG is pinned, so this check never silently trusts a newly replaced binary.
     assert.equal(asset.digest, 'sha256:' + expected);
     const file = path.join(root, asset.name);
     await client.downloadAsset(repository.full_name, asset.id, file, {
@@ -69,7 +69,7 @@ async function main() {
     const record = await syncRepository({ source, repository, github: pinned, git, options });
     const installed = await new ProgramInstaller().install({ source, record, git });
     assert.equal(installed.status, 'installed');
-    assert.equal(installed.tag, 'v0.15.1');
+    assert.equal(installed.tag, 'v3.6.1');
     const app = (await fs.readdir(installed.destination)).find(name => name.endsWith('.app'));
     assert(app);
     await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', path.join(installed.destination, app)]);
@@ -78,7 +78,7 @@ async function main() {
     assert.equal(await fs.readlink(path.join(desktop, shortcuts.files[0])), installed.executable);
     assert.equal((await new ProgramInstaller().install({ source, record, git })).status, 'current');
     console.log(
-      'Actual Wordcraft v0.15.1: pinned official macOS DMG downloaded, SHA256 verified, real source cloned, signed app installed into isolated managed folder with Finder shortcut and repeated installation skipped. No app launch.'
+      'Published Git Cloner v3.6.1: pinned macOS DMG downloaded, SHA256 verified, real source cloned, signed app installed into isolated managed folder with Finder shortcut and repeated installation skipped. No app launch.'
     );
   } finally {
     await fs.rm(root, { recursive: true, force: true });

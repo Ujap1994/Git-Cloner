@@ -5,7 +5,10 @@ const path = require('node:path');
 const { defaults } = require('../../app/core/config.cjs');
 
 async function launch(options = {}) {
-  const { config = defaults(), state, release } = options;
+  const { state, release } = options;
+  // The suite drives the English interface, so documentation screenshots show it too; German has its own checks.
+  const config = structuredClone(options.config ?? defaults());
+  config.appearance = { ...config.appearance, language: options.language ?? 'en' };
   const directory = options.directory || (await fs.mkdtemp(path.join(os.tmpdir(), 'git-cloner-e2e-')));
   if (!options.directory || options.config)
     await fs.writeFile(path.join(directory, 'settings.json'), JSON.stringify(config));
@@ -39,4 +42,10 @@ async function launch(options = {}) {
     }
   };
 }
-module.exports = { launch };
+// Documentation screenshots are written only by `npm run screenshots`; normal test runs never change tracked files.
+function screenshotPath(name) {
+  return process.env.GIT_CLONER_SCREENSHOTS === '1'
+    ? path.resolve(__dirname, '../../docs/screenshots', name)
+    : undefined;
+}
+module.exports = { launch, screenshotPath };

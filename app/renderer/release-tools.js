@@ -202,7 +202,7 @@ window.createGitClonerReleaseTools = function ({
         void actions[node.dataset.action]().catch(error => {
           const target = document.getElementById('storage-error');
           if (target) {
-            target.textContent = error.message;
+            target.textContent = window.gitClonerMessages.display(error.message, t);
             target.hidden = false;
           } else
             void attempt(() => {

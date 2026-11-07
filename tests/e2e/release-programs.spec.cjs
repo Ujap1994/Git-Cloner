@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
-const { launch } = require('./helpers.cjs');
+const { launch, screenshotPath } = require('./helpers.cjs');
 const { defaults } = require('../../app/core/config.cjs');
 const { repository } = require('../helpers/repository.cjs');
 const { ReleaseDownloads } = require('../../app/core/release-downloads.cjs');
@@ -27,11 +27,11 @@ async function fixture() {
 async function capture(page, name) {
   await expect(page.locator('#toast')).toBeHidden();
   await page.mouse.move(20, 20);
-  await page.screenshot({ path: path.resolve(__dirname, '../../docs/screenshots', name) });
+  await page.screenshot({ path: screenshotPath(name) });
 }
 async function settings(page) {
-  await page.getByRole('button', { name: 'Einstellungen', exact: true }).click();
-  await page.getByRole('tab', { name: 'Sicherung', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('tab', { name: 'Backup', exact: true }).click();
 }
 async function parts(f) {
   const cache = await ReleaseDownloads.open({
@@ -65,28 +65,28 @@ test('architecture and multiple file-type filters persist with aligned controls 
   config.checkUpdates = false;
   const a = await app({ config });
   await settings(a.page);
-  await a.page.getByLabel('Releases mit Download-Dateien', { exact: true }).check();
-  await a.page.getByLabel('Release-Dateien auswählen', { exact: true }).selectOption('all');
-  await a.page.getByLabel('Prozessorarchitektur', { exact: true }).selectOption('arm64');
-  await a.page.getByText('Dateitypen auswählen', { exact: true }).click();
+  await a.page.getByLabel('Releases with downloadable assets', { exact: true }).check();
+  await a.page.getByLabel('Select release assets', { exact: true }).selectOption('all');
+  await a.page.getByLabel('Processor architecture', { exact: true }).selectOption('arm64');
+  await a.page.getByText('Choose file types', { exact: true }).click();
   await a.page.getByLabel('DMG', { exact: true }).check();
   await a.page.getByLabel('ZIP', { exact: true }).check();
   const boxes = await Promise.all(
-    ['Prozessorarchitektur', 'Automatisch erkannte Architektur'].map(label =>
+    ['Processor architecture', 'Detected architecture'].map(label =>
       a.page.getByLabel(label, { exact: true }).boundingBox()
     )
   );
   expect(boxes[0].y).toBe(boxes[1].y);
   expect(boxes[0].height).toBe(boxes[1].height);
-  await a.page.getByRole('button', { name: 'Einstellungen speichern', exact: true }).click();
-  await expect(a.page.locator('#toast')).toContainText('gespeichert');
+  await a.page.getByRole('button', { name: 'Save settings', exact: true }).click();
+  await expect(a.page.locator('#toast')).toContainText('saved');
   await a.page.reload();
   await settings(a.page);
-  await expect(a.page.getByLabel('Prozessorarchitektur', { exact: true })).toHaveValue('arm64');
+  await expect(a.page.getByLabel('Processor architecture', { exact: true })).toHaveValue('arm64');
   const state = await a.page.evaluate(() => window.gitCloner.getState());
   expect(state.config.backup.releaseFileTypes).toEqual(['dmg', 'zip']);
   expect(state.config.sources).toEqual([]);
-  await a.page.getByText('Dateitypen auswählen', { exact: true }).click();
+  await a.page.getByText('Choose file types', { exact: true }).click();
   await a.page.getByLabel('DMG', { exact: true }).scrollIntoViewIfNeeded();
   await capture(a.page, 'architecture-filters.png');
 });
@@ -102,18 +102,18 @@ test('automatic program installation is off by default and saves only an explici
   const config = defaults();
   config.checkUpdates = false;
   const a = await app({ config });
-  await a.page.getByRole('button', { name: 'Quellen', exact: true }).click();
-  await a.page.getByRole('button', { name: 'Quelle hinzufügen', exact: true }).click();
-  const dialog = a.page.getByRole('dialog', { name: 'Quelle hinzufügen' });
+  await a.page.getByRole('button', { name: 'Sources', exact: true }).click();
+  await a.page.getByRole('button', { name: 'Add source', exact: true }).click();
+  const dialog = a.page.getByRole('dialog', { name: 'Add source' });
   await dialog.locator('#source-values').fill('example/project');
   await dialog.locator('#source-destination').fill(backup);
-  await dialog.getByText('Programm automatisch installieren', { exact: true }).click();
+  await dialog.getByText('Automatically install this program', { exact: true }).click();
   await expect(dialog.locator('#source-install-enabled')).not.toBeChecked();
   await dialog.locator('#source-install-enabled').check();
   await expect(dialog.locator('#source-release-scope')).toBeEnabled();
   await expect(dialog.locator('#source-release-scope')).toHaveValue('system');
-  await dialog.getByLabel('Programm-Zielordner', { exact: true }).fill(programs);
-  await dialog.getByLabel('Release-Dateiname (optional)', { exact: true }).fill(pattern);
+  await dialog.getByLabel('Program destination folder', { exact: true }).fill(programs);
+  await dialog.getByLabel('Release filename (optional)', { exact: true }).fill(pattern);
   const favoriteBox = await dialog.locator('.organization-favorite').boundingBox(),
     groupBox = await dialog.locator('#source-group').boundingBox();
   expect(favoriteBox.y).toBe(groupBox.y);
@@ -128,8 +128,8 @@ test('automatic program installation is off by default and saves only an explici
   expect(state.config.sources[0].backup.releaseScope).toBe('system');
   expect(state.config.backup.metadata.releases).toBe(false);
   await a.page.reload();
-  await a.page.getByRole('button', { name: 'Quellen', exact: true }).click();
-  await a.page.getByRole('button', { name: 'example/project bearbeiten', exact: true }).click();
+  await a.page.getByRole('button', { name: 'Sources', exact: true }).click();
+  await a.page.getByRole('button', { name: 'example/project edit', exact: true }).click();
   await expect(a.page.locator('#source-install-enabled')).toBeChecked();
 });
 test('download storage previews, cancels and then cleans real parts while retaining a real backup', async () => {
@@ -138,23 +138,23 @@ test('download storage previews, cancels and then cleans real parts while retain
   await parts(f);
   const a = await app({ config: f.config(), state: { repositories: { [record.id]: record } } });
   await settings(a.page);
-  await a.page.getByRole('button', { name: 'Download-Speicher anzeigen', exact: true }).click();
-  const dialog = a.page.getByRole('dialog', { name: 'Downloads & Speicher' });
+  await a.page.getByRole('button', { name: 'View download storage', exact: true }).click();
+  const dialog = a.page.getByRole('dialog', { name: 'Downloads & storage' });
   await expect(dialog.locator('tbody tr')).toHaveCount(1);
   await expect(dialog).toContainText('demo/project');
   await dialog.locator('[data-storage-select]').check();
   await capture(a.page, 'download-storage.png');
-  await dialog.getByRole('button', { name: 'Bereinigung prüfen', exact: true }).click();
-  await expect(a.page.getByRole('dialog', { name: 'Bereinigung prüfen' })).toBeVisible();
-  await a.page.getByRole('button', { name: 'Zurück', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Review cleanup', exact: true }).click();
+  await expect(a.page.getByRole('dialog', { name: 'Review cleanup' })).toBeVisible();
+  await a.page.getByRole('button', { name: 'Back', exact: true }).click();
   expect((await a.page.evaluate(() => window.gitCloner.downloadInventory())).entries).toHaveLength(1);
   await dialog.locator('#storage-select-page').uncheck();
   await expect(dialog.locator('[data-storage-select]')).not.toBeChecked();
   await dialog.locator('#storage-select-page').check();
   await expect(dialog.locator('[data-storage-select]')).toBeChecked();
-  await dialog.getByRole('button', { name: 'Bereinigung prüfen', exact: true }).click();
-  await a.page.getByRole('button', { name: 'Ausgewählte Teile bereinigen', exact: true }).click();
-  await expect(dialog).toContainText('Keine bereinigbaren Downloadreste');
+  await dialog.getByRole('button', { name: 'Review cleanup', exact: true }).click();
+  await a.page.getByRole('button', { name: 'Clean selected parts', exact: true }).click();
+  await expect(dialog).toContainText('No removable download parts');
   expect(await fs.readFile(path.join(record.destination, 'README.md'), 'utf8')).toBe('  old text  \n');
 });
 test('a changed download cannot be deleted using an old GUI cleanup preview', async () => {
@@ -162,18 +162,18 @@ test('a changed download cannot be deleted using an old GUI cleanup preview', as
   await parts(f);
   const a = await app({ config: f.config() });
   await settings(a.page);
-  await a.page.getByRole('button', { name: 'Download-Speicher anzeigen', exact: true }).click();
-  const dialog = a.page.getByRole('dialog', { name: 'Downloads & Speicher' });
+  await a.page.getByRole('button', { name: 'View download storage', exact: true }).click();
+  const dialog = a.page.getByRole('dialog', { name: 'Downloads & storage' });
   await expect(dialog.locator('[data-storage-select]')).toHaveCount(1);
   await dialog.locator('[data-storage-select]').check();
-  await dialog.getByRole('button', { name: 'Bereinigung prüfen', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Review cleanup', exact: true }).click();
   const { inventory } = require('../../app/core/download-storage.cjs'),
     entry = (await inventory([{ destination: f.backup, volumeId: f.source.volumeId }])).entries[0],
     file = path.join(entry.directory, 'parts.json'),
     meta = await readJson(file);
   meta.complete = true;
   await writeJson(file, meta);
-  await a.page.getByRole('button', { name: 'Ausgewählte Teile bereinigen', exact: true }).click();
+  await a.page.getByRole('button', { name: 'Clean selected parts', exact: true }).click();
   await expect(a.page.locator('#storage-error')).toContainText('inzwischen');
   expect(await fs.stat(file)).toBeTruthy();
 });
@@ -207,15 +207,15 @@ test('installation failures remain visible in overview filters and history along
       }
     ];
   const a = await app({ config: f.config(), state: { repositories: { [record.id]: record }, history } });
-  await expect(a.page.locator('.program-status')).toContainText('Programminstallation fehlgeschlagen');
-  await a.page.getByLabel('Status filtern', { exact: true }).selectOption('error');
+  await expect(a.page.locator('.program-status')).toContainText('Program installation failed');
+  await a.page.getByLabel('Filter status', { exact: true }).selectOption('error');
   await expect(a.page.locator('#repository-list')).toContainText('demo/project');
-  await expect(a.page.locator('#repository-list')).toContainText('Geprüft');
-  await a.page.getByRole('button', { name: 'Verlauf', exact: true }).click();
-  await a.page.getByLabel('Ergebnis', { exact: true }).selectOption('errors');
-  await expect(a.page.locator('.history-table')).toContainText('1 Fehler');
+  await expect(a.page.locator('#repository-list')).toContainText('Verified');
+  await a.page.getByRole('button', { name: 'History', exact: true }).click();
+  await a.page.getByLabel('Result', { exact: true }).selectOption('errors');
+  await expect(a.page.locator('.history-table')).toContainText('1 errors');
   await a.page.getByRole('button', { name: 'Details', exact: true }).click();
-  await expect(a.page.getByRole('dialog', { name: 'Ergebnisse dieses Laufs' })).toContainText(
+  await expect(a.page.getByRole('dialog', { name: 'Results for this run' })).toContainText(
     'Keine passende Prozessorarchitektur.'
   );
 });

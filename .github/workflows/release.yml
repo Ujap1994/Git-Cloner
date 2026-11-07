@@ -197,7 +197,7 @@ jobs:
           npm run catalogs -- --assets release-assets --output catalogs --version "$RELEASE_VERSION" --commit "$RELEASE_COMMIT"
           RELEASE_EPOCH="$(git show -s --format=%ct "$RELEASE_COMMIT")"
           find catalogs -exec touch -h -d "@$RELEASE_EPOCH" {} +
-          find catalogs -type f | LC_ALL=C sort | zip -X -q release-assets/Git-Cloner-Katalogvorlagen.zip -@
+          find catalogs -type f | LC_ALL=C sort | zip -X -q release-assets/Git-Cloner-Catalog-Templates.zip -@
       - name: Checksums and release
         shell: bash
         env:

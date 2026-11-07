@@ -244,7 +244,7 @@ window.createGitClonerStudio = function (context) {
     detail = await api.historyDetails({ id, offset, query: history.query });
     modal(
       t('Ergebnisse dieses Laufs', 'Results for this run'),
-      `<p class="muted">${esc(date(detail.finishedAt))} · ${detail.total} ${t('gespeicherte Details', 'saved details')}</p><div class="history-details">${detail.results.map((r, i) => `<div class="history-result"><div><strong>${esc(r.fullName)}</strong><div class="repo-detail">${esc(r.provider || 'GitHub')}</div>${r.message ? `<p>${esc(r.message)}</p>` : ''}${r.installation?.status === 'error' ? `<p class="inline-error">${t('Programminstallation', 'Program installation')}: ${esc(r.installation.message)}</p>` : ''}${r.installation?.shortcuts?.status === 'error' ? `<p class="inline-error">${t('Programmverknüpfungen', 'Program shortcuts')}: ${esc(r.installation.shortcuts.message)}</p>` : ''}</div><div>${statusLabel(r.status)}${r.status === 'error' ? `<button class="text-button" data-history-help="${i}">${t('Fehlerhilfe', 'Troubleshoot')}</button>` : ''}</div></div>`).join('')}</div>${detail.truncated ? `<p class="field-help">${detail.truncated} ${t('weitere Ergebnisse wurden im begrenzten Verlauf nicht aufbewahrt.', 'additional results were not retained in the bounded history.')}</p>` : ''}<div class="dialog-actions">${button('‹', 'detail-previous', '', 'secondary', offset === 0)}${button('›', 'detail-next', '', 'secondary', offset + 50 >= detail.total)}${button(t('Diesen Lauf anonym exportieren', 'Export this run anonymously'), 'detail-export', 'download', 'primary')}</div>`
+      `<p class="muted">${esc(date(detail.finishedAt))} · ${detail.total} ${t('gespeicherte Details', 'saved details')}</p><div class="history-details">${detail.results.map((r, i) => `<div class="history-result"><div><strong>${esc(r.fullName)}</strong><div class="repo-detail">${esc(r.provider || 'GitHub')}</div>${r.message ? `<p>${esc(t(r.message, window.gitClonerMessages.translate(r.message)))}</p>` : ''}${r.installation?.status === 'error' ? `<p class="inline-error">${t('Programminstallation', 'Program installation')}: ${esc(r.installation.message)}</p>` : ''}${r.installation?.shortcuts?.status === 'error' ? `<p class="inline-error">${t('Programmverknüpfungen', 'Program shortcuts')}: ${esc(r.installation.shortcuts.message)}</p>` : ''}</div><div>${statusLabel(r.status)}${r.status === 'error' ? `<button class="text-button" data-history-help="${i}">${t('Fehlerhilfe', 'Troubleshoot')}</button>` : ''}</div></div>`).join('')}</div>${detail.truncated ? `<p class="field-help">${detail.truncated} ${t('weitere Ergebnisse wurden im begrenzten Verlauf nicht aufbewahrt.', 'additional results were not retained in the bounded history.')}</p>` : ''}<div class="dialog-actions">${button('‹', 'detail-previous', '', 'secondary', offset === 0)}${button('›', 'detail-next', '', 'secondary', offset + 50 >= detail.total)}${button(t('Diesen Lauf anonym exportieren', 'Export this run anonymously'), 'detail-export', 'download', 'primary')}</div>`
     );
   }
   function rotationPanel() {
@@ -466,7 +466,10 @@ window.createGitClonerStudio = function (context) {
             document.getElementById('rotation-report').innerHTML =
               `<div class="info-box">${result.completed} ${t('Archive umgestellt', 'archives changed')} · ${result.errors} ${t('Fehler', 'errors')} · ${result.remaining} ${t('mit älterem Schlüssel', 'with older keys')}</div>${result.results
                 .filter(r => r.status === 'error')
-                .map(r => `<p class="inline-error">${esc(r.fullName)} · ${esc(r.message)}</p>`)
+                .map(
+                  r =>
+                    `<p class="inline-error">${esc(r.fullName)} · ${esc(t(r.message, window.gitClonerMessages.translate(r.message)))}</p>`
+                )
                 .join('')}`;
             await loadRotation();
           } catch (value) {

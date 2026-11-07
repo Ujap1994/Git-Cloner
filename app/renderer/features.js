@@ -22,7 +22,7 @@ window.createGitClonerFeatures = function (context) {
     value == null ? '—' : value < 60000 ? `${Math.ceil(value / 1000)} s` : `${Math.ceil(value / 60000)} min`;
   function errorIn(id, error) {
     const node = document.getElementById(id);
-    node.textContent = error.message.replace(/^Error invoking remote method '[^']+': Error: /, '');
+    node.textContent = window.gitClonerMessages.display(error.message, t);
     node.hidden = false;
   }
   function reason(value) {
@@ -78,7 +78,7 @@ window.createGitClonerFeatures = function (context) {
       };
       node.innerHTML = `<div class="progress-block"><div><strong>${esc(p?.fullName || t('Vorgang läuft …', 'Operation running …'))}</strong><div>${p?.active?.length ? esc(p.active.map(a => `${a.fullName} · ${phases[a.status] || a.status}${a.asset ? ' · ' + a.asset : ''}${a.downloadBytes != null ? ' · ' + bytes(a.downloadBytes) + (a.downloadTotal != null ? ' / ' + bytes(a.downloadTotal) : '') : ''}${a.resumedBytes ? ' · ' + t('Fortgesetzt ab ', 'Resumed from ') + bytes(a.resumedBytes) : ''}`).join(' / ')) : esc(phases[p?.status] || t('Bitte warten', 'Please wait'))}</div></div><div class="progress-numbers">${p ? `${p.completed} / ${p.total}<small>${t('Laufzeit', 'Elapsed')} ${duration(p.elapsedMs)} · ${t('Restzeit ca.', 'Remaining approx.')} ${duration(p.etaMs)} · ${bytes(p.receivedBytes)}</small>` : ''}</div></div>${p ? `<progress max="${Math.max(1, p.total)}" value="${p.completed}" aria-label="${t('Abgeschlossene Sicherungen', 'Completed backups')}"></progress>` : ''}`;
     } else if (q)
-      node.innerHTML = `<div class="notice"><strong>${reason(q.pauseReason)}</strong><div>${q.unresolved ? t('Die Quellen werden nach Freigabe der Regel gelesen.', 'Sources will be read once the rule allows it.') : `${q.completed} / ${q.total} ${t('abgeschlossen. Bereits gesicherte Repositories werden beim Fortsetzen übersprungen.', 'complete. Completed repositories are skipped when resuming.')}`}</div>${q.message ? `<p>${esc(q.message)}</p>` : ''}${['restart', 'error'].includes(q.pauseReason) && state.nextRun ? `<p data-auto-resume>${t('Wird zum nächsten Zeitplan automatisch fortgesetzt', 'Resumes automatically at the next scheduled time')}: ${esc(new Date(state.nextRun).toLocaleString(t('de-DE', 'en-GB'), { dateStyle: 'short', timeStyle: 'short' }))}</p>` : ''}${q.pauseReason === 'rate' && q.rateLimitUntil ? `<p data-rate-until>${t('Freigabe voraussichtlich', 'Expected release')}: ${esc(new Date(q.rateLimitUntil).toLocaleString(t('de-DE', 'en-GB'), { dateStyle: 'short', timeStyle: 'short' }))} · ${t('Ein Lesetoken unter Einstellungen → Konten erhöht das Limit.', 'A read token under Settings → Accounts raises the limit.')}</p>` : ''}</div>`;
+      node.innerHTML = `<div class="notice"><strong>${reason(q.pauseReason)}</strong><div>${q.unresolved ? t('Die Quellen werden nach Freigabe der Regel gelesen.', 'Sources will be read once the rule allows it.') : `${q.completed} / ${q.total} ${t('abgeschlossen. Bereits gesicherte Repositories werden beim Fortsetzen übersprungen.', 'complete. Completed repositories are skipped when resuming.')}`}</div>${q.message ? `<p>${esc(t(q.message, window.gitClonerMessages.translate(q.message)))}</p>` : ''}${['restart', 'error'].includes(q.pauseReason) && state.nextRun ? `<p data-auto-resume>${t('Wird zum nächsten Zeitplan automatisch fortgesetzt', 'Resumes automatically at the next scheduled time')}: ${esc(new Date(state.nextRun).toLocaleString(t('de-DE', 'en-GB'), { dateStyle: 'short', timeStyle: 'short' }))}</p>` : ''}${q.pauseReason === 'rate' && q.rateLimitUntil ? `<p data-rate-until>${t('Freigabe voraussichtlich', 'Expected release')}: ${esc(new Date(q.rateLimitUntil).toLocaleString(t('de-DE', 'en-GB'), { dateStyle: 'short', timeStyle: 'short' }))} · ${t('Ein Lesetoken unter Einstellungen → Konten erhöht das Limit.', 'A read token under Settings → Accounts raises the limit.')}</p>` : ''}</div>`;
     else node.innerHTML = '';
     const key = `${state.busy}:${Boolean(p)}:${p?.pauseRequested}:${q?.pauseReason}`;
     if (key !== progressControls || !document.getElementById('progress-controls').innerHTML) {
@@ -203,7 +203,7 @@ window.createGitClonerFeatures = function (context) {
       previewOffset = 0;
       renderPreview();
     } catch (error) {
-      document.getElementById('preview-content').textContent = error.message;
+      document.getElementById('preview-content').textContent = window.gitClonerMessages.display(error.message, t);
     }
   }
   function renderPreview() {

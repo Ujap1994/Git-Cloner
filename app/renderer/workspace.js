@@ -127,7 +127,7 @@ window.createGitClonerWorkspace = function ({
   function showError(id, error) {
     const node = document.getElementById(id);
     if (node) {
-      node.textContent = error.message;
+      node.textContent = window.gitClonerMessages.display(error.message, t);
       node.hidden = false;
     }
   }
@@ -210,7 +210,9 @@ window.createGitClonerWorkspace = function ({
       ? exists
         ? t('Vorhandene Quelle beibehalten', 'Keep existing source')
         : t('Sammelquelle hinzufügen', 'Add owner source')
-      : `${picked.size || ''} ${t('Quellen hinzufügen', 'Add sources')}`.trim();
+      : picked.size
+        ? t(`${picked.size} Quellen hinzufügen`, `Add ${picked.size} sources`)
+        : t('Quellen hinzufügen', 'Add sources');
     add.disabled =
       (owner ? !browser || (state().config.sources.length >= 100 && !exists) : !picked.size) ||
       browserLoading ||

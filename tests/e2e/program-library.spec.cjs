@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
-const { launch } = require('./helpers.cjs');
+const { launch, screenshotPath } = require('./helpers.cjs');
 const { repository } = require('../helpers/repository.cjs');
 const { DownloadHistory } = require('../../app/core/download-history.cjs');
 const { defaults } = require('../../app/core/config.cjs');
@@ -45,42 +45,42 @@ async function fixture() {
   return f;
 }
 async function editor(a) {
-  await a.page.getByRole('button', { name: 'Quellen', exact: true }).click();
-  await a.page.getByRole('button', { name: 'demo/project bearbeiten', exact: true }).first().click();
-  const dialog = a.page.getByRole('dialog', { name: 'Quelle bearbeiten' });
-  await dialog.getByText('Programm automatisch installieren', { exact: true }).click();
+  await a.page.getByRole('button', { name: 'Sources', exact: true }).click();
+  await a.page.getByRole('button', { name: 'demo/project edit', exact: true }).first().click();
+  const dialog = a.page.getByRole('dialog', { name: 'Edit source' });
+  await dialog.getByText('Automatically install this program', { exact: true }).click();
   return dialog;
 }
 async function history(a, english = false) {
-  await a.page.getByRole('button', { name: english ? 'Settings' : 'Einstellungen', exact: true }).click();
-  await a.page.getByRole('tab', { name: english ? 'Backup' : 'Sicherung', exact: true }).click();
+  await a.page.getByRole('button', { name: english ? 'Settings' : 'Settings', exact: true }).click();
+  await a.page.getByRole('tab', { name: english ? 'Backup' : 'Backup', exact: true }).click();
   await a.page
-    .getByRole('button', { name: english ? 'View download history' : 'Download-Verlauf anzeigen', exact: true })
+    .getByRole('button', { name: english ? 'View download history' : 'View download history', exact: true })
     .click();
-  return a.page.getByRole('dialog', { name: english ? 'Download history' : 'Download-Verlauf', exact: true });
+  return a.page.getByRole('dialog', { name: english ? 'Download history' : 'Download history', exact: true });
 }
 async function screenshot(page, name) {
   await page.mouse.move(20, 20);
-  await page.screenshot({ path: path.resolve(__dirname, '../../docs/screenshots', name) });
+  await page.screenshot({ path: screenshotPath(name) });
 }
 test('multiple archive programs and optional shortcuts persist only after explicit source save', async () => {
   const f = await fixture(),
     a = await app({ config: f.config(), programCandidates: f.preview }),
     dialog = await editor(a);
-  await expect(dialog.getByLabel('Programmverknüpfungen erstellen')).not.toBeChecked();
-  await dialog.getByRole('button', { name: 'Programme aus Sicherung auswählen', exact: true }).click();
-  const picker = a.page.getByRole('dialog', { name: 'Programme auswählen', exact: true });
-  await expect(picker.getByRole('button', { name: 'Auswahl übernehmen' })).toBeDisabled();
+  await expect(dialog.getByLabel('Create program shortcuts')).not.toBeChecked();
+  await dialog.getByRole('button', { name: 'Choose programs from backup', exact: true }).click();
+  const picker = a.page.getByRole('dialog', { name: 'Choose programs', exact: true });
+  await expect(picker.getByRole('button', { name: 'Apply selection' })).toBeDisabled();
   await expect(picker.getByLabel('Legacy')).toBeDisabled();
   await picker.locator('[data-program-key="Writer.app"]').check();
   await picker.locator('[data-program-key="Viewer.app"]').check();
   await expect(picker.locator('#program-count')).toContainText('2');
   await screenshot(a.page, 'multiple-programs.png');
-  await picker.getByRole('button', { name: 'Auswahl übernehmen' }).click();
-  await expect(dialog.locator('#source-program-summary')).toContainText('2 Programme');
-  await dialog.getByLabel('Programmverknüpfungen erstellen').check();
-  await dialog.getByLabel('Ordner für Verknüpfungen', { exact: true }).fill(f.desktop);
-  await dialog.getByLabel('Ordner für Verknüpfungen', { exact: true }).scrollIntoViewIfNeeded();
+  await picker.getByRole('button', { name: 'Apply selection' }).click();
+  await expect(dialog.locator('#source-program-summary')).toContainText('2 programs');
+  await dialog.getByLabel('Create program shortcuts').check();
+  await dialog.getByLabel('Shortcut folder', { exact: true }).fill(f.desktop);
+  await dialog.getByLabel('Shortcut folder', { exact: true }).scrollIntoViewIfNeeded();
   await screenshot(a.page, 'program-shortcuts.png');
   await dialog.locator('#source-submit').click();
   await expect(dialog).toBeHidden();
@@ -89,22 +89,22 @@ test('multiple archive programs and optional shortcuts persist only after explic
   expect(config.sources[0].installation.shortcut).toEqual({ enabled: true, destination: f.desktop });
   await a.page.reload();
   const reopened = await editor(a);
-  await expect(reopened.locator('#source-program-summary')).toContainText('2 Programme');
-  await expect(reopened.getByLabel('Programmverknüpfungen erstellen')).toBeChecked();
+  await expect(reopened.locator('#source-program-summary')).toContainText('2 programs');
+  await expect(reopened.getByLabel('Create program shortcuts')).toBeChecked();
 });
 test('canceling or resetting a program selection leaves the saved configuration intact until save', async () => {
   const f = await fixture();
   f.source.installation.programs = ['Writer.app'];
   const a = await app({ config: f.config(), programCandidates: f.preview }),
     dialog = await editor(a);
-  await dialog.getByRole('button', { name: 'Programme aus Sicherung auswählen' }).click();
-  const picker = a.page.getByRole('dialog', { name: 'Programme auswählen', exact: true });
+  await dialog.getByRole('button', { name: 'Choose programs from backup' }).click();
+  const picker = a.page.getByRole('dialog', { name: 'Choose programs', exact: true });
   await picker.locator('[data-program-key="Viewer.app"]').check();
-  await picker.getByRole('button', { name: 'Abbrechen' }).click();
-  await expect(dialog.locator('#source-program-summary')).toContainText('1 Programm');
-  await dialog.getByRole('button', { name: 'Automatische Auswahl', exact: true }).click();
-  await expect(dialog.locator('#source-program-summary')).toContainText('Automatische Auswahl');
-  await dialog.getByRole('button', { name: 'Abbrechen', exact: true }).click();
+  await picker.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog.locator('#source-program-summary')).toContainText('1 program');
+  await dialog.getByRole('button', { name: 'Automatic selection', exact: true }).click();
+  await expect(dialog.locator('#source-program-summary')).toContainText('Automatic selection');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect((await a.page.evaluate(() => window.gitCloner.getState())).config.sources[0].installation.programs).toEqual([
     'Writer.app'
   ]);
@@ -127,11 +127,11 @@ test('download history has aligned filters, real persisted totals, pagination an
   await log.flush();
   const a = await app({ directory: f.directory, config: f.config() }),
     dialog = await history(a);
-  await expect(dialog.getByText('77 Treffer', { exact: false })).toBeVisible();
+  await expect(dialog.getByText('77 matches', { exact: false })).toBeVisible();
   await expect(dialog.locator('tbody tr')).toHaveCount(50);
   await expect(dialog.getByText('secret-program.zip')).toHaveCount(0);
   const boxes = await Promise.all(
-    ['Repository oder Datei suchen', 'Ergebnis', 'Zeitraum'].map(label =>
+    ['Search repository or file', 'Result', 'Period'].map(label =>
       dialog.getByLabel(label, { exact: true }).boundingBox()
     )
   );
@@ -142,13 +142,13 @@ test('download history has aligned filters, real persisted totals, pagination an
   await screenshot(a.page, 'download-history.png');
   await dialog.locator('[data-action="download-history-next"]').click();
   await expect(dialog.locator('tbody tr')).toHaveCount(27);
-  await dialog.getByLabel('Repository oder Datei suchen', { exact: true }).fill('project-74');
+  await dialog.getByLabel('Search repository or file', { exact: true }).fill('project-74');
   await expect(dialog.locator('tbody tr')).toHaveCount(1);
-  await expect(dialog.getByLabel('Repository oder Datei suchen', { exact: true })).toBeFocused();
-  await dialog.getByLabel('Ergebnis', { exact: true }).selectOption('reused');
-  await expect(dialog.getByText('Noch keine passenden Download-Einträge.')).toBeVisible();
-  await dialog.getByLabel('Repository oder Datei suchen', { exact: true }).fill('');
-  await expect(dialog.getByText('Verschlüsselte Release-Datei')).toBeVisible();
+  await expect(dialog.getByLabel('Search repository or file', { exact: true })).toBeFocused();
+  await dialog.getByLabel('Result', { exact: true }).selectOption('reused');
+  await expect(dialog.getByText('No matching download entries yet.')).toBeVisible();
+  await dialog.getByLabel('Search repository or file', { exact: true }).fill('');
+  await expect(dialog.getByText('Encrypted release file')).toBeVisible();
   await expect(dialog.locator('.download-storage-summary')).toContainText('4 KiB');
 });
 test('download history survives an actual Electron restart without adding preset repositories', async () => {
