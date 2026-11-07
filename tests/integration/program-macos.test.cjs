@@ -46,7 +46,7 @@ test('native macOS installs and keeps a signed app from a DMG whose files carry 
   await run('/usr/bin/clang', ['-arch', process.arch === 'x64' ? 'x86_64' : 'arm64', code, '-o', path.join(contents, 'MacOS', 'Layout')]);
   await fs.writeFile(path.join(contents, 'Info.plist'), '<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>org.example.layout</string><key>CFBundleExecutable</key><string>Layout</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleVersion</key><string>1</string></dict></plist>');
   await run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', app]);
-  // The same bytes the DeckCraft 0.16.0 image stores on every file and folder: a Finder icon position of (-1, -1).
+  // The bytes real DMG tools store on every file and folder: a Finder icon position of (-1, -1).
   const finderInfo = '00'.repeat(10) + 'ffffffff' + '00'.repeat(18), finder = target => run('/usr/bin/xattr', ['-wx', 'com.apple.FinderInfo', finderInfo, target]);
   for (const target of [app, contents, path.join(contents, 'MacOS'), path.join(contents, 'MacOS', 'Layout'), path.join(contents, 'Info.plist')]) await finder(target);
   const file = path.join(f.root, 'layout-macos-universal.dmg'); await run('/usr/bin/hdiutil', ['create', '-quiet', '-fs', 'HFS+', '-srcfolder', image, '-volname', 'Layout', file], { timeout: 60000 });

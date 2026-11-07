@@ -91,8 +91,8 @@ test('installer tools receive a closed input instead of waiting for an interacti
 });
 test('a release file published under a second name counts as one program only with the same SHA-256', () => {
   const { narrowToProgram } = require('../../app/core/program-select.cjs'), digest = 'sha256:' + 'dc'.repeat(32);
-  const twins = [{ id: 1, name: 'solidcraft-macos-universal.dmg', digest }, { id: 2, name: 'solidcraft-0.30.1-macos-universal.dmg', digest: digest.toUpperCase().replace('SHA256:', 'sha256:') }, { id: 3, name: 'solidcraft-cli-0.30.1-macos-universal.zip', digest: 'sha256:' + '1e'.repeat(32) }];
-  assert.equal(selectProgram(twins, 'darwin', 'arm64').name, 'solidcraft-0.30.1-macos-universal.dmg'); assert.equal(selectProgram([...twins].reverse(), 'darwin', 'arm64').id, 2);
+  const twins = [{ id: 1, name: 'app-macos-universal.dmg', digest }, { id: 2, name: 'app-1.2.3-macos-universal.dmg', digest: digest.toUpperCase().replace('SHA256:', 'sha256:') }, { id: 3, name: 'app-cli-1.2.3-macos-universal.zip', digest: 'sha256:' + '1e'.repeat(32) }];
+  assert.equal(selectProgram(twins, 'darwin', 'arm64').name, 'app-1.2.3-macos-universal.dmg'); assert.equal(selectProgram([...twins].reverse(), 'darwin', 'arm64').id, 2);
   assert.equal(selectProgram(twins.map(file => ({ ...file, digest: file.digest.slice(7) })), 'darwin', 'arm64').id, 2);
   assert.throws(() => selectProgram([twins[0], { ...twins[1], digest: 'sha256:' + 'ab'.repeat(32) }], 'darwin', 'arm64'), /Mehrere/); assert.throws(() => selectProgram([twins[0], { ...twins[1], digest: undefined }], 'darwin', 'arm64'), /Mehrere/); assert.throws(() => selectProgram(twins.map(file => ({ ...file, digest: 'sha256:short' })), 'darwin', 'arm64'), /Mehrere/);
   const narrowed = narrowToProgram(selectReleaseAssets(twins, 'all', 'darwin'), { pattern: '' }, 'darwin', 'arm64'); assert.deepEqual(narrowed.selected.map(file => file.id), [2]); assert.deepEqual(narrowed.excluded.map(file => file.id), [1, 3]);
