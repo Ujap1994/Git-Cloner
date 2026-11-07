@@ -76,3 +76,56 @@ function rateReady(queue, now = Date.now()) {
   return !Number.isFinite(until) || until <= now;
 }
 module.exports = { rateLimitError, responseRateLimit, isRateLimited, rateReady, SHORT_WAIT_MS };
+// Remembers the remaining API quota from every response, so a run can pause before the provider refuses requests.
+// Search and other resources have their own budgets; only the main ("core") budget matters for backups.
+function observeRate(state, headers, now = Date.now()) {
+  const value = name => headers?.get?.(name) ?? null;
+  const resource = value('x-ratelimit-resource');
+  if (resource && resource !== 'core') return;
+  const read = name => value(`x-ratelimit-${name}`) ?? value(`ratelimit-${name}`);
+  const [limit, remaining, reset] = ['limit', 'remaining', 'reset'].map(read);
+  if (limit == null || remaining == null || !Number.isFinite(Number(limit)) || !Number.isFinite(Number(remaining)))
+    return;
+  const seconds = Number(reset);
+  Object.assign(state, {
+    limit: Number(limit),
+    remaining: Number(remaining),
+    resetAt:
+      Number.isFinite(seconds) && seconds > 0
+        ? new Date(seconds > 1e9 ? seconds * 1000 : now + seconds * 1000).toISOString()
+        : null,
+    observedAt: new Date(now).toISOString()
+  });
+}
+// Before a repository starts, a nearly used-up quota pauses the queue until the reset instead of failing midway.
+function budgetError(state, { reserve = 4, label = 'GitHub', now = Date.now() } = {}) {
+  if (state?.remaining == null || state.remaining >= reserve) return null;
+  const until = Date.parse(state.resetAt ?? '');
+  if (!Number.isFinite(until) || until <= now) return null;
+  const error = new Error(
+    `${label}-API-Kontingent fast aufgebraucht (${state.remaining} von ${state.limit} Anfragen übrig). Der Lauf pausiert bis zur Freigabe.`
+  );
+  Object.assign(error, {
+    rateLimited: true,
+    proactive: true,
+    helpCode: 'rate',
+    retryable: false,
+    retryAfterMs: until - now,
+    rateLimitUntil: new Date(until).toISOString()
+  });
+  return error;
+}
+// What the window shows: after the reset time the full quota is available again.
+function budgetView(state, now = Date.now()) {
+  if (state?.remaining == null) return null;
+  const reset = Date.parse(state.resetAt ?? ''),
+    released = Number.isFinite(reset) && reset <= now;
+  return {
+    limit: state.limit,
+    remaining: released ? state.limit : state.remaining,
+    resetAt: released ? null : state.resetAt
+  };
+}
+module.exports.observeRate = observeRate;
+module.exports.budgetError = budgetError;
+module.exports.budgetView = budgetView;

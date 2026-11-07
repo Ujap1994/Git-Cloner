@@ -12,6 +12,8 @@ function quietNow(hours, now = new Date()) {
 function notificationAllowed(config, kind, result = {}, now = new Date()) {
   if (!config.notifications || quietNow(config.notificationRules?.quietHours, now)) return false;
   if (kind === 'update') return config.notificationRules?.updates !== false;
+  if (kind === 'program') return config.notificationRules?.programs !== false;
+  if (kind === 'reminder') return true;
   const rule = config.notificationRules?.backup ?? 'all';
   const errors = result.errorCount ?? result.results?.filter(r => r.status === 'error').length ?? 0;
   const changed =

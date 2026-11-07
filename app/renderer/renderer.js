@@ -374,7 +374,7 @@ function repositoryTable() {
   const visible = all.slice(pageIndex * size, (pageIndex + 1) * size);
   if (!visible.length)
     return `<div class="empty-small">${t('Keine passenden Sicherungen gefunden.', 'No matching backups found.')}</div>`;
-  return `<div class="table-wrap"><table class="table"><thead><tr><th scope="col">${t('REPOSITORY / SPEICHERORT', 'REPOSITORY / DESTINATION')}</th><th scope="col">STATUS</th><th scope="col">${t('PRÜFUNG', 'CHECKED')}</th><th scope="col">${t('AKTIONEN', 'ACTIONS')}</th></tr></thead><tbody>${visible.map(record => `<tr><td><div class="repo-cell"><span class="repo-avatar">${icon(record.encrypted ? 'shield' : 'branch')}</span><div><div class="repo-name">${esc(record.fullName)}</div><div class="repo-detail">${esc(record.destination)}</div><div class="repo-detail">${record.encrypted ? t('Verschlüsselt · ', 'Encrypted · ') : ''}${record.mode === 'mirror' ? 'Mirror' : t('Arbeitskopie', 'Working copy')}${record.commit ? ` · ${esc(record.commit.slice(0, 7))}` : ''}</div></div></div>${record.releaseInfo ? `<div class="repo-detail">${esc(record.releaseInfo.tag)} · ${record.releaseInfo.fileCount} ${t('Release-Dateien', 'release assets')}${record.releaseInfo.scope === 'system' ? ` · ${esc({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' }[record.releaseInfo.platform] || record.releaseInfo.platform)}` : ''}</div>${record.releaseInfo.fileCount ? `<div class="repo-detail release-location">${record.encrypted ? t('Im verschlüsselten Archiv · über Wiederherstellung öffnen', 'Inside the encrypted archive · open through Restore') : record.releaseInfo.assetDirectory ? esc(record.releaseInfo.assetDirectory) + '/' : t('Ältere Ablage · mit der nächsten Prüfung in den sichtbaren Ordner übernehmen', 'Legacy location · moved to the visible folder on the next check')}</div>` : ''}` : ''}${record.message ? `<div class="inline-error">${esc(errorText(record.message))}</div>` : ''}${record.message ? studio.helpButton(record) : ''}${studio.sourceBadge(record)}${record.warning ? `<div class="inline-warning">${esc(record.warning)}</div>` : ''}${record.installation ? `<div class="repo-detail program-status ${record.installation.status === 'error' ? 'inline-error' : ''}">${record.installation.status === 'error' ? t('Programminstallation fehlgeschlagen', 'Program installation failed') : record.installation.status === 'waiting' ? t('Programminstallation wartet', 'Program installation waiting') : record.installation.programs?.length > 1 ? `${record.installation.programs.length} ${t('Programme installiert', 'programs installed')}` : t('Programm installiert', 'Program installed')} ${esc(record.installation.tag || '')}${record.installation.destination ? ` · ${esc(record.installation.destination)}` : ''}${record.installation.destination ? ` <button class="text-button" data-open-program="${esc(record.id)}" aria-label="${t('Programmordner öffnen', 'Open program folder')}">${icon('external')}</button>` : ''}</div>` : ''}</td><td>${statusLabel(record.status)}${record.verificationStatus === 'ok' ? `<small class="verified">✓ ${t('Geprüft', 'Verified')}</small>` : record.verificationStatus === 'error' ? `<small class="inline-error">${t('Integrität fehlerhaft', 'Integrity failed')}</small>` : ''}</td><td class="nowrap">${date(record.checkedAt)}</td><td><div class="actions"><button class="icon-button" data-open-source="${esc(record.id)}" aria-label="${t('Ordner öffnen', 'Open folder')}">${icon('folder')}</button><button class="icon-button" data-changes="${esc(record.id)}" aria-label="${t('Änderungen ansehen', 'Review changes')}"${appState.busy || !record.commit ? ' disabled' : ''}>${icon('file')}</button><button class="icon-button" data-verify="${esc(record.id)}" aria-label="${t('Integrität prüfen', 'Verify integrity')}"${appState.busy ? ' disabled' : ''}>${icon('shield')}</button>${record.releaseInfo?.fileCount ? `${!record.encrypted && record.releaseInfo.assetDirectory ? `<button class="icon-button" data-open-releases="${esc(record.id)}" aria-label="${t('Release-Ordner öffnen', 'Open release folder')}" title="${t('Release-Ordner öffnen', 'Open release folder')}">${icon('external')}</button>` : ''}<button class="icon-button" data-restore-releases="${esc(record.id)}" aria-label="${t('Release-Dateien wiederherstellen', 'Restore release assets')}"${appState.busy ? ' disabled' : ''}>${icon('download')}</button>` : ''}<button class="icon-button" data-restore="${esc(record.id)}" aria-label="${t('Diese Sicherung wiederherstellen', 'Restore this backup')}"${appState.busy ? ' disabled' : ''}>${icon('history')}</button></div></td></tr>`).join('')}</tbody></table></div><div class="pagination"><span>${all.length} ${t('Sicherungen', 'backups')}</span><div>${button('‹', 'previous-page', '', 'secondary', pageIndex === 0)}<span>${pageIndex + 1} / ${Math.ceil(all.length / size)}</span>${button('›', 'next-page', '', 'secondary', (pageIndex + 1) * size >= all.length)}</div></div>`;
+  return `<div class="table-wrap"><table class="table"><thead><tr><th scope="col">${t('REPOSITORY / SPEICHERORT', 'REPOSITORY / DESTINATION')}</th><th scope="col">STATUS</th><th scope="col">${t('PRÜFUNG', 'CHECKED')}</th><th scope="col">${t('AKTIONEN', 'ACTIONS')}</th></tr></thead><tbody>${visible.map(record => `<tr><td><div class="repo-cell"><span class="repo-avatar">${icon(record.encrypted ? 'shield' : 'branch')}</span><div><div class="repo-name">${esc(record.fullName)}</div><div class="repo-detail">${esc(record.destination)}</div><div class="repo-detail">${record.encrypted ? t('Verschlüsselt · ', 'Encrypted · ') : ''}${record.mode === 'mirror' ? 'Mirror' : t('Arbeitskopie', 'Working copy')}${record.commit ? ` · ${esc(record.commit.slice(0, 7))}` : ''}</div></div></div>${record.releaseInfo ? `<div class="repo-detail">${esc(record.releaseInfo.tag)} · ${record.releaseInfo.fileCount} ${t('Release-Dateien', 'release assets')}${record.releaseInfo.scope === 'system' ? ` · ${esc({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' }[record.releaseInfo.platform] || record.releaseInfo.platform)}` : ''}</div>${record.releaseInfo.fileCount ? `<div class="repo-detail release-location">${record.encrypted ? t('Im verschlüsselten Archiv · über Wiederherstellung öffnen', 'Inside the encrypted archive · open through Restore') : record.releaseInfo.assetDirectory ? esc(record.releaseInfo.assetDirectory) + '/' : t('Ältere Ablage · mit der nächsten Prüfung in den sichtbaren Ordner übernehmen', 'Legacy location · moved to the visible folder on the next check')}</div>` : ''}` : ''}${record.message ? `<div class="inline-error">${esc(errorText(record.message))}</div>` : ''}${record.message ? studio.helpButton(record) : ''}${studio.sourceBadge(record)}${record.warning ? `<div class="inline-warning">${esc(record.warning)}</div>` : ''}${programStatus(record)}</td><td>${statusLabel(record.status)}${record.verificationStatus === 'ok' ? `<small class="verified">✓ ${t('Geprüft', 'Verified')}</small>` : record.verificationStatus === 'error' ? `<small class="inline-error">${t('Integrität fehlerhaft', 'Integrity failed')}</small>` : ''}</td><td class="nowrap">${date(record.checkedAt)}</td><td><div class="actions"><button class="icon-button" data-open-source="${esc(record.id)}" aria-label="${t('Ordner öffnen', 'Open folder')}">${icon('folder')}</button><button class="icon-button" data-changes="${esc(record.id)}" aria-label="${t('Änderungen ansehen', 'Review changes')}"${appState.busy || !record.commit ? ' disabled' : ''}>${icon('file')}</button><button class="icon-button" data-verify="${esc(record.id)}" aria-label="${t('Integrität prüfen', 'Verify integrity')}"${appState.busy ? ' disabled' : ''}>${icon('shield')}</button>${record.releaseInfo?.fileCount ? `${!record.encrypted && record.releaseInfo.assetDirectory ? `<button class="icon-button" data-open-releases="${esc(record.id)}" aria-label="${t('Release-Ordner öffnen', 'Open release folder')}" title="${t('Release-Ordner öffnen', 'Open release folder')}">${icon('external')}</button>` : ''}<button class="icon-button" data-restore-releases="${esc(record.id)}" aria-label="${t('Release-Dateien wiederherstellen', 'Restore release assets')}"${appState.busy ? ' disabled' : ''}>${icon('download')}</button>` : ''}<button class="icon-button" data-restore="${esc(record.id)}" aria-label="${t('Diese Sicherung wiederherstellen', 'Restore this backup')}"${appState.busy ? ' disabled' : ''}>${icon('history')}</button></div></td></tr>`).join('')}</tbody></table></div><div class="pagination"><span>${all.length} ${t('Sicherungen', 'backups')}</span><div>${button('‹', 'previous-page', '', 'secondary', pageIndex === 0)}<span>${pageIndex + 1} / ${Math.ceil(all.length / size)}</span>${button('›', 'next-page', '', 'secondary', (pageIndex + 1) * size >= all.length)}</div></div>`;
 }
 function historyList() {
   return appState.history
@@ -519,6 +519,45 @@ function settingsGeneral() {
 function saveRow() {
   return `<div class="save-row"><button type="submit" class="button primary"${appState.busy ? ' disabled' : ''}>${icon('check')}${t('Einstellungen speichern', 'Save settings')}</button></div>`;
 }
+// Program line of a repository: installed version, a waiting or available update and the kept previous version.
+function programStatus(record) {
+  const installation = record.installation;
+  if (!installation) return '';
+  const status = installation.status,
+    afterExit = appState.config.programUpdates?.mode !== 'next-check';
+  const label =
+    {
+      error: t('Programminstallation fehlgeschlagen', 'Program installation failed'),
+      waiting: afterExit
+        ? t('Programm läuft · Update nach dem Beenden', 'Program running · update after it quits')
+        : t('Programm läuft · Update bei der nächsten Prüfung', 'Program running · update at the next check'),
+      available: t('Update bereit', 'Update ready'),
+      held: t('Vorherige Version aktiv', 'Previous version active'),
+      'rolled-back': t('Vorherige Version aktiv', 'Previous version active')
+    }[status] ||
+    (installation.programs?.length > 1
+      ? `${installation.programs.length} ${t('Programme installiert', 'programs installed')}`
+      : t('Programm installiert', 'Program installed'));
+  const target =
+    installation.latestTag &&
+    installation.latestTag !== installation.tag &&
+    ['error', 'waiting', 'available'].includes(status)
+      ? ` → ${esc(installation.latestTag)}`
+      : '';
+  const held = installation.heldTag ? ` · ${t('übersprungen', 'skipped')} ${esc(installation.heldTag)}` : '';
+  const location = installation.destination
+    ? ` · ${esc(installation.destination)} <button class="text-button" data-open-program="${esc(record.id)}" aria-label="${t('Programmordner öffnen', 'Open program folder')}">${icon('external')}</button>`
+    : '';
+  const install =
+    ['available', 'error'].includes(status) && installation.latestTag
+      ? `<button class="text-button" data-install-program="${esc(record.id)}">${icon('download')}${t('Jetzt installieren', 'Install now')}</button>`
+      : '';
+  const rollback =
+    installation.previousTag && !['waiting'].includes(status)
+      ? `<button class="text-button" data-rollback-program="${esc(record.id)}" data-previous-tag="${esc(installation.previousTag)}">${icon('history')}${t('Zurück zu', 'Roll back to')} ${esc(installation.previousTag)}</button>`
+      : '';
+  return `<div class="repo-detail program-status ${status === 'error' ? 'inline-error' : ''}">${label} ${esc(installation.tag || '')}${target}${held}${location}${install || rollback ? `<span class="program-actions">${install}${rollback}</span>` : ''}</div>`;
+}
 function settingsBackup() {
   const b = draft.backup;
   return `<form id="settings-form">${panel(
@@ -562,6 +601,18 @@ function settingsBackup() {
     )}
     ${enhancements.releasePanel(b)}
     ${panel(
+      t('Programm-Updates', 'Program updates'),
+      `<div class="panel-body">${field(
+        t('Neue Programmversion installieren', 'Install a new program version'),
+        'program-updates-mode',
+        `<select id="program-updates-mode" data-program-updates="mode">${option('after-exit', draft.programUpdates.mode, t('Automatisch, läuft das Programm: nach dem Beenden', 'Automatically, after the program quits if it is running'))}${option('next-check', draft.programUpdates.mode, t('Automatisch, läuft das Programm: bei der nächsten Prüfung', 'Automatically, at the next check if the program is running'))}${option('manual', draft.programUpdates.mode, t('Nur melden und per „Jetzt installieren“', 'Notify only and install with “Install now”'))}</select>`,
+        t(
+          'Gilt für alle Quellen mit Programminstallation. Die zuletzt ersetzte Version bleibt erhalten und lässt sich in der Übersicht zurückholen.',
+          'Applies to all sources with program installation. The most recently replaced version is kept and can be restored from the overview.'
+        )
+      )}</div>`
+    )}
+    ${panel(
       t('Speicher und Verschlüsselung', 'Storage and encryption'),
       `<div class="panel-body"><div class="field-grid">${field(t('Freier Speicher als Reserve (MB)', 'Free storage reserve (MB)'), 'reserve-mb', `<input type="number" id="reserve-mb" data-backup="reserveMB" min="64" max="1048576" value="${b.reserveMB}">`, t('Zusätzlich zum geschätzten Platz für den neuen Stand.', 'In addition to the estimated space needed for the new backup.'))}<div class="field"><label>${t('Archivpasswort', 'Archive password')}</label>${button(appState.encryptionReady ? t('Passwort ändern', 'Change password') : t('Passwort setzen / entsperren', 'Set / unlock password'), 'archive-password', 'shield', 'secondary')}<p class="field-help">${appState.encryptionReady ? t('Für diese Sitzung entsperrt.', 'Unlocked for this session.') : t('Noch nicht entsperrt.', 'Not unlocked yet.')} ${appState.encryptionRemembered ? t('Sicher im OS-Schlüsselspeicher hinterlegt.', 'Stored in the secure OS key store.') : ''}</p></div></div></div>` +
         row(
@@ -579,8 +630,26 @@ function settingsBackup() {
         )
     )}${saveRow()}</form>`;
 }
+// Remaining API requests per account, read from the last provider response.
+function apiBudgetPanel() {
+  const budgets = appState.apiBudget || [];
+  return panel(
+    t('API-Kontingent', 'API quota'),
+    `<div class="panel-body"><p>${t('Ohne Token erlaubt GitHub 60 Anfragen pro Stunde, mit Token 5.000. Ein Repository mit Release-Sicherung braucht etwa drei Anfragen pro Prüfung. Reicht der Rest nicht, pausiert der Lauf bis zur Freigabe.', 'Without a token GitHub allows 60 requests per hour, with a token 5,000. A repository with release backup needs about three requests per check. If too few remain, the run pauses until the reset.')}</p>${
+      budgets.length
+        ? `<ul class="api-budget">${budgets
+            .map(
+              item =>
+                `<li><strong>${esc(item.label)}</strong> · ${item.remaining} / ${item.limit} ${t('frei', 'left')}${item.resetAt ? ` · ${t('Freigabe', 'Reset')} ${date(item.resetAt, true)}` : ''}</li>`
+            )
+            .join('')}</ul>`
+        : `<p class="field-help">${t('Wird nach der ersten Prüfung angezeigt.', 'Shown after the first check.')}</p>`
+    }</div>`
+  );
+}
 function settingsAccounts() {
   return (
+    apiBudgetPanel() +
     panel(
       t('Git-Konten', 'Git accounts'),
       `<div class="panel-body"><p>${t('Öffentliche Quellen funktionieren ohne Anmeldung. Jede Quelle kann ein eigenes Konto verwenden. Tokens werden ausschließlich verschlüsselt gespeichert.', 'Public sources work without signing in. Each source can use its own account. Tokens are stored only with OS encryption.')}</p><div class="account-list">${appState.accounts.map(account => `<div class="account-card"><div class="account-heading"><strong>${esc(account.id === 'default' ? t('Standard', 'Default') : account.label)}</strong>${studio.sourceBadge(account)}<span class="label ${account.configured ? '' : 'neutral'}">${account.configured ? t('Verbunden', 'Connected') : t('Öffentlicher Zugriff', 'Public access')}</span></div><form class="account-token-form" data-account="${esc(account.id)}"><label for="token-${esc(account.id)}">Personal Access Token</label><div class="input-group"><input id="token-${esc(account.id)}" name="token" type="password" autocomplete="off" placeholder="${t('Token wird nicht angezeigt', 'Token is never displayed')}"${appState.secureStorage ? '' : ' disabled'}><button type="submit" class="button secondary"${!appState.secureStorage || appState.busy ? ' disabled' : ''}>${t('Token speichern', 'Save token')}</button></div></form><div class="heading-buttons account-actions">${studio.loginButton(account)}${account.configured ? `<button class="text-button danger" data-remove-token="${esc(account.id)}">${t('Token entfernen', 'Remove token')}</button>` : ''}${account.id !== 'default' ? `<button class="text-button danger" data-remove-account="${esc(account.id)}">${t('Konto entfernen', 'Remove account')}</button>` : ''}</div></div>`).join('')}</div><form id="add-account-form" class="account-create">${studio.accountFields()}<div class="input-group"><input id="account-label" aria-label="${t('Name des GitHub-Kontos', 'GitHub account label')}" placeholder="${t('Name für ein weiteres Konto', 'Label for another account')}" required maxlength="80"><button class="button secondary" type="submit">${icon('plus')}${t('Konto hinzufügen', 'Add account')}</button></div></form><p class="field-help">${appState.secureStorage ? t('Die Zugangsdaten verlassen den Hauptprozess nicht.', 'Credentials never leave the main process.') : t('Kein sicherer Schlüsselspeicher verfügbar. Öffentliche Quellen funktionieren weiterhin.', 'No secure key store is available. Public sources still work.')}</p><button class="text-button" data-link="token">${t('Token auf GitHub erstellen', 'Create a token on GitHub')} ${icon('external')}</button></div>`
@@ -914,6 +983,7 @@ document.addEventListener('change', event => {
     ].includes(node.name)
   )
     draft[node.name] = node.checked;
+  else if (node.dataset.programUpdates) draft.programUpdates[node.dataset.programUpdates] = node.value;
   else if (node.dataset.backup) {
     draft.backup[node.dataset.backup] =
       node.type === 'checkbox' ? node.checked : node.type === 'number' ? Number(node.value) : node.value;
@@ -994,6 +1064,40 @@ document.addEventListener('click', event => {
   }
   if (node.dataset.openProgram) {
     void attempt(() => api.openProgramDirectory(node.dataset.openProgram));
+    return;
+  }
+  if (node.dataset.installProgram) {
+    void attempt(async () => {
+      const result = await api.installProgram(node.dataset.installProgram);
+      toast(
+        result.status === 'waiting'
+          ? t(
+              'Das Programm läuft noch. Es wird nach dem Beenden installiert.',
+              'The program is still running. It is installed after it quits.'
+            )
+          : result.status === 'installed'
+            ? `${t('Installiert', 'Installed')}: ${result.tag}`
+            : result.message || t('Programm ist aktuell.', 'Program is up to date.'),
+        result.status === 'error'
+      );
+    });
+    return;
+  }
+  if (node.dataset.rollbackProgram) {
+    const tag = node.dataset.previousTag;
+    if (
+      !window.confirm(
+        t(
+          `Die vorherige Version ${tag} wiederherstellen? Die aktuelle Version bleibt als vorherige Version erhalten und wird bis zu einer neueren Version nicht automatisch erneut installiert.`,
+          `Restore the previous version ${tag}? The current version is kept as the previous version and is not installed automatically again until a newer version appears.`
+        )
+      )
+    )
+      return;
+    void attempt(async () => {
+      const result = await api.rollbackProgram(node.dataset.rollbackProgram);
+      toast(`${t('Vorherige Version aktiv', 'Previous version active')}: ${result.tag}`);
+    });
     return;
   }
   if (node.dataset.openReleases) {

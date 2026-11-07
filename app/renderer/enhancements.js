@@ -106,7 +106,7 @@ window.createGitClonerEnhancements = function (context) {
           )
           .join('')}</select>`,
         t('Gilt für manuelle und automatische Durchläufe.', 'Applies to manual and automatic runs.')
-      )}${field(t('Neue Programmversionen', 'New application versions'), 'notification-updates', `<select id="notification-updates" data-notification="updates"${draft.notifications ? '' : ' disabled'}><option value="yes"${rules.updates ? ' selected' : ''}>${t('Benachrichtigen', 'Notify me')}</option><option value="no"${rules.updates ? '' : ' selected'}>${t('Nur in der App anzeigen', 'Show in the app only')}</option></select>`, t('Übersprungene Versionen bleiben weiterhin stumm.', 'Skipped versions remain hidden.'))}</div></div>`
+      )}${field(t('Programm-Updates', 'Program updates'), 'notification-programs', `<select id="notification-programs" data-notification="programs"${draft.notifications ? '' : ' disabled'}><option value="yes"${rules.programs ? ' selected' : ''}>${t('Installierte und bereite Versionen melden', 'Report installed and ready versions')}</option><option value="no"${rules.programs ? '' : ' selected'}>${t('Nicht melden', 'Do not notify')}</option></select>`, t('Nennt Programm und Version, etwa nach einer Installation beim Beenden des Programms.', 'Names program and version, for example after an installation once the program quits.'))}${field(t('Neue Programmversionen', 'New application versions'), 'notification-updates', `<select id="notification-updates" data-notification="updates"${draft.notifications ? '' : ' disabled'}><option value="yes"${rules.updates ? ' selected' : ''}>${t('Benachrichtigen', 'Notify me')}</option><option value="no"${rules.updates ? '' : ' selected'}>${t('Nur in der App anzeigen', 'Show in the app only')}</option></select>`, t('Übersprungene Versionen bleiben weiterhin stumm.', 'Skipped versions remain hidden.'))}</div></div>`
     )}${panel(t('Ruhezeiten', 'Quiet hours'), `<div class="setting-row"><div><h3>${t('Tägliche Ruhezeit', 'Daily quiet hours')}</h3><p>${t('Unterdrückt Systemmeldungen während dieser Zeit.', 'Suppresses system notifications during this period.')}</p></div><label class="toggle"><input type="checkbox" data-quiet="enabled" aria-label="${t('Ruhezeit aktivieren', 'Enable quiet hours')}"${q.enabled ? ' checked' : ''}${draft.notifications ? '' : ' disabled'}></label></div><div class="panel-body"><div class="field-grid">${field(t('Ruhezeit beginnt', 'Quiet hours start'), 'quiet-start', `<input type="time" id="quiet-start" data-quiet="start" value="${q.start}"${draft.notifications && q.enabled ? '' : ' disabled'}>`)}${field(t('Ruhezeit endet', 'Quiet hours end'), 'quiet-end', `<input type="time" id="quiet-end" data-quiet="end" value="${q.end}"${draft.notifications && q.enabled ? '' : ' disabled'}>`)}</div><p class="field-help">${t('Lokale Uhrzeit, auch über Mitternacht. Sicherungsmeldungen werden nicht gesammelt. Ein neuer Versionshinweis kann nach Ende der Ruhezeit erscheinen.', 'Local time, including overnight periods. Backup notifications are not queued. A new version notice can appear after quiet hours end.')}</p></div>`)}<div class="save-row"><button type="submit" class="button primary"${getState().busy ? ' disabled' : ''}>${t('Einstellungen speichern', 'Save settings')}</button></div></form>`;
   }
   function syncNotificationFields() {
@@ -301,8 +301,11 @@ window.createGitClonerEnhancements = function (context) {
       if (node.dataset.sourceTime !== undefined && source.schedule)
         source.schedule.times[Number(node.dataset.sourceTime)] = node.value;
       if (node.dataset.notification)
-        getDraft().notificationRules[node.dataset.notification] =
-          node.dataset.notification === 'updates' ? node.value === 'yes' : node.value;
+        getDraft().notificationRules[node.dataset.notification] = ['updates', 'programs'].includes(
+          node.dataset.notification
+        )
+          ? node.value === 'yes'
+          : node.value;
       if (node.dataset.quiet)
         getDraft().notificationRules.quietHours[node.dataset.quiet] =
           node.type === 'checkbox' ? node.checked : node.value;

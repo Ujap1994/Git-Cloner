@@ -35,18 +35,26 @@ const { HostedClient } = require('./core/hosted-client.cjs');
 const { providerSpec, providerKey, parseHostedSource } = require('./core/provider-spec.cjs');
 const { queryHistory, exportHistory, historyDetails } = require('./core/history.cjs');
 const { spaceReady } = require('./core/space-wait.cjs');
-const { rateReady } = require('./core/rate-limit.cjs');
+const { rateReady, budgetView } = require('./core/rate-limit.cjs');
 const { setTimeout: sleepFor } = require('node:timers/promises');
 const { rotationInventory, rotatePasswords, recoverRotations } = require('./core/key-rotation.cjs');
 const { inspectRecommendations } = require('./core/recommendations.cjs');
 const { organizeConfig, prepareBulk, configSignature, RepositoryBrowser } = require('./core/source-workspace.cjs');
 
 const downloadStorage = require('./core/download-storage.cjs');
-const { ProgramInstaller } = require('./core/program-installation.cjs');
+const { ProgramInstaller, owned } = require('./core/program-installation.cjs');
 const { ProgramShortcuts } = require('./core/program-shortcuts.cjs');
 const { DownloadHistory } = require('./core/download-history.cjs');
 const { FILE_TYPES, ARCHITECTURES } = require('./core/release-assets.cjs');
 
+// Program messages replace their previous version; other backup warnings stay.
+function programWarning(existing, next) {
+  const kept = String(existing ?? '')
+    .split(/ (?=Programm(?:installation|verknüpfungen): )/)
+    .filter(part => part && !/^Programm(?:installation|verknüpfungen): /.test(part))
+    .join(' ');
+  return [kept, next].filter(Boolean).join(' ') || undefined;
+}
 class Runtime extends EventEmitter {
   downloadRoots() {
     return [
@@ -175,6 +183,8 @@ class Runtime extends EventEmitter {
     applyOS = async () => {},
     notifyUpdate = () => {},
     notifyBackup = () => {},
+    notifyProgram = () => {},
+    notifyReminder = () => {},
     notificationsAvailable = () => true,
     now = () => new Date(),
     mountedRoots,
@@ -192,6 +202,8 @@ class Runtime extends EventEmitter {
       applyOS,
       notifyUpdate,
       notifyBackup,
+      notifyProgram,
+      notifyReminder,
       notificationsAvailable,
       now,
       mountedRoots,
@@ -356,42 +368,16 @@ class Runtime extends EventEmitter {
               .catch(() => {})
               .then(async () => {
                 const previousInstallation = this.backup.state.repositories[jobId(input)]?.installation;
-                try {
-                  record.installation = await new ProgramInstaller().install({
-                    source: input.source,
-                    record,
-                    git: input.git,
-                    passphrase: input.passphrase,
-                    onProgress: input.onProgress
-                  });
-                  try {
-                    record.installation.shortcuts = await new ProgramShortcuts({
-                      writeWindowsShortcut: this.writeWindowsShortcut
-                    }).sync({
-                      source: input.source,
-                      installation: record.installation,
-                      previous: previousInstallation
-                    });
-                  } catch (error) {
-                    record.installation.shortcuts = {
-                      ...previousInstallation?.shortcuts,
-                      ...error.shortcutState,
-                      status: 'error',
-                      message: error.message
-                    };
-                    record.warning = [record.warning, 'Programmverknüpfungen: ' + error.message]
-                      .filter(Boolean)
-                      .join(' ');
-                  }
-                } catch (error) {
-                  record.installation = {
-                    ...previousInstallation,
-                    latestTag: record.releaseInfo?.tag,
-                    status: ['PROGRAM_RUNNING', 'EBUSY'].includes(error.code) ? 'waiting' : 'error',
-                    message: error.message
-                  };
-                  record.warning = [record.warning, 'Programminstallation: ' + error.message].filter(Boolean).join(' ');
-                }
+                const { installation, warning } = await this.applyInstallation({
+                  source: input.source,
+                  record,
+                  git: input.git,
+                  passphrase: input.passphrase,
+                  onProgress: input.onProgress,
+                  previousInstallation
+                });
+                record.installation = installation;
+                record.warning = programWarning(record.warning, warning);
               });
             this.programJobs.set(key, task);
             try {
@@ -425,8 +411,13 @@ class Runtime extends EventEmitter {
     });
     this.backup.on('complete', result => {
       try {
-        if (this.notificationsAvailable() && notificationAllowed(this.config, 'backup', result, this.now()))
-          this.notifyBackup(result);
+        if (!this.notificationsAvailable()) return;
+        if (notificationAllowed(this.config, 'backup', result, this.now())) this.notifyBackup(result);
+        else if (
+          (result.results ?? []).some(item => ['installed', 'available'].includes(item.installation?.status)) &&
+          notificationAllowed(this.config, 'program', result, this.now())
+        )
+          this.notifyProgram({ results: result.results });
       } catch (error) {
         this.notice = error.message;
         this.changed();
@@ -435,6 +426,8 @@ class Runtime extends EventEmitter {
     this.updates = new UpdateMonitor({
       currentVersion: this.version,
       github: this.updateFetch ? new GitHubClient({ fetchImpl: this.updateFetch }) : this.client(),
+      // Simulated releases in tests answer only API requests.
+      web: this.updateFetch ? null : this.fetchImpl,
       state: await readJson(path.join(this.directory, 'updates.json'), {}),
       save: value => writeJson(path.join(this.directory, 'updates.json'), value),
       notify: result => this.notifyUpdate(result),
@@ -493,6 +486,7 @@ class Runtime extends EventEmitter {
     }
     return {
       config: this.config,
+      apiBudget: this.apiBudget(),
       busy: this.busy(),
       progress: this.backup.progress,
       operation: this.operation,
@@ -651,6 +645,172 @@ class Runtime extends EventEmitter {
     }
     return restriction(execution, this.environment);
   }
+  // One installation path for backup runs, installations after a program quits, "Install now" and roll-backs. With
+  // manual updates a newer release only becomes "available" until the user asks for it.
+  async applyInstallation({ source, record, git, passphrase, onProgress, previousInstallation, requested = false }) {
+    const mode = this.config.programUpdates.mode,
+      latest = record.releaseInfo?.tag;
+    if (
+      !requested &&
+      mode === 'manual' &&
+      latest &&
+      previousInstallation?.status !== 'waiting' &&
+      ![previousInstallation?.tag, previousInstallation?.heldTag].includes(latest)
+    )
+      return {
+        installation: { ...previousInstallation, status: 'available', latestTag: latest, message: undefined },
+        warning: null
+      };
+    let installation,
+      warning = null;
+    try {
+      installation = await new ProgramInstaller().install({ source, record, git, passphrase, onProgress });
+      try {
+        installation.shortcuts = await new ProgramShortcuts({ writeWindowsShortcut: this.writeWindowsShortcut }).sync({
+          source,
+          installation,
+          previous: previousInstallation
+        });
+      } catch (error) {
+        installation.shortcuts = {
+          ...previousInstallation?.shortcuts,
+          ...error.shortcutState,
+          status: 'error',
+          message: error.message
+        };
+        warning = 'Programmverknüpfungen: ' + error.message;
+      }
+    } catch (error) {
+      const waiting = ['PROGRAM_RUNNING', 'EBUSY'].includes(error.code);
+      const message =
+        waiting && mode === 'next-check'
+          ? 'Das Programm läuft noch. Die Installation wird bei der nächsten Prüfung erneut versucht.'
+          : error.message;
+      installation = { ...previousInstallation, latestTag: latest, status: waiting ? 'waiting' : 'error', message };
+      warning = 'Programminstallation: ' + message;
+    }
+    return { installation, warning };
+  }
+  programSource(record) {
+    const source = this.config.sources.find(item => item.id === record.sourceId);
+    if (!source?.installation?.enabled) throw new Error('Die Programminstallation ist für diese Quelle ausgeschaltet.');
+    return source;
+  }
+  async saveInstallation(id, installation, warning) {
+    const current = this.backup.state.repositories[id];
+    this.backup.state.repositories[id] = {
+      ...current,
+      installation,
+      warning: programWarning(current.warning, warning)
+    };
+    await this.persistState(this.backup.state);
+    this.dataRevision++;
+    this.changed();
+  }
+  async installStored(id) {
+    const record = this.record(id),
+      source = this.programSource(record);
+    const { installation, warning } = await this.applyInstallation({
+      source,
+      record,
+      git: this.sourceGit(source),
+      passphrase: this.vault.passwordFor(record),
+      previousInstallation: record.installation,
+      requested: true
+    });
+    await this.saveInstallation(id, installation, warning);
+    if (
+      installation.status === 'installed' &&
+      this.notificationsAvailable() &&
+      notificationAllowed(this.config, 'program', {}, this.now())
+    )
+      this.notifyProgram({ results: [{ ...record, installation }] });
+    return installation;
+  }
+  installProgram(id) {
+    return this.withOperation('installing-program', () => this.installStored(id));
+  }
+  rollbackProgram(id) {
+    return this.withOperation('rolling-back-program', async () => {
+      const record = this.record(id),
+        source = this.programSource(record);
+      let installation;
+      try {
+        installation = await new ProgramInstaller().rollback({ source, record });
+      } catch (error) {
+        if (error.code === 'PROGRAM_RUNNING') throw new Error('Bitte das Programm zuerst beenden.');
+        throw error;
+      }
+      let warning = null;
+      try {
+        installation.shortcuts = await new ProgramShortcuts({ writeWindowsShortcut: this.writeWindowsShortcut }).sync({
+          source,
+          installation,
+          previous: record.installation
+        });
+      } catch (error) {
+        installation.shortcuts = { ...record.installation?.shortcuts, status: 'error', message: error.message };
+        warning = 'Programmverknüpfungen: ' + error.message;
+      }
+      await this.saveInstallation(id, { ...installation, latestTag: record.releaseInfo?.tag }, warning);
+      return installation;
+    });
+  }
+  // Updates that waited for a running program are installed once it has quit. Only waiting programs are checked, so an
+  // idle app starts no process for this.
+  async installAfterExit() {
+    if (this.config.programUpdates.mode === 'next-check' || this.busy() || this.saving) return;
+    for (const record of Object.values(this.backup.state.repositories)) {
+      if (record.installation?.status !== 'waiting' || record.rekeyPending) continue;
+      const source = this.config.sources.find(item => item.id === record.sourceId);
+      if (!source?.installation?.enabled) continue;
+      try {
+        const installer = new ProgramInstaller(),
+          place = await installer.locate(source, record, { create: false });
+        const current = await owned(place.target, place.identity).catch(() => null);
+        if (current && (await installer.isRunning(place.target, current))) continue;
+        await this.withOperation('installing-program', () => this.installStored(record.id));
+      } catch (error) {
+        await this.saveInstallation(
+          record.id,
+          { ...record.installation, status: 'error', message: error.message },
+          'Programminstallation: ' + error.message
+        );
+      }
+      return;
+    }
+  }
+  // A queue the user paused is either left alone, announced once after the configured time, or resumed.
+  async followUpPause() {
+    const q = this.backup.state.queue,
+      rule = this.config.execution.pauseReminder;
+    if (!q || q.pauseReason !== 'user' || rule.action === 'none' || this.busy() || this.saving) return;
+    const since = Date.parse(q.pausedAt ?? '');
+    if (!Number.isFinite(since) || Number(this.now()) - since < rule.hours * 3600000) return;
+    if (rule.action === 'resume') {
+      await this.resume();
+      return;
+    }
+    if (q.remindedAt || !this.notificationsAvailable() || !notificationAllowed(this.config, 'reminder', {}, this.now()))
+      return;
+    this.notifyReminder({ pausedAt: q.pausedAt, completed: q.completed.length, total: q.jobs.length });
+    q.remindedAt = new Date().toISOString();
+    await this.persistState(this.backup.state);
+  }
+  apiBudget() {
+    const labels = new Map([
+      ['default', 'GitHub'],
+      ...this.config.accounts.map(account => [account.id, account.label])
+    ]);
+    return [...this.clients.entries()]
+      .map(([key, client]) => {
+        const view = budgetView(client.rateState);
+        if (!view) return null;
+        const id = key.includes(':') ? key.split(':').pop() : key;
+        return { id: key, label: labels.get(id) ?? id, ...view };
+      })
+      .filter(Boolean);
+  }
   async policyTick() {
     try {
       const disks = this.diskSignature();
@@ -670,6 +830,8 @@ class Runtime extends EventEmitter {
           });
       }
       if (this.config.checkUpdates && this.updates.retryDue(this.now())) void this.checkUpdates();
+      await this.installAfterExit();
+      await this.followUpPause();
       await this.updates.notifyAvailable();
       const q = this.backup.state.queue;
       if (

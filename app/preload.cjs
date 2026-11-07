@@ -61,6 +61,8 @@ contextBridge.exposeInMainWorld('gitCloner', {
   openLink: name => ipcRenderer.invoke('link:open', name),
   openDestination: id => ipcRenderer.invoke('destination:open', id),
   openProgramDirectory: id => ipcRenderer.invoke('program:open-directory', id),
+  installProgram: id => ipcRenderer.invoke('program:install', id),
+  rollbackProgram: id => ipcRenderer.invoke('program:rollback', id),
   openReleaseDirectory: id => ipcRenderer.invoke('releases:open-directory', id),
   onState: callback => {
     const listener = (_event, patch) => {

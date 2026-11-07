@@ -5,13 +5,38 @@ const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { setTimeout: delay } = require('node:timers/promises');
 
+// A daily window such as 08:00–18:00 may have its own limit; windows across midnight (22:00–06:00) are supported.
+function windowActive(window, date) {
+  if (!window?.enabled) return false;
+  const minutes = value => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
+  const from = minutes(window.from),
+    to = minutes(window.to),
+    current = date.getHours() * 60 + date.getMinutes();
+  return from < to ? current >= from && current < to : current >= from || current < to;
+}
 class TransferBudget {
-  constructor({ bytesPerSecond = 0, sleep = delay, now = () => performance.now(), onBytes = () => {} } = {}) {
-    Object.assign(this, { bytesPerSecond, sleep, now, onBytes });
+  constructor({
+    bytesPerSecond = 0,
+    window = null,
+    clock = () => new Date(),
+    sleep = delay,
+    now = () => performance.now(),
+    onBytes = () => {}
+  } = {}) {
+    Object.assign(this, { base: bytesPerSecond, window, clock, sleep, now, onBytes });
     this.nextAt = 0;
     this.bytes = 0;
     this.tail = Promise.resolve();
     this.abort = new AbortController();
+  }
+  // The rate is read for every chunk, so a run that crosses the start or end of the window adapts immediately.
+  get bytesPerSecond() {
+    return windowActive(this.window, this.clock()) ? this.window.bytesPerSecond : this.base;
+  }
+  // Download timeouts assume the slowest configured rate, because a window may begin during a long download.
+  get slowestBytesPerSecond() {
+    const rates = [this.base, this.window?.enabled ? this.window.bytesPerSecond : 0].filter(Boolean);
+    return rates.length ? Math.min(...rates) : 0;
   }
   async consume(length) {
     const work = this.tail
@@ -58,10 +83,15 @@ function bypassProxy(host, value = '') {
 }
 async function createTransport({
   bandwidthKBps = 0,
+  bandwidthWindow = null,
   upstream = process.env.https_proxy || process.env.HTTPS_PROXY || process.env.all_proxy || process.env.ALL_PROXY || '',
   noProxy = process.env.no_proxy || process.env.NO_PROXY || '',
   onBytes,
-  budget = new TransferBudget({ bytesPerSecond: bandwidthKBps * 1024, onBytes })
+  budget = new TransferBudget({
+    bytesPerSecond: bandwidthKBps * 1024,
+    window: bandwidthWindow?.enabled ? { ...bandwidthWindow, bytesPerSecond: bandwidthWindow.kbps * 1024 } : null,
+    onBytes
+  })
 } = {}) {
   const sockets = new Set();
   const server = http.createServer((_request, response) => {
@@ -164,4 +194,4 @@ async function createTransport({
     }
   };
 }
-module.exports = { TransferBudget, createTransport, bypassProxy };
+module.exports = { windowActive, TransferBudget, createTransport, bypassProxy };

@@ -426,3 +426,55 @@ test('automatic installation keeps only the program file of the newest release u
   const kept = await f.sync();
   assert.equal((await stored(kept)).length, 8);
 });
+test('an update keeps exactly one previous version that can be restored while the broken release is held back', async t => {
+  const f = await repository(t),
+    destination = path.join(f.root, 'programs');
+  await fs.mkdir(destination);
+  f.source.installation = { enabled: true, destination, pattern: '*.AppImage' };
+  f.options.metadata.releases = true;
+  const add = (id, version) => {
+    const bytes = program('x64', id),
+      asset = {
+        id,
+        name: `program-linux-x64-${version}.AppImage`,
+        size: bytes.length,
+        digest: 'sha256:' + createHash('sha256').update(bytes).digest('hex')
+      };
+    f.assets.set(id, bytes);
+    f.releases = [{ tag_name: version, assets: [asset] }];
+  };
+  const installer = new ProgramInstaller({ platform: 'linux', arch: 'x64' }),
+    install = async () => installer.install({ source: f.source, record: await f.sync(), git: f.git });
+  add(1, 'v1');
+  const first = await install(),
+    rollback = path.join(path.dirname(first.destination), `.${path.basename(first.destination)}.gc-previous-version`),
+    kept = async () => (await readJson(path.join(rollback, '.git-cloner-program.json'))).tag;
+  assert.equal(first.previousTag, null);
+  add(2, 'v2');
+  assert.equal((await install()).previousTag, 'v1');
+  assert.equal(await kept(), 'v1');
+  add(3, 'v3');
+  const third = await install();
+  assert.equal(third.previousTag, 'v2');
+  assert.equal(await kept(), 'v2');
+  const restored = await installer.rollback({ source: f.source, record: await f.sync() });
+  assert.deepEqual(
+    [restored.status, restored.tag, restored.heldTag, restored.previousTag],
+    ['rolled-back', 'v2', 'v3', 'v3']
+  );
+  assert.deepEqual(await fs.readFile(restored.executable), program('x64', 2));
+  assert.equal(await kept(), 'v3');
+  assert.equal((await readJson(path.join(rollback, '.git-cloner-program.json'))).heldTag, undefined);
+  const held = await install();
+  assert.deepEqual([held.status, held.tag, held.heldTag], ['held', 'v2', 'v3']);
+  add(4, 'v4');
+  const fourth = await install();
+  assert.deepEqual(
+    [fourth.status, fourth.tag, fourth.previousTag, fourth.heldTag],
+    ['installed', 'v4', 'v2', undefined]
+  );
+  assert.equal(await kept(), 'v2');
+  assert.deepEqual((await fs.readdir(path.dirname(fourth.destination))).filter(name => name.startsWith('.')).sort(), [
+    `.${path.basename(fourth.destination)}.gc-previous-version`
+  ]);
+});

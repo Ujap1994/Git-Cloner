@@ -5,7 +5,7 @@ const { createHash } = require('node:crypto');
 const { lookup } = require('node:dns/promises');
 const { isIP } = require('node:net');
 const { retry } = require('./retry.cjs');
-const { responseRateLimit } = require('./rate-limit.cjs');
+const { responseRateLimit, observeRate, budgetError } = require('./rate-limit.cjs');
 const { readBody, cachedData, remember, CACHE_LIMIT } = require('./response-cache.cjs');
 const { providerSpec, parseHostedSource, cloneURL } = require('./provider-spec.cjs');
 function privateAddress(value) {
@@ -47,6 +47,10 @@ class HostedClient {
     this.cache = new Map();
     this.cacheStats = { bytes: 0 };
     this.pagination = new Map();
+    this.rateState = {};
+  }
+  budgetError(reserve) {
+    return budgetError(this.rateState, { reserve, label: this.label() });
   }
   headers(url, download = false) {
     const target = new URL(url),
@@ -101,6 +105,7 @@ class HostedClient {
       redirect: 'error',
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000)
     });
+    observeRate(this.rateState, response.headers);
     if (response.status === 304 && cached) return cachedData(this, endpoint, cached);
     if (response.status === 404 && allow404) return null;
     if (!response.ok) {
@@ -374,8 +379,8 @@ class HostedClient {
       86400000,
       Math.max(
         600000,
-        this.transfer?.budget.bytesPerSecond && expectedSize
-          ? (expectedSize / this.transfer.budget.bytesPerSecond) * 1500
+        this.transfer?.budget.slowestBytesPerSecond && expectedSize
+          ? (expectedSize / this.transfer.budget.slowestBytesPerSecond) * 1500
           : 0
       )
     );

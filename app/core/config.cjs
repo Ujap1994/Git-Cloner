@@ -13,7 +13,15 @@ const DEFAULT_CONFIG = {
   launchAtLogin: false,
   closeToTray: true,
   notifications: true,
-  notificationRules: { backup: 'all', updates: true, quietHours: { enabled: false, start: '22:00', end: '07:00' } },
+  notificationRules: {
+    backup: 'all',
+    updates: true,
+    programs: true,
+    quietHours: { enabled: false, start: '22:00', end: '07:00' }
+  },
+  // How a newer program from a backed-up release is installed: right after the running program quits, at the next
+  // check, or only on request from the overview.
+  programUpdates: { mode: 'after-exit' },
   checkUpdates: true,
   backup: {
     mode: 'snapshot',
@@ -29,7 +37,18 @@ const DEFAULT_CONFIG = {
   },
   accounts: [],
   appearance: { language: 'de', theme: 'system', fontScale: 1, highContrast: false },
-  execution: { concurrency: 2, smallRepoMB: 50, retries: 2, bandwidthKBps: 0, onlyOnAC: false, allowedNetworks: [] },
+  execution: {
+    concurrency: 2,
+    smallRepoMB: 50,
+    retries: 2,
+    bandwidthKBps: 0,
+    // An optional daily window with its own limit, for example slower downloads during working hours.
+    bandwidthWindow: { enabled: false, from: '08:00', to: '18:00', kbps: 1024 },
+    onlyOnAC: false,
+    allowedNetworks: [],
+    // What happens when a queue paused by the user stays paused: nothing, one reminder, or an automatic resume.
+    pauseReminder: { action: 'remind', hours: 24 }
+  },
   setupCompleted: false,
   onDriveConnect: false,
   autoRelocate: true,
@@ -137,6 +156,7 @@ function validateConfig(input) {
   if (
     !['all', 'errors', 'changes', 'none'].includes(rules.backup) ||
     typeof rules.updates !== 'boolean' ||
+    typeof rules.programs !== 'boolean' ||
     typeof rules.quietHours.enabled !== 'boolean' ||
     [rules.quietHours.start, rules.quietHours.end].some(
       t => typeof t !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(t)
@@ -148,8 +168,13 @@ function validateConfig(input) {
   result.notificationRules = {
     backup: rules.backup,
     updates: rules.updates,
+    programs: rules.programs,
     quietHours: { enabled: rules.quietHours.enabled, start: rules.quietHours.start, end: rules.quietHours.end }
   };
+  const programUpdates = { ...DEFAULT_CONFIG.programUpdates, ...input.programUpdates };
+  if (!['after-exit', 'next-check', 'manual'].includes(programUpdates.mode))
+    throw new Error('Ungültige Einstellung für Programm-Updates.');
+  result.programUpdates = { mode: programUpdates.mode };
   result.backup = validateBackup(input.backup);
   const accounts = input.accounts ?? [];
   if (!Array.isArray(accounts) || accounts.length > 20) throw new Error('Maximal 20 GitHub-Konten.');
@@ -219,13 +244,35 @@ function validateConfig(input) {
     execution.allowedNetworks.some(s => typeof s !== 'string' || !s.trim() || s.length > 32 || /[\r\n\0]/.test(s))
   )
     throw new Error('Ungültige Netzwerkregel.');
+  const time = value => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+  const window = { ...DEFAULT_CONFIG.execution.bandwidthWindow, ...execution.bandwidthWindow };
+  if (
+    typeof window.enabled !== 'boolean' ||
+    !time(window.from) ||
+    !time(window.to) ||
+    window.from === window.to ||
+    !Number.isInteger(window.kbps) ||
+    window.kbps < 1 ||
+    window.kbps > 1048576
+  )
+    throw new Error('Ungültiges Zeitfenster für die Bandbreite.');
+  const reminder = { ...DEFAULT_CONFIG.execution.pauseReminder, ...execution.pauseReminder };
+  if (
+    !['none', 'remind', 'resume'].includes(reminder.action) ||
+    !Number.isInteger(reminder.hours) ||
+    reminder.hours < 1 ||
+    reminder.hours > 168
+  )
+    throw new Error('Ungültige Einstellung für pausierte Sicherungen.');
   result.execution = {
     concurrency: execution.concurrency,
     smallRepoMB: execution.smallRepoMB,
     retries: execution.retries,
     bandwidthKBps: execution.bandwidthKBps,
+    bandwidthWindow: { enabled: window.enabled, from: window.from, to: window.to, kbps: window.kbps },
     onlyOnAC: execution.onlyOnAC,
-    allowedNetworks: [...new Set(execution.allowedNetworks.map(s => s.trim()))]
+    allowedNetworks: [...new Set(execution.allowedNetworks.map(s => s.trim()))],
+    pauseReminder: { action: reminder.action, hours: reminder.hours }
   };
   if (input.setupCompleted !== undefined && typeof input.setupCompleted !== 'boolean')
     throw new Error('Ungültiger Einrichtungsstatus.');

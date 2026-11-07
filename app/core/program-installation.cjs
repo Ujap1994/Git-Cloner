@@ -47,6 +47,12 @@ async function owned(directory, identity) {
   }
   return marker;
 }
+// A version moved out of the program folder no longer holds back any release.
+function released(marker) {
+  const copy = { ...marker };
+  delete copy.heldTag;
+  return copy;
+}
 async function exists(file) {
   try {
     await fs.lstat(file);
@@ -60,31 +66,111 @@ class ProgramInstaller {
   constructor({ platform = process.platform, arch = process.arch, run = execute } = {}) {
     Object.assign(this, { platform, arch, run });
   }
-  async ensureNotRunning(target, current) {
-    if (this.platform !== 'darwin') return;
+  // macOS lists the running executables; Windows refuses write access to a running program file. Linux keeps a running
+  // AppImage usable when it is replaced, so it never has to wait.
+  async isRunning(target, current) {
+    const programs = current.programs || [{ executable: current.executable }];
+    if (this.platform === 'win32') {
+      for (const item of programs) {
+        const handle = await fs.open(path.join(target, item.executable), 'r+').catch(error => {
+          if (['EBUSY', 'EPERM', 'EACCES'].includes(error.code)) return null;
+          if (error.code === 'ENOENT') return undefined;
+          throw error;
+        });
+        if (handle === null) return true;
+        await handle?.close();
+      }
+      return false;
+    }
+    if (this.platform !== 'darwin') return false;
     const { stdout } = await this.run('/bin/ps', ['-U', String(process.getuid()), '-o', 'pid=,command='], {
       timeout: 10000,
       maxBuffer: 4 * 1048576
     });
-    const prefixes = (current.programs || [{ executable: current.executable }]).map(
-      item => path.join(target, item.executable, 'Contents', 'MacOS') + path.sep
-    );
-    if (
-      stdout.split('\n').some(line =>
-        prefixes.some(prefix =>
-          line
-            .trim()
-            .replace(/^\d+\s+/, '')
-            .startsWith(prefix)
-        )
-      )
-    ) {
-      const error = new Error(
-        'Das Programm läuft noch. Die Installation wird bei einer späteren Prüfung erneut versucht.'
-      );
-      error.code = 'PROGRAM_RUNNING';
-      throw error;
+    const prefixes = programs.map(item => path.join(target, item.executable, 'Contents', 'MacOS') + path.sep);
+    return stdout.split('\n').some(line => {
+      const command = line.trim().replace(/^\d+\s+/, '');
+      return prefixes.some(prefix => command.startsWith(prefix));
+    });
+  }
+  async ensureNotRunning(target, current) {
+    if (!(await this.isRunning(target, current))) return;
+    const error = new Error('Das Programm läuft noch. Es wird installiert, sobald es beendet ist.');
+    error.code = 'PROGRAM_RUNNING';
+    throw error;
+  }
+  // Paths of one installed repository: the program folder, a crash-safe swap folder and the kept previous version.
+  async locate(source, record, { create = true } = {}) {
+    const root = await fs.realpath(source.installation.destination),
+      parts = repositoryParts(source, record.fullName),
+      name = parts.pop();
+    const namespace =
+      source.provider && source.provider !== 'github'
+        ? [source.provider, createHash('sha256').update(source.server).digest('hex').slice(0, 12)]
+        : [];
+    const parent = await safeDirectory(root, [...namespace, ...parts], create);
+    return {
+      root,
+      name,
+      parent,
+      identity: `${providerKey(source)}:${record.fullName.toLowerCase()}`,
+      target: path.join(parent, name),
+      previous: path.join(parent, `.${name}.gc-install-previous`),
+      rollback: path.join(parent, `.${name}.gc-previous-version`)
+    };
+  }
+  async previousTag(rollback, identity) {
+    if (!(await exists(rollback))) return null;
+    return (await owned(rollback, identity)).tag ?? null;
+  }
+  // Swaps the installed program with the kept previous version. The replaced version stays as the new previous version
+  // and its tag is held, so automatic updates skip exactly that release until a newer one appears.
+  async rollback({ source, record }) {
+    if (!source.installation?.enabled) throw new Error('Die Programminstallation ist für diese Quelle ausgeschaltet.');
+    const { parent, identity, target, previous, rollback } = await this.locate(source, record, { create: false });
+    const release = await acquireLease(parent);
+    try {
+      if (!(await exists(rollback))) throw new Error('Es ist keine vorherige Programmversion vorhanden.');
+      const current = await owned(target, identity),
+        kept = await owned(rollback, identity);
+      if (await exists(previous)) throw new Error('Eine unterbrochene Installation muss zuerst abgeschlossen werden.');
+      await this.ensureNotRunning(target, current);
+      await fs.rename(target, previous);
+      try {
+        await fs.rename(rollback, target);
+      } catch (error) {
+        await fs.rename(previous, target);
+        throw error;
+      }
+      await fs.rename(previous, rollback);
+      const replaced = released(current);
+      await writeJson(path.join(rollback, MARKER), replaced);
+      const restored = { ...kept, heldTag: current.tag };
+      await writeJson(path.join(target, MARKER), restored);
+      return this.describe('rolled-back', restored, target, current.tag);
+    } finally {
+      await release();
     }
+  }
+  describe(status, marker, target, previousTag) {
+    const programs = marker.programs || [
+      {
+        key: marker.executable,
+        name: path.basename(marker.executable).replace(/\.(app|exe|AppImage)$/i, ''),
+        executable: marker.executable,
+        executableHash: marker.executableHash
+      }
+    ];
+    return {
+      status,
+      tag: marker.tag,
+      destination: target,
+      executable: path.join(target, programs[0].executable),
+      programs: programs.map(item => ({ ...item, executable: path.join(target, item.executable) })),
+      previousTag: previousTag ?? null,
+      ...(marker.heldTag ? { heldTag: marker.heldTag } : {}),
+      ...(marker.installedAt ? { installedAt: marker.installedAt } : {})
+    };
   }
   async prepare(asset, output) {
     return (await preparePrograms(asset, output, [], this))[0].executable;
@@ -158,13 +244,7 @@ class ProgramInstaller {
       browser = opened.browser;
       const { chosen, asset, entry, stat } = opened,
         selection = source.installation.programs || [];
-      const root = await fs.realpath(source.installation.destination),
-        parts = repositoryParts(source, record.fullName),
-        name = parts.pop();
-      const namespace =
-        source.provider && source.provider !== 'github'
-          ? [source.provider, createHash('sha256').update(source.server).digest('hex').slice(0, 12)]
-          : [];
+      const { root, name, parent, identity, target, previous, rollback } = await this.locate(source, record);
       for (const backup of [
         source.destination,
         ...(source.additionalDestinations ?? []).map(target => target.destination)
@@ -173,10 +253,6 @@ class ProgramInstaller {
         if (root === canonical || root.startsWith(canonical + path.sep) || canonical.startsWith(root + path.sep))
           throw new Error('Programmziel und Sicherungsordner müssen auch nach Auflösen von Links getrennt liegen.');
       }
-      const parent = await safeDirectory(root, [...namespace, ...parts], true),
-        identity = `${providerKey(source)}:${record.fullName.toLowerCase()}`,
-        target = path.join(parent, name),
-        previous = path.join(parent, `.${name}.gc-install-previous`);
       stage = path.join(parent, `.${name}.gc-install-stage`);
       stageMarker = stage + '.json';
       release = await acquireLease(parent);
@@ -203,6 +279,9 @@ class ProgramInstaller {
         await fs.rm(stageMarker);
       } else if (await exists(stage)) throw new Error('Ein fremder temporärer Programmordner bleibt erhalten.');
       const current = (await exists(target)) ? await owned(target, identity) : null;
+      const kept = await this.previousTag(rollback, identity);
+      if (current?.heldTag && current.heldTag === record.releaseInfo.tag)
+        return this.describe('held', current, target, kept);
       if (
         current?.sha256 === entry.sha256 &&
         current.tag === record.releaseInfo.tag &&
@@ -228,14 +307,7 @@ class ProgramInstaller {
             valid = false;
           }
         }
-        if (valid)
-          return {
-            status: 'current',
-            tag: current.tag,
-            destination: target,
-            executable: path.join(target, programs[0].executable),
-            programs: programs.map(item => ({ ...item, executable: path.join(target, item.executable) }))
-          };
+        if (valid) return this.describe('current', current, target, kept);
       }
       if (current) await this.ensureNotRunning(target, current);
       await checkSpace(root, Math.max(stat.size * 4, 64 * 1048576), 64);
@@ -274,15 +346,17 @@ class ProgramInstaller {
         if (current && !(await exists(target))) await fs.rename(previous, target);
         throw error;
       }
-      if (current) await fs.rm(previous, { recursive: true });
-      return {
-        status: 'installed',
-        tag: marker.tag,
-        destination: target,
-        executable: path.join(target, executable),
-        programs: programs.map(item => ({ ...item, executable: path.join(target, item.executable) })),
-        installedAt: marker.installedAt
-      };
+      // The replaced version stays as the only previous version, so a broken release can be rolled back.
+      if (current) {
+        if (await exists(rollback)) {
+          await owned(rollback, identity);
+          await fs.rm(rollback, { recursive: true });
+        }
+        const replaced = released(current);
+        await writeJson(path.join(previous, MARKER), replaced);
+        await fs.rename(previous, rollback);
+      }
+      return this.describe('installed', marker, target, current?.tag ?? kept);
     } finally {
       if (stage && cleanupStage) await fs.rm(stage, { recursive: true, force: true }).catch(() => {});
       if (stageMarker && cleanupMarker) await fs.rm(stageMarker, { force: true }).catch(() => {});

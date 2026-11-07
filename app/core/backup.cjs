@@ -513,7 +513,10 @@ class BackupService extends EventEmitter {
   async pause() {
     if (!this.busy && !this.state.queue) throw new Error('Kein Durchlauf zum Pausieren vorhanden.');
     this.pauseReason = 'user';
-    if (this.state.queue) this.state.queue.pauseReason = 'user';
+    if (this.state.queue) {
+      this.state.queue.pauseReason = 'user';
+      this.state.queue.pausedAt ??= new Date().toISOString();
+    }
     this.updateProgress();
     if (!this.busy) {
       await this.saveState(this.state);
@@ -598,6 +601,8 @@ class BackupService extends EventEmitter {
       q.config.execution = structuredClone(config.execution || defaults().execution);
       if (config.backup?.encryptionKeyId) q.config.backup.encryptionKeyId = config.backup.encryptionKeyId;
       q.pauseReason = null;
+      delete q.pausedAt;
+      delete q.remindedAt;
       delete q.message;
       delete q.rateLimitUntil;
       if (q.unresolved) {
@@ -654,6 +659,7 @@ class BackupService extends EventEmitter {
       if (pending.length)
         this.transport = await this.transportFactory({
           bandwidthKBps: q.config.execution.bandwidthKBps,
+          bandwidthWindow: q.config.execution.bandwidthWindow,
           onBytes: () => {
             if (Date.now() - lastEmission > 500) {
               lastEmission = Date.now();
@@ -684,6 +690,9 @@ class BackupService extends EventEmitter {
             throw new Error(
               'Der Passwortwechsel ist noch nicht abgeschlossen. Das Sicherungslaufwerk verbinden und den Assistenten erneut öffnen.'
             );
+          // A repository needs about three API requests; with fewer left the queue pauses before GitHub refuses them.
+          const exhausted = github.budgetError?.(4);
+          if (exhausted) throw exhausted;
           result = await retry(
             async () => {
               const releaseProgram = programRelease(job.source),
@@ -870,6 +879,8 @@ class BackupService extends EventEmitter {
       }
       if (pending.length) {
         q.pauseReason = this.pauseReason || (rateBlocked.size ? 'rate' : failedForSpace.size ? 'space' : 'user');
+        // The pause reminder counts from the moment a pause chosen by the user took effect.
+        if (q.pauseReason === 'user') q.pausedAt ??= new Date().toISOString();
         if (q.pauseReason === 'rate')
           q.message = 'Warte auf die Freigabe des API-Limits. Erledigte Sicherungen bleiben erhalten.';
         else delete q.rateLimitUntil;

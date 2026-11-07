@@ -1,6 +1,6 @@
 const { parseSource } = require('./config.cjs');
 const { retry } = require('./retry.cjs');
-const { responseRateLimit } = require('./rate-limit.cjs');
+const { responseRateLimit, observeRate, budgetError } = require('./rate-limit.cjs');
 const { readBody, cachedData, remember, CACHE_LIMIT } = require('./response-cache.cjs');
 
 class GitHubClient {
@@ -9,6 +9,11 @@ class GitHubClient {
     this.cache = new Map();
     this.cacheStats = { bytes: 0 };
     this.pagination = new Map();
+    // Shared with transfer-scoped copies, which reach it through the prototype.
+    this.rateState = {};
+  }
+  budgetError(reserve) {
+    return budgetError(this.rateState, { reserve, label: 'GitHub' });
   }
   withTransfer(transfer, retries = 2) {
     const client = Object.create(this);
@@ -40,6 +45,7 @@ class GitHubClient {
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
       redirect: 'error'
     });
+    observeRate(this.rateState, response.headers);
     if (response.status === 304 && cached) return cachedData(this, endpoint, cached);
     if (allow404 && response.status === 404) return null;
     if (!response.ok) {
@@ -153,6 +159,7 @@ class GitHubClient {
       redirect: 'manual',
       signal: AbortSignal.timeout(timeout)
     });
+    observeRate(this.rateState, response.headers);
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const url = new URL(response.headers.get('location'));
       if (
@@ -190,8 +197,8 @@ class GitHubClient {
       86400000,
       Math.max(
         600000,
-        this.transfer?.budget.bytesPerSecond && expectedSize
-          ? (expectedSize / this.transfer.budget.bytesPerSecond) * 1500
+        this.transfer?.budget.slowestBytesPerSecond && expectedSize
+          ? (expectedSize / this.transfer.budget.slowestBytesPerSecond) * 1500
           : 0
       )
     );

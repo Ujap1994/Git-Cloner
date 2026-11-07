@@ -22,6 +22,7 @@ const { exportSettings, importSettings, redactLogs } = require('./core/transfer.
 const { readJson, writeJson } = require('./core/store.cjs');
 const { RELEASES_URL } = require('./core/updates.cjs');
 const { registrationTimes } = require('./core/schedule.cjs');
+const { backupNotification, programNotification, reminderNotification } = require('./core/notification-text.cjs');
 if (process.platform === 'win32') app.setAppUserModelId('io.github.Ujap1994.GitCloner');
 
 const testMode = !app.isPackaged && process.env.GIT_CLONER_E2E === '1';
@@ -198,19 +199,20 @@ async function applyOS(old, next) {
 async function runBackup() {
   return runtime.run();
 }
-function notifyBackup(result) {
-  const failures = result.errorCount ?? 0;
-  const notice = new Notification({
-    title: failures
-      ? text('Git Cloner · Sicherung prüfen', 'Git Cloner · Review backup')
-      : text('Git Cloner · Prüfung abgeschlossen', 'Git Cloner · Check complete'),
-    body: text(
-      `${result.resultCount} Ergebnisse, ${failures} Fehler.`,
-      `${result.resultCount} results, ${failures} errors.`
-    )
-  });
+function showNotice(content) {
+  if (!content) return;
+  const notice = new Notification(content);
   notice.on('click', showWindow);
   presentNotification(notice);
+}
+function notifyBackup(result) {
+  showNotice(backupNotification(result, runtime.config.appearance.language));
+}
+function notifyProgram({ results }) {
+  showNotice(programNotification(results, runtime.config.appearance.language));
+}
+function notifyReminder(info) {
+  showNotice(reminderNotification(info, runtime.config.appearance.language));
 }
 async function start() {
   const release = testMode && process.env.GIT_CLONER_TEST_RELEASE;
@@ -229,6 +231,8 @@ async function start() {
     applyOS,
     notifyUpdate,
     notifyBackup,
+    notifyProgram,
+    notifyReminder,
     notificationsAvailable: () => !testMode && Notification.isSupported(),
     environmentState: async () => ({ onBattery: powerMonitor.isOnBatteryPower() }),
     ...(testMounts ? { mountedRoots: async () => testMounts } : {}),
@@ -499,6 +503,8 @@ async function start() {
     const error = await shell.openPath(destination);
     if (error) throw new Error(error);
   });
+  handle('program:install', id => runtime.installProgram(id));
+  handle('program:rollback', id => runtime.rollbackProgram(id));
   handle('program:open-directory', async id => {
     const record = runtime.record(id),
       destination = record.installation?.destination;

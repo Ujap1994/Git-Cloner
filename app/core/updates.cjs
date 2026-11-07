@@ -1,8 +1,34 @@
 const semver = require('semver');
 const RELEASES_URL = 'https://github.com/Ujap1994/Git-Cloner/releases';
 
-async function checkForUpdates(currentVersion, github, { ignoredVersion = null } = {}) {
-  const release = await github.request('/repos/Ujap1994/Git-Cloner/releases/latest', { allow404: true });
+// github.com answers /releases/latest with a redirect to the newest stable tag. Reading only that redirect costs no
+// API request, so the version check never competes with backups for the 60 requests per hour without a token.
+async function latestFromWeb(fetchImpl) {
+  const response = await fetchImpl(`${RELEASES_URL}/latest`, {
+    method: 'HEAD',
+    redirect: 'manual',
+    headers: { 'User-Agent': 'Git-Cloner' },
+    signal: AbortSignal.timeout(30000)
+  });
+  const location = response.headers?.get('location') ?? '';
+  if (![301, 302, 303, 307, 308].includes(response.status)) throw new Error('Unerwartete Antwort von GitHub.');
+  if (location.replace(/\/$/, '') === RELEASES_URL) return { tag_name: null };
+  const match = /^https:\/\/github\.com\/Ujap1994\/Git-Cloner\/releases\/tag\/([^/?#]+)$/.exec(location);
+  if (!match) throw new Error('Unerwartete Weiterleitung von GitHub.');
+  return { tag_name: decodeURIComponent(match[1]) };
+}
+async function latestRelease(github, web) {
+  if (web)
+    try {
+      const release = await latestFromWeb(web);
+      return release.tag_name ? release : null;
+    } catch (_error) {
+      /* The API answers below if github.com changes its redirect. */
+    }
+  return github.request('/repos/Ujap1994/Git-Cloner/releases/latest', { allow404: true });
+}
+async function checkForUpdates(currentVersion, github, { ignoredVersion = null, web = null } = {}) {
+  const release = await latestRelease(github, web);
   const checkedAt = new Date().toISOString();
   if (!release) return { currentVersion, latestVersion: null, status: 'unpublished', url: RELEASES_URL, checkedAt };
   const latestVersion = semver.valid(release.tag_name);
@@ -23,12 +49,13 @@ class UpdateMonitor {
   constructor({
     currentVersion,
     github,
+    web = null,
     state = {},
     save = async () => {},
     notify = () => {},
     canNotify = () => true
   }) {
-    Object.assign(this, { currentVersion, github, state, save, notify, canNotify });
+    Object.assign(this, { currentVersion, github, web, state, save, notify, canNotify });
     this.result = {
       currentVersion,
       status: 'idle',
@@ -42,7 +69,7 @@ class UpdateMonitor {
     this.result = { ...this.result, status: 'checking' };
     this.checking = (async () => {
       try {
-        this.result = await checkForUpdates(this.currentVersion, this.github, this.state);
+        this.result = await checkForUpdates(this.currentVersion, this.github, { ...this.state, web: this.web });
         await this.notifyAvailable();
       } catch (error) {
         // Without a token, backups can use up GitHub's 60 requests per hour; the check then waits for the release instead of failing for six hours.
@@ -120,4 +147,4 @@ class UpdateMonitor {
   }
 }
 
-module.exports = { checkForUpdates, UpdateMonitor, RELEASES_URL };
+module.exports = { latestFromWeb, checkForUpdates, UpdateMonitor, RELEASES_URL };
