@@ -1,5 +1,4 @@
-const fs = require('node:fs/promises');
-const { createWriteStream } = require('node:fs');
+const { promises: fs, createWriteStream } = require('./physical-fs.cjs');
 const path = require('node:path');
 const { crc32 } = require('node:zlib');
 const { Transform } = require('node:stream');

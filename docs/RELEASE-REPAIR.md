@@ -33,10 +33,17 @@ Every unchanged backup now verifies the release metadata and checks the presence
 
 This lightweight check does not hash large DMGs on every scheduled run. Full integrity checks keep their configured cadence, and installation still verifies the selected package's SHA-256. These checks do not determine who removed a missing file.
 
+## Electron applications inside releases
+
+The live repair exposed a second installation failure: `Invalid package .../Contents/Resources/app.asar`. Electron's normal filesystem APIs interpret ASAR archives as virtual directories. Copying a downloaded Electron application with these APIs could fail at the destination archive; ZIP extraction was affected too. Node-only installer tests did not reproduce this behavior.
+
+Installer extraction, validation, copying and cleanup now use Electron's `original-fs` APIs, treating downloaded ASAR archives as physical files. The application's own archive loader stays enabled, and program signature checks remain enforced. This follows the [Electron ASAR documentation](https://www.electronjs.org/docs/latest/tutorial/asar-archives#treating-an-asar-archive-as-a-normal-file).
+
 ## Verification
 
 - Integration tests reproduce missing/truncated files with an unchanged Git commit and release, confirm repair and local reuse, preserve the old backup on download failure, and install a repaired program asset.
 - Variant tests cover exact Universal/ARM64/x64 selection, aliases, absent variants, migration, OS/format interactions and GitHub/GitLab/Forgejo metadata planning.
 - Electron tests save global and source-specific choices, reload the UI, and check German and English with dark mode and large text.
+- Native Electron tests install signed macOS bundles containing real ASAR archives from DMG and ZIP files, compare the copied archive bytes and unpacked companion files, and verify the resulting signatures.
 
 Run `npm run check` and `npx playwright test tests/e2e/dmg-variants.spec.cjs`. Existing native macOS tests exercise signed apps inside ZIP and DMG packages.
