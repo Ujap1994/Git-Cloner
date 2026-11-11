@@ -2,6 +2,13 @@
 // English; error-help texts and the interface itself are bilingual at their source.
 (function () {
   const exact = {
+    'Ungültige DMG-Variante.': 'Invalid DMG variant.',
+    'Die Archivdatei fehlt oder ist unvollständig.': 'The archive file is missing or incomplete.',
+    'Das Dateiverzeichnis der Sicherung ist beschädigt.': 'The backup file manifest is damaged.',
+    'Die Release-Dateizuordnung ist unvollständig.': 'The release file mapping is incomplete.',
+    'Unsicherer Release-Dateipfad.': 'Unsafe release file path.',
+    'Eine gesicherte Release-Datei fehlt oder ist unvollständig.': 'A backed-up release file is missing or incomplete.',
+
     'Das Archivpasswort muss mindestens 12 Zeichen enthalten.':
       'The archive password must contain at least 12 characters.',
     'Der Entschlüsselungsordner existiert bereits.': 'The decryption folder already exists.',

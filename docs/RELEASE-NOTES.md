@@ -1,11 +1,39 @@
-Git Cloner **3.6.1** makes automatic program updates reliable again, needs fewer GitHub API requests and keeps scheduled backups running after an interrupted run.
+# Git Cloner 3.7.0
 
-- **Signed apps from DMGs with Finder layout data install again:** Many DMG tools store Finder layout data (`com.apple.FinderInfo`) on every file of the image. It is not part of the code signature and Gatekeeper accepts such apps, but the strict `codesign` check rejected them, so installations and updates of such notarized apps failed with "resource fork, Finder information, or similar detritus not allowed". Apps are now checked inside the read-only image with every other strict rule; the installed copy is cleaned of this data and must pass the full `codesign --strict` check.
-- **The same file under two names counts as one program:** Releases that publish one package twice, for example versioned and under a stable "latest" name, no longer stop the installation with "Several programs match" when both files have the same SHA-256. Only one copy is downloaded and kept.
-- **Finder no longer blocks updates:** A `.DS_Store` that Finder creates in a program folder no longer prevents later updates, and a Finder label added to an installed app no longer triggers a reinstall at every check.
-- **Fewer API requests:** Release asset lists are read from the release response itself; only lists with 100 or more files use the separate assets endpoint. A repository with release backup now needs three instead of four GitHub API requests per run, for example 30 instead of 40 for ten repositories.
-- **Version check waits for the API limit:** If the API limit is used up, the sidebar shows "Version check waits for API limit" and the check runs again automatically after the reset instead of reporting a failure for six hours.
-- **Interrupted runs continue automatically:** A run interrupted by a crash, a forced quit or a shutdown, or stopped by an unexpected error, continues once at each later scheduled time. Previously it blocked all scheduled backups until it was resumed manually. A pause chosen by the user still waits for **Resume**. While a queue is paused, due schedules no longer scan backup drives every 15 seconds.
-- **Leaner API cache:** Cached API responses are kept as compact text and parsed once per response instead of being stored as objects and cloned for every request. The cache limit now holds the release lists of typical setups, so unchanged lists are answered with HTTP 304. Replaying ten real repositories with long release histories over five runs: process memory 242 MB instead of 342 MB, peak heap 122 MB instead of 172 MB, 20 of 20 unchanged lists served from the cache instead of none, and about one third less CPU time.
+![Git Cloner](https://raw.githubusercontent.com/Ujap1994/Git-Cloner/v3.7.0/build/icon.svg)
 
-Without a token, GitHub typically allows 60 API requests per hour; a read token under **Settings → Accounts** raises the limit to 5,000. MIT open source without a warranty of error-free operation. Git Cloner packages have no verified publisher signature; macOS builds use ad-hoc signing without notarization.
+Git Cloner 3.7.0 combines managed program updates, rollback, API-aware scheduling and bandwidth windows with repairs for missing release downloads and Electron applications inside DMG/ZIP packages.
+
+## Program installation and recovery
+
+- Choose **after the program quits**, **at the next check**, or **notify only / Install now** under Settings → Backup → Program updates. A running program is left intact; the after-exit watcher checks only installations that are waiting.
+- Keep the most recently replaced managed program version. **Roll back to…** swaps it back and holds the reverted release until a newer release appears or installation is explicitly requested. This is program rollback, not historical backup retention.
+- Select **Automatic**, **Universal**, **ARM64** or **x64** for DMGs globally or per source. Explicit DMG choices override the general CPU filter for DMGs; OS and file-type filters still apply. Other formats retain their general filters.
+- Repair missing or truncated release files even if the Git commit and release did not change. Intact downloads are verified and reused; failed repair downloads preserve the previous backup.
+- Install Electron programs correctly by treating downloaded `app.asar` files as physical archives during extraction, validation, copying and cleanup. Native Electron tests reproduce the former `Invalid package` error and verify byte-for-byte copies and intact signatures from DMG and ZIP.
+
+![Program update policy](https://raw.githubusercontent.com/Ujap1994/Git-Cloner/v3.7.0/docs/screenshots/program-updates.png)
+![DMG variant selection](https://raw.githubusercontent.com/Ujap1994/Git-Cloner/v3.7.0/docs/screenshots/dmg-variants.png)
+
+## Scheduling, quotas and notifications
+
+- Configure a reminder or automatic resume for a user-paused queue after the selected number of hours.
+- View API quota and reset time per account. A repository waits before starting when its available request budget is too small.
+- Check Git Cloner's official release version without consuming a GitHub API request.
+- Apply a separate download limit during a daily time window, including overnight windows. Active transfers adapt to the current limit.
+- Notifications name the program and version for completed or pending installations and respect existing quiet-hour and notification preferences.
+
+## Documentation, tests and distribution
+
+- The codebase is formatted with Prettier, with the formatting-only commit excluded from Git blame.
+- English core-message rendering and the English E2E suite are completed, with dedicated German-language checks.
+- Screenshots are regenerated only through `npm run screenshots`; ordinary test runs do not modify tracked images.
+- The complete English guide covers setup, every feature, permissions and recovery. README, changelog and supporting documentation are updated for 3.7.0.
+- API/cache regression checks protect request counts, reuse of unchanged responses and bounded cache storage.
+- The full release matrix includes Windows x64/ARM64 installers and portable apps, macOS x64/ARM64/Universal DMG and ZIP, and Linux x64/ARM64 AppImage, DEB, RPM, Pacman, TAR.GZ, Snap and Flatpak. Git LFS in Flatpak now matches the target CPU.
+
+Existing source settings are preserved. Existing DMG settings use Automatic until changed. If a source has its own backup options, change the DMG preference there. Git Cloner still keeps one successful repository backup per destination. Its own updates remain notification-only. macOS release packages use ad-hoc signing without notarization; verify downloads using `SHA256SUMS.txt`.
+
+Read the [complete illustrated guide](https://github.com/Ujap1994/Git-Cloner/blob/v3.7.0/docs/GUIDE.md) and [verification details](https://github.com/Ujap1994/Git-Cloner/blob/v3.7.0/docs/VALIDIERUNG.md). MIT licensed, without warranty.
+
+New profiles follow the system language (German or English fallback) and close the application with the idle window by default. Existing language and tray preferences are preserved.

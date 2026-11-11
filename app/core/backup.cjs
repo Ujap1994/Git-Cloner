@@ -24,6 +24,7 @@ const { hashFile, writeManifest, verifyDirectory, verificationDue, controlDirect
 const { encryptArchive, decryptArchive } = require('./archives.cjs');
 const { metadataPlan } = require('./metadata.cjs');
 const { programRelease } = require('./program-select.cjs');
+const { verifyReleasePresence } = require('./release-presence.cjs');
 const { ReleaseReuse } = require('./release-reuse.cjs');
 const { ReleaseDownloads } = require('./release-downloads.cjs');
 const { releaseDirectoryName } = require('./release-layout.cjs');
@@ -137,6 +138,9 @@ function backupFingerprint(opts) {
                     releaseArch: opts.releaseArchitecture === 'system' ? process.arch : null
                   }
                 : {}),
+              ...(opts.releaseDmgVariant && opts.releaseDmgVariant !== 'compatible'
+                ? { releaseDmgVariant: opts.releaseDmgVariant }
+                : {}),
               releasePlatform: opts.releaseScope === 'system' ? process.platform : null
             }
           : {}),
@@ -183,6 +187,7 @@ async function syncRepository({
     releaseScope: opts.releaseScope,
     releaseArchitecture: opts.releaseArchitecture,
     releaseFileTypes: opts.releaseFileTypes,
+    releaseDmgVariant: opts.releaseDmgVariant,
     releaseProgram: programRelease(source)
   });
   if (current?.wikiRevision && plan.warning)
@@ -196,6 +201,7 @@ async function syncRepository({
     current.metadataDigest === plan.digest
   ) {
     try {
+      await verifyReleasePresence(target, current);
       if (verificationDue(opts.integrity, current.verifiedAt)) {
         onProgress({ fullName, status: 'verifying' });
         if (current.encrypted) {
@@ -696,7 +702,7 @@ class BackupService extends EventEmitter {
           result = await retry(
             async () => {
               const releaseProgram = programRelease(job.source),
-                key = `${providerKey(job.source)}:${job.source.accountId}:${job.repository.full_name}:${JSON.stringify(options.metadata)}:${options.releaseScope}:${options.releaseArchitecture}:${JSON.stringify(options.releaseFileTypes)}:${JSON.stringify(releaseProgram)}`;
+                key = `${providerKey(job.source)}:${job.source.accountId}:${job.repository.full_name}:${JSON.stringify(options.metadata)}:${options.releaseScope}:${options.releaseArchitecture}:${JSON.stringify(options.releaseFileTypes)}:${options.releaseDmgVariant}:${JSON.stringify(releaseProgram)}`;
               if (!plans.has(key))
                 plans.set(
                   key,
@@ -704,6 +710,7 @@ class BackupService extends EventEmitter {
                     releaseScope: options.releaseScope,
                     releaseArchitecture: options.releaseArchitecture,
                     releaseFileTypes: options.releaseFileTypes,
+                    releaseDmgVariant: options.releaseDmgVariant,
                     releaseProgram
                   }).catch(error => {
                     plans.delete(key);

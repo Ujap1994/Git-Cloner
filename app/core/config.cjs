@@ -11,7 +11,7 @@ const DEFAULT_CONFIG = {
   sourceGroups: [],
   schedule: { enabled: true, checksPerDay: 1, times: ['02:00'] },
   launchAtLogin: false,
-  closeToTray: true,
+  closeToTray: false,
   notifications: true,
   notificationRules: {
     backup: 'all',
@@ -36,7 +36,7 @@ const DEFAULT_CONFIG = {
     reserveMB: 512
   },
   accounts: [],
-  appearance: { language: 'de', theme: 'system', fontScale: 1, highContrast: false },
+  appearance: { language: defaultLanguage(), theme: 'system', fontScale: 1, highContrast: false },
   execution: {
     concurrency: 2,
     smallRepoMB: 50,
@@ -56,8 +56,14 @@ const DEFAULT_CONFIG = {
   oauthClientId: ''
 };
 
-function defaults() {
-  return structuredClone(DEFAULT_CONFIG);
+function defaultLanguage(locale = Intl.DateTimeFormat().resolvedOptions().locale) {
+  return /^de(?:[-_]|$)/i.test(locale) ? 'de' : 'en';
+}
+
+function defaults(locale) {
+  const config = structuredClone(DEFAULT_CONFIG);
+  config.appearance.language = defaultLanguage(locale);
+  return config;
 }
 
 function parseSource(value, kind) {
@@ -440,6 +446,7 @@ function validateFilters(input = {}) {
 }
 
 module.exports = {
+  defaultLanguage,
   defaults,
   validateConfig,
   parseSource,

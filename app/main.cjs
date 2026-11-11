@@ -16,6 +16,7 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
 const { Runtime } = require('./runtime.cjs');
+const { defaultLanguage } = require('./core/config.cjs');
 const { setAutostart } = require('./core/autostart.cjs');
 const { setNativeSchedule } = require('./core/native-schedule.cjs');
 const { exportSettings, importSettings, redactLogs } = require('./core/transfer.cjs');
@@ -29,14 +30,14 @@ const testMode = !app.isPackaged && process.env.GIT_CLONER_E2E === '1';
 if (testMode && process.env.GIT_CLONER_TEST_DATA) app.setPath('userData', process.env.GIT_CLONER_TEST_DATA);
 const worker = process.argv.includes('--scheduled-worker');
 if (worker) app.disableHardwareAcceleration();
-let locale = 'de';
+let locale = defaultLanguage();
 try {
   const saved = JSON.parse(
     require('node:fs').readFileSync(path.join(app.getPath('userData'), 'settings.json'), 'utf8')
   );
-  if (saved.appearance?.language === 'en') locale = 'en';
+  if (['de', 'en'].includes(saved.appearance?.language)) locale = saved.appearance.language;
 } catch (_error) {
-  /* New profiles default to German. */
+  /* New profiles use the system language, with English as the fallback. */
 }
 app.commandLine.appendSwitch('lang', locale);
 const indexFile = path.join(__dirname, 'renderer', 'index.html'),

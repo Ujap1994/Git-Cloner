@@ -5,7 +5,7 @@ const os = require('node:os');
 const { pathToFileURL } = require('node:url');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
-const { launch, screenshotPath } = require('./helpers.cjs');
+const { launch } = require('./helpers.cjs');
 const { defaults } = require('../../app/core/config.cjs');
 const { Git } = require('../../app/core/git.cjs');
 const { prepareDestination } = require('../../app/core/destinations.cjs');
@@ -193,7 +193,7 @@ test('restore assistant decrypts and verifies a real backup without a configured
 });
 test('scheduled worker completes without opening a GUI when no source is due', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'gc-worker-ui-'));
-  await fs.writeFile(screenshotPath('settings.json'), JSON.stringify(defaults()));
+  await fs.writeFile(path.join(directory, 'settings.json'), JSON.stringify(defaults()));
   try {
     // Match Playwright's Linux development launcher; shipped apps keep their sandbox.
     const flags = process.platform === 'linux' ? ['--no-sandbox'] : [];
@@ -202,7 +202,7 @@ test('scheduled worker completes without opening a GUI when no source is due', a
       windowsHide: true,
       timeout: 30000
     });
-    const logs = await fs.readFile(screenshotPath('worker.log'), 'utf8');
+    const logs = await fs.readFile(path.join(directory, 'worker.log'), 'utf8');
     expect(logs).toContain('not-due');
     expect(logs).not.toContain('password');
   } finally {

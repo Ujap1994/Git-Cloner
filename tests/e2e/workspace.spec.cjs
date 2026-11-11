@@ -133,7 +133,7 @@ test('changing the picker owner requires an explicit reload before sources can b
   await dialog.getByLabel('example/alpha select', { exact: true }).check();
   await dialog.getByLabel('Owner / organization / group').fill('other-example');
   await expect(dialog.locator('#browser-add')).toBeDisabled();
-  await expect(dialog.locator('#browser-selected')).toContainText('erneut laden');
+  await expect(dialog.locator('#browser-selected')).toContainText('Load again');
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect((await a.page.evaluate(() => window.gitCloner.getState())).config.sources).toEqual([]);
 });
@@ -190,7 +190,7 @@ test('bulk editor previews changes and preserves per-source differences and unse
   await dialog.getByRole('button', { name: 'Review changes', exact: true }).click();
   await expect(dialog.locator('.bulk-preview-card')).toHaveCount(2);
   await expect(dialog.locator('#bulk-preview')).toContainText('LFS on');
-  await expect(dialog.locator('#bulk-preview')).toContainText('LFS aus');
+  await expect(dialog.locator('#bulk-preview')).toContainText('LFS off');
   await capture(a.page, 'bulk-preview.png');
   expect(
     (await a.page.evaluate(() => window.gitCloner.getState())).config.sources.every(source => source.enabled)

@@ -1,6 +1,8 @@
-# Git Cloner 3 user guide
+# Git Cloner 3.7 user guide
 
 All account, repository and drive names in this guide are placeholders. The app adds **no default sources**. The images show real application windows with an isolated test profile and the English interface; the app can be switched between English and German at any time. Credentials are neither required nor shown.
+
+![Git Cloner](../build/icon.svg)
 
 ## Contents
 
@@ -47,6 +49,9 @@ All account, repository and drive names in this guide are placeholders. The app 
 41. [Reminder for paused backups](#41-reminder-for-paused-backups)
 42. [API quota](#42-api-quota)
 43. [Bandwidth time window](#43-bandwidth-time-window)
+44. [Exact macOS DMG variants](#44-exact-macos-dmg-variants)
+45. [Missing downloads and Electron program archives](#45-missing-downloads-and-electron-program-archives)
+46. [Snap and ARM64 Flatpak packages](#46-snap-and-arm64-flatpak-packages)
 
 ## 1. Installation
 
@@ -54,15 +59,15 @@ Use only the [official GitHub releases](https://github.com/Ujap1994/Git-Cloner/r
 
 The packaged app needs no separate Node.js. **Git must be available**, plus **Git LFS** for the optional LFS backup. Flatpak contains both. Restart the app after installing Git.
 
-| System         | Package and installation                                                                                                                                                  |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS          | Universal for Intel and Apple silicon, or x64 or ARM64. Open the DMG and drag the app to Applications. Install Git with `xcode-select --install` if needed.               |
-| Windows        | Install Git for Windows with the PATH option for other programs. Then start the x64 or ARM64 installer or the portable version.                                         |
-| Ubuntu / Mint  | Install Git, then `sudo apt install ./FILENAME.deb`.                                                                                                                      |
-| Fedora         | `sudo dnf install git ./FILENAME.rpm`.                                                                                                                                    |
-| Arch / CachyOS | `sudo pacman -U ./FILENAME.pkg.tar.zst`. The package manager resolves the dependencies.                                                                                  |
-| AppImage       | Install Git, make the file executable (`chmod +x ./FILENAME.AppImage`) and start it. Some distributions require FUSE; alternatively use `--appimage-extract`.             |
-| Linux TAR.GZ   | Extract it to a permanent location and start the included application; Git and the desktop runtime libraries must be installed.                                         |
+| System         | Package and installation                                                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS          | Universal for Intel and Apple silicon, or x64 or ARM64. Open the DMG and drag the app to Applications. Install Git with `xcode-select --install` if needed.   |
+| Windows        | Install Git for Windows with the PATH option for other programs. Then start the x64 or ARM64 installer or the portable version.                               |
+| Ubuntu / Mint  | Install Git, then `sudo apt install ./FILENAME.deb`.                                                                                                          |
+| Fedora         | `sudo dnf install git ./FILENAME.rpm`.                                                                                                                        |
+| Arch / CachyOS | `sudo pacman -U ./FILENAME.pkg.tar.zst`. The package manager resolves the dependencies.                                                                       |
+| AppImage       | Install Git, make the file executable (`chmod +x ./FILENAME.AppImage`) and start it. Some distributions require FUSE; alternatively use `--appimage-extract`. |
+| Linux TAR.GZ   | Extract it to a permanent location and start the included application; Git and the desktop runtime libraries must be installed.                               |
 
 `FILENAME` stands for the actual file name from the release. Choose an ARM64 package for ARM64 computers. CachyOS mostly uses x86_64; Linux aarch64 packages are meant for compatible ARM systems.
 
@@ -72,7 +77,7 @@ Move portable and AppImage files to their final location before enabling start a
 
 ### Flatpak
 
-A release can contain an x64 bundle. A bundle is not yet a public Flathub entry:
+Releases include x64 and ARM64 bundles. A bundle is not yet a public Flathub entry:
 
 ```sh
 flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
@@ -130,14 +135,14 @@ Choose **Check now**. New states are built and verified separately first; only t
 
 ![Empty overview without default repositories](screenshots/overview.png)
 
-| Status    | Meaning                                                        |
-| --------- | -------------------------------------------------------------- |
-| Backed up | First backup created.                                          |
-| Updated   | Changed Git data or metadata applied.                          |
-| Current   | The checked remote state matches the backup.                   |
-| Repaired  | A damaged managed backup was rebuilt successfully.             |
-| Empty     | The Git repository has no commit yet.                          |
-| Error     | The operation did not succeed; check the message in History.   |
+| Status    | Meaning                                                      |
+| --------- | ------------------------------------------------------------ |
+| Backed up | First backup created.                                        |
+| Updated   | Changed Git data or metadata applied.                        |
+| Current   | The checked remote state matches the backup.                 |
+| Repaired  | A damaged managed backup was rebuilt successfully.           |
+| Empty     | The Git repository has no commit yet.                        |
+| Error     | The operation did not succeed; check the message in History. |
 
 Search and status filters help with many repositories. The list shows up to 75 rows per page. Entries offer integrity checks and restore. An integrity error stays visible and forces another check or repair in the next backup run.
 
@@ -149,13 +154,13 @@ Additional content is off by default under **Settings → Backup**:
 
 | Option        | Effect                                                                                                                                  |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Working copy  | Fast shallow working copy of the current default branch. No complete Git history.                                                      |
+| Working copy  | Fast shallow working copy of the current default branch. No complete Git history.                                                       |
 | Mirror        | Bare repository with the complete Git history, all branches and tags. No checked-out working folder. Changes are fetched incrementally. |
 | Git LFS       | Downloads the actual LFS content; requires Git LFS to be installed.                                                                     |
-| Submodules    | Checked out recursively in the working copy. Only safe HTTPS remotes; GitHub SSH addresses are converted to HTTPS. Not with Mirror.    |
+| Submodules    | Checked out recursively in the working copy. Only safe HTTPS remotes; GitHub SSH addresses are converted to HTTPS. Not with Mirror.     |
 | Issues        | Issues and comments as JSON.                                                                                                            |
 | Pull requests | Pull requests, reviews, comments and change information as JSON.                                                                        |
-| Releases      | Release data and their files. Large files need corresponding space and time.                                                           |
+| Releases      | Release data and their files. Large files need corresponding space and time.                                                            |
 | Wiki          | Separate Git mirror of the wiki. An inaccessible wiki is reported explicitly.                                                           |
 
 Release files are stored visibly under **`destination / account / repository / Git-Cloner-Releases`** with their original file names. The overview names this folder and offers **Open release folder**. If the repository already contains a folder with that name, the app uses a free numbered name and keeps the repository files. For encrypted backups the release folder is inside `backup.gcb`; choose **Restore release assets** and unlock it to access the files. Older backups with files in the hidden `.git/git-cloner-metadata/release-assets` stay restorable and move to the visible location at the next successful check.
@@ -245,6 +250,8 @@ The image uses a simulated release response. The app does not download or instal
 
 ## 10. Appearance, settings and diagnostics
 
+New profiles use German on German-language systems and English otherwise. Existing language preferences remain unchanged. Closing an idle window quits the app by default; background tray operation can be enabled in Settings. Existing tray preferences remain unchanged.
+
 **Settings → Appearance** offers English and German, light, dark or system theme and three text sizes. Selection fields have the same height; larger text scales the whole interface. The choices are kept after restarts.
 
 ![English interface in dark mode](screenshots/dark-english.png)
@@ -253,21 +260,21 @@ The image uses a simulated release response. The app does not download or instal
 
 The diagnostic export removes account and repository names, paths, commit IDs and raw error messages. The history keeps up to 100 runs and at most 500 single results per run, errors first. Totals are kept. Never send `settings.json`, `state.json`, `history.json` or the encrypted `secrets.enc` as a supposedly anonymous support export.
 
-| Problem                         | Next step                                                                                                                                                                                                                                                                         |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Git missing                     | Install Git, check PATH and restart the app. On macOS the Finder environment can differ from the terminal.                                                                                                                                                                       |
-| Drive identity missing          | Connect the correct drive. For an intentionally new destination, set up the source again. Never copy a foreign identity.                                                                                                                                                        |
-| Foreign folder blocks target    | Choose a new destination folder or move the existing data yourself.                                                                                                                                                                                                              |
-| Not enough space                | Free space for the old and new state plus the reserve; metadata and LFS can exceed the estimate.                                                                                                                                                                                |
-| GitHub 401 / 403                | Check validity, repository access, organization SSO and the API limit.                                                                                                                                                                                                           |
-| Waiting for API limit           | Wait for the reset; the queue continues automatically and keeps completed repositories. Section [42](#42-api-quota) explains the request budget. A read token under **Settings → Accounts** raises the limit; **Resume** then works immediately.                               |
-| DMG not installed               | Check the overview message: a missing or invalid signature, a program for another CPU or several different packages that match equally block the replacement. In the last case narrow the **release file name**, for example `*arm64.dmg`. The same file under two names (identical SHA-256) counts as one package. Finder layout data in a DMG (`com.apple.FinderInfo`) is not a signature error. |
-| LFS missing                     | Install Git LFS or turn the option off; the existing successful state is kept.                                                                                                                                                                                                  |
-| Password missing or wrong       | Enter the password of this archive. After a change, older archives may still need the old password.                                                                                                                                                                             |
-| No automatic run                | Are source and schedule enabled and saved? Is the computer awake? Does the app run in the background or is the system worker active? Is a queue paused by you? See section [41](#41-reminder-for-paused-backups).                                                             |
-| Token cannot be saved           | Set up the secure key store or keyring of the operating system, or use public sources.                                                                                                                                                                                          |
+| Problem                      | Next step                                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Git missing                  | Install Git, check PATH and restart the app. On macOS the Finder environment can differ from the terminal.                                                                                                                                                                                                                                                                                         |
+| Drive identity missing       | Connect the correct drive. For an intentionally new destination, set up the source again. Never copy a foreign identity.                                                                                                                                                                                                                                                                           |
+| Foreign folder blocks target | Choose a new destination folder or move the existing data yourself.                                                                                                                                                                                                                                                                                                                                |
+| Not enough space             | Free space for the old and new state plus the reserve; metadata and LFS can exceed the estimate.                                                                                                                                                                                                                                                                                                   |
+| GitHub 401 / 403             | Check validity, repository access, organization SSO and the API limit.                                                                                                                                                                                                                                                                                                                             |
+| Waiting for API limit        | Wait for the reset; the queue continues automatically and keeps completed repositories. Section [42](#42-api-quota) explains the request budget. A read token under **Settings → Accounts** raises the limit; **Resume** then works immediately.                                                                                                                                                   |
+| DMG not installed            | Check the overview message: a missing or invalid signature, a program for another CPU or several different packages that match equally block the replacement. In the last case narrow the **release file name**, for example `*arm64.dmg`. The same file under two names (identical SHA-256) counts as one package. Finder layout data in a DMG (`com.apple.FinderInfo`) is not a signature error. |
+| LFS missing                  | Install Git LFS or turn the option off; the existing successful state is kept.                                                                                                                                                                                                                                                                                                                     |
+| Password missing or wrong    | Enter the password of this archive. After a change, older archives may still need the old password.                                                                                                                                                                                                                                                                                                |
+| No automatic run             | Are source and schedule enabled and saved? Is the computer awake? Does the app run in the background or is the system worker active? Is a queue paused by you? See section [41](#41-reminder-for-paused-backups).                                                                                                                                                                                  |
+| Token cannot be saved        | Set up the secure key store or keyring of the operating system, or use public sources.                                                                                                                                                                                                                                                                                                             |
 
-[Architecture and data layout](DEVELOPMENT.md) · [Package repositories](PACKAGE-REPOSITORIES.md) · [Roadmap](ROADMAP.md)
+[Architecture and data layout](ENTWICKLUNG.md) · [Package repositories](PAKETVERZEICHNISSE.md) · [Roadmap](ROADMAP.md)
 
 ## 11. Setup assistant and dry run
 
@@ -297,15 +304,15 @@ State and queue are written in batches and when pausing. After a hard process te
 
 Under **Settings → Performance & rules**:
 
-| Setting                         | Meaning                                                                                                                                                                                                            |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Concurrent small repositories   | 1–4, default 2. At most two small tasks per detected drive.                                                                                                                                                       |
-| Small repository threshold      | GitHub size estimate in MiB, default 50. Unknown or larger repositories run exclusively.                                                                                                                         |
-| Demanding backups               | Mirrors, LFS, submodules, metadata and encryption always run one at a time, regardless of the size estimate.                                                                                                     |
-| Retries                         | 0–5 additional attempts for each temporarily failed network operation, default 2. Increasing delays and a limited respect for Retry-After. Nested retries do not multiply the number of attempts.              |
-| Download limit                  | KiB/s, 0 = unlimited. A shared limit for Git, LFS and release downloads including transport data. API JSON, uploads and other applications are not included. Section [43](#43-bandwidth-time-window) adds a daily window with its own limit. |
-| Back up on AC power only        | On battery or with an unknown required power state the queue waits. Running tasks are completed.                                                                                                                 |
-| Allowed Wi-Fi names             | One exact name per line. Empty allows all networks. With a different or unknown Wi-Fi name the app waits.                                                                                                       |
+| Setting                       | Meaning                                                                                                                                                                                                                                      |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Concurrent small repositories | 1–4, default 2. At most two small tasks per detected drive.                                                                                                                                                                                  |
+| Small repository threshold    | GitHub size estimate in MiB, default 50. Unknown or larger repositories run exclusively.                                                                                                                                                     |
+| Demanding backups             | Mirrors, LFS, submodules, metadata and encryption always run one at a time, regardless of the size estimate.                                                                                                                                 |
+| Retries                       | 0–5 additional attempts for each temporarily failed network operation, default 2. Increasing delays and a limited respect for Retry-After. Nested retries do not multiply the number of attempts.                                            |
+| Download limit                | KiB/s, 0 = unlimited. A shared limit for Git, LFS and release downloads including transport data. API JSON, uploads and other applications are not included. Section [43](#43-bandwidth-time-window) adds a daily window with its own limit. |
+| Back up on AC power only      | On battery or with an unknown required power state the queue waits. Running tasks are completed.                                                                                                                                             |
+| Allowed Wi-Fi names           | One exact name per line. Empty allows all networks. With a different or unknown Wi-Fi name the app waits.                                                                                                                                    |
 
 ![Performance and rules](screenshots/performance-settings.png)
 
@@ -341,15 +348,15 @@ During a run the overview shows the elapsed time, completed tasks, an approximat
 
 ![High contrast appearance](screenshots/high-contrast.png)
 
-| Shortcut                 | Function                                                  |
-| ------------------------ | --------------------------------------------------------- |
-| Cmd/Ctrl + K             | Open the overview and its search field.                   |
-| Cmd/Ctrl + N             | Add a source when no run is active or paused.             |
-| Cmd/Ctrl + B             | Start a check when sources exist.                         |
-| Cmd/Ctrl + Shift + P     | Request a pause or resume.                                |
-| Cmd/Ctrl + Comma         | Open settings.                                            |
-| F1                       | Show the keyboard shortcuts.                              |
-| Esc                      | Close a dialog.                                           |
+| Shortcut             | Function                                      |
+| -------------------- | --------------------------------------------- |
+| Cmd/Ctrl + K         | Open the overview and its search field.       |
+| Cmd/Ctrl + N         | Add a source when no run is active or paused. |
+| Cmd/Ctrl + B         | Start a check when sources exist.             |
+| Cmd/Ctrl + Shift + P | Request a pause or resume.                    |
+| Cmd/Ctrl + Comma     | Open settings.                                |
+| F1                   | Show the keyboard shortcuts.                  |
+| Esc                  | Close a dialog.                               |
 
 ## 17. Check times per source
 
@@ -372,7 +379,7 @@ The app assigns packages by their names and file extensions. Files without a cle
 
 The setting can be overridden per source under **Backup content for this source**. A download becomes part of the new backup state. The app checks reported file sizes and available SHA256 digests while downloading; on errors the previous successful state is kept. The space check adds known release file sizes to the repository.
 
-The files of the latest official, stable release are backed up per repository. When a new release appears, the new backup state replaces the files of the older release; old download files are not kept in addition. Earlier release metadata can be part of the JSON export. With automatic program installation, only the installed file is kept by default (see section 35). The selection applies to your backup sources; the update check of Git Cloner itself only informs and never installs a version of Git Cloner automatically.
+The files of the latest official, stable release are backed up per repository. When a new release appears, the new backup state replaces the files of the older release; old download files are not kept in addition. Earlier release metadata can be part of the JSON export. Managed program installations retain the current and the most recently replaced version for rollback (see sections 35 and 40). The selection applies to your backup sources; the update check of Git Cloner itself only informs and never installs a version of Git Cloner automatically.
 
 ![Release selection and detected system](screenshots/release-filter.png)
 
@@ -541,7 +548,7 @@ After a successful backup the own cache files are removed. Unused parts older th
 
 ![Visible release folder in the overview](screenshots/release-location.png)
 
-Further detail views are described as a [separate interface concept](DETAIL-VIEWS.md); the features named there are not implemented yet.
+Further detail views are described as a [separate interface concept](DETAILANSICHTEN.md); the features named there are not implemented yet.
 
 ## 32. Reuse existing release assets
 
@@ -584,11 +591,11 @@ This option updates **the program from your chosen source**, not Git Cloner itse
 
 After a successful backup, the app checks the actual release files again and prepares the program separately. Only then is the existing assigned program copy replaced; the replaced version is kept as the previous version (section [40](#40-restore-the-previous-program-version)). If version and content are already current, the existing installation stays. Errors keep the previous program state and appear in addition to the backup status, in the error counter, the history and the configured error notifications. The overview shows the installed tag and offers **Open program folder**. Installation never starts a program. Section [39](#39-when-program-updates-are-installed) explains what happens while a program is running.
 
-| System  | Supported automatic installation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| System  | Supported automatic installation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | macOS   | One clearly recognizable `.app` bundle from a DMG or ZIP. Signature, bundle and actual processor architecture are checked. Ad-hoc signed bundles are possible; no signing certificates are set up. Finder layout data that many DMG tools store on every file (`com.apple.FinderInfo`) is not part of the signature: the app is checked inside the image with every other strict rule, and the installed copy is cleaned of this data and must pass the full `codesign --strict` check. DMGs with a license agreement open without a prompt through a read-only copy; by enabling installation you accept the terms of this publisher. A DMG already open in Finder is read and stays open. On Apple silicon, Intel-only programs are chosen only if no native package exists; they run through Rosetta 2. |
-| Windows | A portable EXE or ZIP with one clearly recognizable main program and companion files. PE header and actual architecture are checked. A running program is detected because Windows refuses write access to it.                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Linux   | An AppImage with matching ELF and AppImage header and processor architecture. The file is saved as executable in the assigned location. A running AppImage keeps working while it is replaced.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Windows | A portable EXE or ZIP with one clearly recognizable main program and companion files. PE header and actual architecture are checked. A running program is detected because Windows refuses write access to it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Linux   | An AppImage with matching ELF and AppImage header and processor architecture. The file is saved as executable in the assigned location. A running AppImage keeps working while it is replaced.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 MSI or NSIS system installers, PKG, DEB, RPM and arbitrary installation scripts are never run automatically. There is no automatic elevation of privileges. If permissions are missing or Windows locks a file in use, the previous state is kept. After importing settings, installation is turned off again and must be enabled locally per source.
 
@@ -631,11 +638,11 @@ Windows portable programs often need shared DLLs and helper files: the portable 
 
 **Settings → Backup → Downloads & storage → Show download history** opens the overview. It reads the history only when opened or refreshed and needs no request to GitHub for this.
 
-| Value                          | Basis of measurement                                                                                                                                                                                                                                                                                 |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Received release payload       | File bytes actually read from the response streams, including failed attempts. HTTP and TLS headers and other protocol traffic are not included; compressed responses are counted after decoding. Git clone and metadata traffic is not part of this value.                                       |
-| Download avoided               | Files taken over locally after a content check and download parts that existed before this download and were used successfully. Parts received again within the same attempt are never counted as savings, also with retries. Unchanged repository checks produce no invented savings.          |
-| Cache file bytes cleaned up    | Sizes of own temporary files including cache identifiers, measured before they were removed successfully. Automatic cleanup after a backup and manual cleanup are included. Physically free capacity can differ because of file system blocks, compression and shared blocks.                     |
+| Value                       | Basis of measurement                                                                                                                                                                                                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Received release payload    | File bytes actually read from the response streams, including failed attempts. HTTP and TLS headers and other protocol traffic are not included; compressed responses are counted after decoding. Git clone and metadata traffic is not part of this value.                            |
+| Download avoided            | Files taken over locally after a content check and download parts that existed before this download and were used successfully. Parts received again within the same attempt are never counted as savings, also with retries. Unchanged repository checks produce no invented savings. |
+| Cache file bytes cleaned up | Sizes of own temporary files including cache identifiers, measured before they were removed successfully. Automatic cleanup after a backup and manual cleanup are included. Physically free capacity can differ because of file system blocks, compression and shared blocks.          |
 
 Search by repository, file name or tag and filter by **Result** or **Period**. The figures always apply to all filtered entries, not only the visible page. Each page holds at most 50 entries; the history keeps at most 2,000 events. No historical values are invented afterwards and no supposedly measured time savings are estimated.
 
@@ -649,11 +656,11 @@ The history is stored locally in the app profile and kept after restarts. Writes
 
 **Settings → Backup → Program updates** decides how a newer program version from a backed-up release is installed. The setting applies to all sources with program installation:
 
-| Choice                                                     | Behavior                                                                                                                                                                                                                                                                                       |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Choice                                                            | Behavior                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Automatically, after the program quits if it is running (default) | The new version is installed right after the backup. If the program is open, the overview shows **Program running · update after it quits** and Git Cloner installs the update within about 30 seconds after you close the program, as long as Git Cloner itself is running, also in the tray. |
-| Automatically, at the next check if the program is running | As before version 3.7: a running program is left alone and the installation is tried again at the next check.                                                                                                                                                                              |
-| Notify only and install with “Install now”                 | A newer version appears as **Update ready** with **Install now** in the overview and, if allowed, as a notification. Nothing is installed until you choose **Install now**. If the program is still running then, it is installed once it quits.                                             |
+| Automatically, at the next check if the program is running        | As before version 3.7: a running program is left alone and the installation is tried again at the next check.                                                                                                                                                                                  |
+| Notify only and install with “Install now”                        | A newer version appears as **Update ready** with **Install now** in the overview and, if allowed, as a notification. Nothing is installed until you choose **Install now**. If the program is still running then, it is installed once it quits.                                               |
 
 Only programs that wait for their installation are watched; an idle Git Cloner starts no process for this. A running program is detected on macOS from the list of running applications and on Windows because its executable cannot be opened for writing. Linux AppImages can be replaced while running. With the installation-related notifications enabled (section 21), a notification names the installed program and version.
 
@@ -679,6 +686,8 @@ A pause you chose yourself also stops all scheduled backups. **Settings → Perf
 
 Pauses caused by rules, the API limit or low space are not affected; they continue on their own as described in sections 7, 12 and 24.
 
+![Pause reminder settings](screenshots/pause-reminder.png)
+
 ## 42. API quota
 
 Without a token GitHub allows 60 API requests per hour, with a token 5,000. A repository with release backup needs three requests per run: the repository, its release list and the latest release, which already contains the list of its files. Each new release file downloaded adds one request. Ten repositories therefore need about 30 requests per run; two runs within one hour can use up the quota without a token.
@@ -694,3 +703,25 @@ The version check of Git Cloner uses no API request (section 9).
 **Settings → Performance & rules → Bandwidth time window** sets a separate download limit for a daily time window, for example 1024 KiB/s from 08:00 to 18:00 so that downloads do not slow down other work during the day. Outside the window the general download limit applies (0 = unlimited). Windows across midnight such as 22:00 to 06:00 are supported.
 
 The limit applies to Git, LFS and release downloads together, just like the general limit. Running downloads adapt immediately when the window starts or ends. Download timeouts are based on the slower of both limits, so a large download is not cancelled when the window starts during it.
+
+![Bandwidth time window](screenshots/bandwidth-window.png)
+
+## 44. Exact macOS DMG variants
+
+Under **Settings → Backup → Release assets → macOS DMG variant**, choose **Automatic**, **Universal**, **Apple Silicon only (ARM64)** or **Intel only (x64)**. The same field appears in **Sources → Edit → Backup content for this source**. Source-specific backup settings override the global preference, so change the field on the source when its own options are enabled.
+
+Automatic preserves the existing CPU filter, which can include both native and Universal DMGs. An explicit variant selects only DMGs named for that variant and their corresponding checksum/signature sidecars. Shared checksum lists remain included. The OS and file-type filters still apply. ZIPs and other formats keep their general architecture filter. An unavailable variant does not silently select a different DMG. Clear an architecture-specific installation filename pattern when changing variants.
+
+![Exact DMG variant selection](screenshots/dmg-variants.png)
+
+## 45. Missing downloads and Electron program archives
+
+An unchanged Git commit does not prove that every downloaded release file still exists. Every unchanged backup checks the release metadata, file presence, regular-file type and recorded sizes. Missing or truncated downloads trigger a staged repair. Intact downloads are verified and reused; the old backup remains until the replacement passes verification. Full file hashing still follows the configured integrity policy, and installation always verifies its chosen package.
+
+Electron programs contain an `app.asar` archive. Git Cloner copies this file and its unpacked companions without interpreting them as a directory. Signature, path and architecture checks still apply. See [Release repair and DMG selection](RELEASE-REPAIR.md) for the regression details and test coverage.
+
+## 46. Snap and ARM64 Flatpak packages
+
+Linux releases include x64 and ARM64 Flatpak and Snap builds. Choose the package matching your system. Flatpak bundles Git and architecture-matched Git LFS; installation uses `flatpak install --user ./PACKAGE.flatpak` after adding Flathub for the runtime dependencies. Start with `flatpak run io.github.Ujap1994.GitCloner`.
+
+Install a standalone Snap using `sudo snap install --dangerous ./PACKAGE.snap`. The package uses strict confinement. External drives may require `sudo snap connect git-cloner:removable-media`. OS policy still controls access to hidden home folders and external paths; use a supported visible folder and verify a backup/restore before relying on the package. Its browser-support interface requests sandbox permission; the package retains Chromium's sandbox helper. The downloaded package is not a Snap Store listing.

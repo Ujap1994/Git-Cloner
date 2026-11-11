@@ -1,7 +1,7 @@
 {
   "name": "git-cloner",
-  "version": "3.6.1",
-  "description": "Geplante Git-Sicherungen auf deinem eigenen Laufwerk.",
+  "version": "3.7.0",
+  "description": "Scheduled Git backups and managed release installations on your own drive.",
   "author": "Ujap1994",
   "license": "MIT",
   "private": true,

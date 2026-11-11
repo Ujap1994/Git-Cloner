@@ -38,7 +38,25 @@ window.createGitClonerReleaseTools = function ({
             `<option value="${value}"${(backup.releaseArchitecture || 'all') === value ? ' selected' : ''}>${label}</option>`
         )
         .join('')}</select>`
-    )}${field(t('Automatisch erkannte Architektur', 'Detected architecture'), prefix + 'release-arch-system', `<input id="${prefix}release-arch-system" value="${esc(getState().arch || '')}" readonly>`)}</div><details class="advanced release-type-options"><summary>${t('Dateitypen auswählen', 'Choose file types')}</summary><div class="advanced-body"><p class="field-help">${t('Ohne Markierung werden alle Dateitypen gesichert. Prüfsummen bleiben enthalten. Universal-Pakete passen zu mehreren Architekturen.', 'No selection includes all file types. Checksums are retained. Universal packages match multiple architectures.')}</p><div class="check-grid">${types()
+    )}${field(t('Automatisch erkannte Architektur', 'Detected architecture'), prefix + 'release-arch-system', `<input id="${prefix}release-arch-system" value="${esc(getState().arch || '')}" readonly>`)}</div><div class="field-grid release-fields">${field(
+      t('macOS-DMG-Variante', 'macOS DMG variant'),
+      prefix + 'release-dmg-variant',
+      `<select id="${prefix}release-dmg-variant" data-${attribute}="releaseDmgVariant" data-release-filter="${own ? 'source' : 'global'}"${backup.metadata.releases ? '' : ' disabled'}>${[
+        ['compatible', t('Automatisch · passende Varianten', 'Automatic · compatible variants')],
+        ['universal', 'Universal (Intel + Apple Silicon)'],
+        ['arm64', t('Nur Apple Silicon (ARM64)', 'Apple Silicon only (ARM64)')],
+        ['x64', t('Nur Intel (x64)', 'Intel only (x64)')]
+      ]
+        .map(
+          ([value, label]) =>
+            `<option value="${value}"${(backup.releaseDmgVariant || 'compatible') === value ? ' selected' : ''}>${label}</option>`
+        )
+        .join('')}</select>`,
+      t(
+        'Eine feste Auswahl gilt für DMGs anstelle des Architekturfilters. Andere Dateitypen behalten ihre Filter. Unpassende Programme werden nicht installiert.',
+        'An explicit choice replaces the architecture filter for DMGs. Other file types keep their filters. Incompatible programs are not installed.'
+      )
+    )}</div><details class="advanced release-type-options"><summary>${t('Dateitypen auswählen', 'Choose file types')}</summary><div class="advanced-body"><p class="field-help">${t('Ohne Markierung werden alle Dateitypen gesichert. Prüfsummen bleiben enthalten. Universal-Pakete passen zu mehreren Architekturen.', 'No selection includes all file types. Checksums are retained. Universal packages match multiple architectures.')}</p><div class="check-grid">${types()
       .map(
         type =>
           `<label class="check-label"><input type="checkbox" data-release-type="${type}" data-release-filter="${own ? 'source' : 'global'}"${backup.releaseFileTypes?.includes(type) ? ' checked' : ''}${backup.metadata.releases ? '' : ' disabled'}>${type === 'other' ? t('Andere Formate', 'Other formats') : type.toUpperCase()}</label>`

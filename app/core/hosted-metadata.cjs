@@ -20,6 +20,7 @@ async function hostedMetadataPlan(
     platform = process.platform,
     releaseArchitecture = 'all',
     releaseFileTypes = [],
+    releaseDmgVariant = 'compatible',
     arch = process.arch,
     releaseProgram = null
   } = {}
@@ -72,7 +73,12 @@ async function hostedMetadataPlan(
       return { ...asset, browser_download_url: url };
     });
   const selection = narrowToProgram(
-      selectReleaseAssets(normalized, releaseScope, platform, { releaseArchitecture, releaseFileTypes, arch }),
+      selectReleaseAssets(normalized, releaseScope, platform, {
+        releaseArchitecture,
+        releaseFileTypes,
+        releaseDmgVariant,
+        arch
+      }),
       options.releases ? releaseProgram : null,
       platform,
       arch
@@ -103,6 +109,7 @@ async function hostedMetadataPlan(
               identities: selection.selected.map(assetIdentity),
               releaseArchitecture,
               releaseFileTypes,
+              ...(releaseDmgVariant !== 'compatible' ? { releaseDmgVariant } : {}),
               arch: releaseArchitecture === 'system' ? arch : null,
               release: release?.tag_name,
               ids: selection.selected.map(a => a.id),

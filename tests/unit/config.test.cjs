@@ -10,6 +10,18 @@ test('first launch has no preconfigured repositories or account', () => {
   config.schedule.times[0] = '03:00';
   assert.equal(defaults().schedule.times[0], '02:00');
 });
+test('new profiles follow the system language and quit on window close while saved preferences survive', () => {
+  assert.equal(defaults('de-DE').appearance.language, 'de');
+  assert.equal(defaults('de_CH').appearance.language, 'de');
+  assert.equal(defaults('en-US').appearance.language, 'en');
+  assert.equal(defaults('fr-FR').appearance.language, 'en');
+  assert.equal(defaults().closeToTray, false);
+  const saved = defaults('en-US');
+  saved.appearance.language = 'de';
+  saved.closeToTray = true;
+  assert.equal(validateConfig(saved).appearance.language, 'de');
+  assert.equal(validateConfig(saved).closeToTray, true);
+});
 test('normalizes GitHub URLs and plain names', () => {
   assert.equal(parseSource('https://github.com/some-user/demo.git/', 'repository'), 'some-user/demo');
   assert.equal(parseSource('some-user', 'owner'), 'some-user');

@@ -174,7 +174,7 @@ test('a changed download cannot be deleted using an old GUI cleanup preview', as
   meta.complete = true;
   await writeJson(file, meta);
   await a.page.getByRole('button', { name: 'Clean selected parts', exact: true }).click();
-  await expect(a.page.locator('#storage-error')).toContainText('inzwischen');
+  await expect(a.page.locator('#storage-error')).toContainText('changed in the meantime');
   expect(await fs.stat(file)).toBeTruthy();
 });
 test('release filters remain aligned in English dark mode with large text', async () => {

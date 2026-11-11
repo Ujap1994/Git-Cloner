@@ -9,6 +9,7 @@ directories:
 files:
   - app/**/*
   - build/icon.png
+  - build/icon.svg
   - build/tray.png
   - package.json
 artifactName: Git-Cloner-${version}-${os}-${arch}.${ext}
@@ -46,7 +47,7 @@ linux:
   executableName: git-cloner
   syncDesktopName: true
   maintainer: Git Cloner <266295514+Ujap1994@users.noreply.github.com>
-  synopsis: Geplante Git-Sicherungen auf deinem Laufwerk
+  synopsis: Scheduled Git backups on your own drive
   target: [AppImage, deb, rpm, tar.gz]
   desktop:
     entry:
@@ -57,6 +58,42 @@ deb:
     [git, libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libdrm2, libgbm1, libasound2]
 rpm:
   depends: [git, gtk3, libnotify, nss, libXScrnSaver, libXtst, xdg-utils, at-spi2-core, libdrm, mesa-libgbm, alsa-lib]
+snapcraft:
+  base: core24
+  core24:
+    confinement: strict
+    grade: stable
+    plugs:
+      - browser-support:
+          interface: browser-support
+          allow-sandbox: true
+      - home
+      - network
+      - removable-media
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+      - opengl
+      - password-manager-service
+    useDestructiveMode: true
+    extensions: []
+    stagePackages:
+      - git
+      - git-lfs
+      - ca-certificates
+      - libgtk-3-0t64
+      - libnotify4
+      - libnss3
+      - libnspr4
+      - libxss1
+      - libxtst6
+      - libatspi2.0-0t64
+      - libdrm2
+      - libgbm1
+      - libasound2t64
+      - libsecret-1-0
+      - libayatana-appindicator3-1
 flatpak:
   runtime: org.freedesktop.Platform
   runtimeVersion: '25.08'
@@ -87,6 +124,11 @@ flatpak:
         - type: archive
           url: https://github.com/git-lfs/git-lfs/releases/download/v3.8.1/git-lfs-linux-amd64-v3.8.1.tar.gz
           sha256: e72cf723a4a660438862282e8aecf3885fc8123e88bfcad534cf6b941a354b75
+          only-arches: [x86_64]
+        - type: archive
+          url: https://github.com/git-lfs/git-lfs/releases/download/v3.8.1/git-lfs-linux-arm64-v3.8.1.tar.gz
+          sha256: 67895dd77b63329796bc5efdd47b57f218e1f7b98717ebaf936a8238dbcaec0f
+          only-arches: [aarch64]
     - name: git
       buildsystem: simple
       build-options:

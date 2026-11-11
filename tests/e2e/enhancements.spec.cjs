@@ -213,7 +213,7 @@ test('the GUI finds a renamed mounted drive without creating a replacement direc
   await expect(f.page.locator('#main-content')).toContainText(path.join(mount, 'backups'));
   const state = await f.page.evaluate(() => window.gitCloner.getState());
   expect(state.driveRecovery.moved).toBe(1);
-  await expect(f.page.locator('.drive-notice')).toContainText('Kennung wiedergefunden');
+  await expect(f.page.locator('.drive-notice')).toContainText('identity');
   await expect(f.page.locator('#main-content')).toContainText(path.join(mount, 'backups'));
   await expect
     .poll(async () =>

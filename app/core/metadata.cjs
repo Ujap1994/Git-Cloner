@@ -19,6 +19,7 @@ async function metadataPlan(
     platform = process.platform,
     releaseArchitecture = 'all',
     releaseFileTypes = [],
+    releaseDmgVariant = 'compatible',
     arch = process.arch,
     releaseProgram = null
   } = {}
@@ -29,6 +30,7 @@ async function metadataPlan(
       platform,
       releaseArchitecture,
       releaseFileTypes,
+      releaseDmgVariant,
       arch,
       releaseProgram
     });
@@ -53,7 +55,12 @@ async function metadataPlan(
       ? await github.collection(`${base}/releases/${release.id}/assets`)
       : (release?.assets ?? []);
   const releaseSelection = narrowToProgram(
-    selectReleaseAssets(assets, releaseScope, platform, { releaseArchitecture, releaseFileTypes, arch }),
+    selectReleaseAssets(assets, releaseScope, platform, {
+      releaseArchitecture,
+      releaseFileTypes,
+      releaseDmgVariant,
+      arch
+    }),
     options.releases ? releaseProgram : null,
     platform,
     arch
@@ -95,6 +102,7 @@ async function metadataPlan(
               identities: releaseSelection.selected.map(assetIdentity),
               releaseArchitecture,
               releaseFileTypes,
+              ...(releaseDmgVariant !== 'compatible' ? { releaseDmgVariant } : {}),
               arch: releaseArchitecture === 'system' ? arch : null,
               release: {
                 tag: release?.tag_name,
