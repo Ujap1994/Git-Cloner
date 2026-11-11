@@ -48,7 +48,7 @@ Xvfb :99 -screen 0 1440x1080x24 -ac -nolisten tcp >/tmp/git-cloner-xvfb.log 2>&1
 display_pid=$!
 trap 'kill "$display_pid" 2>/dev/null || true' EXIT
 export DISPLAY=:99
-npx playwright test tests/e2e/app.spec.cjs tests/e2e/advanced.spec.cjs tests/e2e/workflows.spec.cjs tests/e2e/enhancements.spec.cjs tests/e2e/studio.spec.cjs tests/e2e/workspace.spec.cjs tests/e2e/release-programs.spec.cjs tests/e2e/program-library.spec.cjs
+npx playwright test
 BODY
 chmod 755 /tmp/git-cloner-test-body.sh
 set +e

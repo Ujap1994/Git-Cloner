@@ -1,9 +1,67 @@
-window.createGitClonerReleaseTools = function ({ api, t, esc, field, button, panel, icon, toast, attempt, bytes, getState, getDraft, getSourceDraft, programLibrary }) {
-  let storage, selected = new Set(), offset = 0, cleanupToken;
+window.createGitClonerReleaseTools = function ({
+  api,
+  t,
+  esc,
+  field,
+  button,
+  panel,
+  icon,
+  toast,
+  attempt,
+  bytes,
+  getState,
+  getDraft,
+  getSourceDraft,
+  programLibrary
+}) {
+  let storage,
+    selected = new Set(),
+    offset = 0,
+    cleanupToken;
   const types = () => getState().releaseFormats || [];
   function filterFields(backup, own = false) {
-    const prefix = own ? 'source-' : '', attribute = own ? 'source-backup' : 'backup';
-    return `<div class="field-grid release-fields">${field(t('Prozessorarchitektur', 'Processor architecture'), prefix + 'release-architecture', `<select id="${prefix}release-architecture" data-${attribute}="releaseArchitecture" data-release-filter="${own ? 'source' : 'global'}"${backup.metadata.releases ? '' : ' disabled'}>${[['all', t('Alle Architekturen', 'All architectures')], ['system', t('Nur meine Architektur', 'My architecture only')], ['arm64', 'ARM64'], ['x64', 'x64 / AMD64'], ['ia32', 'x86 / 32 Bit'], ['armv7l', 'ARMv7']].map(([value, label]) => `<option value="${value}"${(backup.releaseArchitecture || 'all') === value ? ' selected' : ''}>${label}</option>`).join('')}</select>`)}${field(t('Automatisch erkannte Architektur', 'Detected architecture'), prefix + 'release-arch-system', `<input id="${prefix}release-arch-system" value="${esc(getState().arch || '')}" readonly>`)}</div><details class="advanced release-type-options"><summary>${t('Dateitypen auswählen', 'Choose file types')}</summary><div class="advanced-body"><p class="field-help">${t('Ohne Markierung werden alle Dateitypen gesichert. Prüfsummen bleiben enthalten. Universal-Pakete passen zu mehreren Architekturen.', 'No selection includes all file types. Checksums are retained. Universal packages match multiple architectures.')}</p><div class="check-grid">${types().map(type => `<label class="check-label"><input type="checkbox" data-release-type="${type}" data-release-filter="${own ? 'source' : 'global'}"${backup.releaseFileTypes?.includes(type) ? ' checked' : ''}${backup.metadata.releases ? '' : ' disabled'}>${type === 'other' ? t('Andere Formate', 'Other formats') : type.toUpperCase()}</label>`).join('')}</div></div></details>`;
+    const prefix = own ? 'source-' : '',
+      attribute = own ? 'source-backup' : 'backup';
+    return `<div class="field-grid release-fields">${field(
+      t('Prozessorarchitektur', 'Processor architecture'),
+      prefix + 'release-architecture',
+      `<select id="${prefix}release-architecture" data-${attribute}="releaseArchitecture" data-release-filter="${own ? 'source' : 'global'}"${backup.metadata.releases ? '' : ' disabled'}>${[
+        ['all', t('Alle Architekturen', 'All architectures')],
+        ['system', t('Nur meine Architektur', 'My architecture only')],
+        ['arm64', 'ARM64'],
+        ['x64', 'x64 / AMD64'],
+        ['ia32', 'x86 / 32 Bit'],
+        ['armv7l', 'ARMv7']
+      ]
+        .map(
+          ([value, label]) =>
+            `<option value="${value}"${(backup.releaseArchitecture || 'all') === value ? ' selected' : ''}>${label}</option>`
+        )
+        .join('')}</select>`
+    )}${field(t('Automatisch erkannte Architektur', 'Detected architecture'), prefix + 'release-arch-system', `<input id="${prefix}release-arch-system" value="${esc(getState().arch || '')}" readonly>`)}</div><div class="field-grid release-fields">${field(
+      t('macOS-DMG-Variante', 'macOS DMG variant'),
+      prefix + 'release-dmg-variant',
+      `<select id="${prefix}release-dmg-variant" data-${attribute}="releaseDmgVariant" data-release-filter="${own ? 'source' : 'global'}"${backup.metadata.releases ? '' : ' disabled'}>${[
+        ['compatible', t('Automatisch · passende Varianten', 'Automatic · compatible variants')],
+        ['universal', 'Universal (Intel + Apple Silicon)'],
+        ['arm64', t('Nur Apple Silicon (ARM64)', 'Apple Silicon only (ARM64)')],
+        ['x64', t('Nur Intel (x64)', 'Intel only (x64)')]
+      ]
+        .map(
+          ([value, label]) =>
+            `<option value="${value}"${(backup.releaseDmgVariant || 'compatible') === value ? ' selected' : ''}>${label}</option>`
+        )
+        .join('')}</select>`,
+      t(
+        'Eine feste Auswahl gilt für DMGs anstelle des Architekturfilters. Andere Dateitypen behalten ihre Filter. Unpassende Programme werden nicht installiert.',
+        'An explicit choice replaces the architecture filter for DMGs. Other file types keep their filters. Incompatible programs are not installed.'
+      )
+    )}</div><details class="advanced release-type-options"><summary>${t('Dateitypen auswählen', 'Choose file types')}</summary><div class="advanced-body"><p class="field-help">${t('Ohne Markierung werden alle Dateitypen gesichert. Prüfsummen bleiben enthalten. Universal-Pakete passen zu mehreren Architekturen.', 'No selection includes all file types. Checksums are retained. Universal packages match multiple architectures.')}</p><div class="check-grid">${types()
+      .map(
+        type =>
+          `<label class="check-label"><input type="checkbox" data-release-type="${type}" data-release-filter="${own ? 'source' : 'global'}"${backup.releaseFileTypes?.includes(type) ? ' checked' : ''}${backup.metadata.releases ? '' : ' disabled'}>${type === 'other' ? t('Andere Formate', 'Other formats') : type.toUpperCase()}</label>`
+      )
+      .join('')}</div></div></details>`;
   }
   function installationFields(source) {
     const install = source.installation || { enabled: false, destination: '', pattern: '' };
@@ -11,47 +69,169 @@ window.createGitClonerReleaseTools = function ({ api, t, esc, field, button, pan
   }
   function syncFilters() {
     for (const input of document.querySelectorAll('[data-release-filter],#release-scope,#source-release-scope')) {
-      const backup = input.dataset.releaseFilter === 'source' || input.id.startsWith('source-') ? getSourceDraft()?.backup || getState().config.backup : getDraft().backup;
+      const backup =
+        input.dataset.releaseFilter === 'source' || input.id.startsWith('source-')
+          ? getSourceDraft()?.backup || getState().config.backup
+          : getDraft().backup;
       input.disabled = !backup.metadata.releases;
     }
   }
   function storagePanel() {
-    return panel(t('Downloads & Speicher', 'Downloads & storage'), `<div class="panel-body"><p>${t('Temporäre Downloadreste auf verbundenen Sicherungslaufwerken anzeigen und ausgewählte Teile nach einer Vorschau bereinigen.', 'Inspect temporary download parts on connected backup drives and clean selected items after a preview.')}</p><div class="heading-buttons">${button(t('Download-Speicher anzeigen', 'View download storage'), 'download-storage', 'download', 'secondary')}${programLibrary.historyButton()}</div></div>`);
+    return panel(
+      t('Downloads & Speicher', 'Downloads & storage'),
+      `<div class="panel-body"><p>${t('Temporäre Downloadreste auf verbundenen Sicherungslaufwerken anzeigen und ausgewählte Teile nach einer Vorschau bereinigen.', 'Inspect temporary download parts on connected backup drives and clean selected items after a preview.')}</p><div class="heading-buttons">${button(t('Download-Speicher anzeigen', 'View download storage'), 'download-storage', 'download', 'secondary')}${programLibrary.historyButton()}</div></div>`
+    );
   }
   function renderStorage() {
-    const dialog = document.getElementById('download-storage-dialog'); cleanupToken = null;
-    const visible = storage.entries.slice(offset, offset + 50), all = visible.length > 0 && visible.every(entry => selected.has(entry.id));
-    const total = storage.entries.reduce((sum, entry) => sum + entry.bytes, 0), chosen = storage.entries.filter(entry => selected.has(entry.id));
-    dialog.innerHTML = `<div class="dialog-heading"><h2 id="download-storage-title">${t('Downloads & Speicher', 'Downloads & storage')}</h2><button class="icon-button" data-action="storage-close" aria-label="${t('Schließen', 'Close')}">×</button></div><div class="download-storage-summary"><div><strong>${bytes(total)}</strong><span>${t('Downloadreste', 'Download parts')}</span></div><div><strong>${storage.entries.length}</strong><span>${t('Downloads', 'Downloads')}</span></div><div><strong>${bytes(chosen.reduce((sum, entry) => sum + entry.bytes, 0))}</strong><span>${t('Ausgewählt', 'Selected')}</span></div></div><p class="field-help">${t('Die Bereinigung entfernt nur eigene temporäre Dateiteile. Diese müssen beim nächsten Versuch neu geladen werden. Fertige Sicherungen und installierte Programme bleiben erhalten.', 'Cleanup removes owned temporary parts, which must be downloaded again on the next attempt. Completed backups and installed programs are retained.')}</p>${storage.warnings.map(warning => `<p class="inline-warning">${esc(warning)}</p>`).join('')}<div class="table-wrap"><table class="table"><thead><tr><th><input type="checkbox" id="storage-select-page"${all?' checked':''}${visible.length?'':' disabled'} aria-label="${t('Downloads dieser Seite auswählen', 'Select downloads on this page')}"></th><th>${t('DOWNLOAD / LAUFWERK', 'DOWNLOAD / DRIVE')}</th><th>${t('SPEICHER', 'STORAGE')}</th><th>STATUS</th></tr></thead><tbody>${storage.entries.slice(offset, offset + 50).map(entry => `<tr><td><input type="checkbox" data-storage-select="${entry.id}" aria-label="${esc(entry.label || entry.name || t('Download', 'Download'))} ${t('auswählen', 'select')}"${selected.has(entry.id) ? ' checked' : ''}></td><td><strong>${esc(entry.label || t('Frühere Quelle', 'Previous source'))}</strong>${entry.name ? `<div class="repo-detail">${esc(entry.name)}</div>` : ''}<div class="repo-detail">${esc(entry.root)}</div><div class="repo-detail">${esc(new Intl.DateTimeFormat(t('de-DE','en-GB'),{dateStyle:'medium',timeStyle:'short'}).format(new Date(entry.updatedAt)))}</div></td><td class="nowrap">${bytes(entry.bytes)}<div class="repo-detail">${entry.chunks} ${t('Teile', 'parts')}</div></td><td><span class="label neutral">${entry.encrypted ? t('Verschlüsselt', 'Encrypted') : t('Unverschlüsselt', 'Unencrypted')}</span><div class="repo-detail">${entry.complete ? t('Vollständig zwischengespeichert', 'Fully cached') : t('Unterbrochen', 'Interrupted')}</div></td></tr>`).join('') || `<tr><td colspan="4">${t('Keine bereinigbaren Downloadreste gefunden.', 'No removable download parts found.')}</td></tr>`}</tbody></table></div><div class="pagination"><span>${storage.entries.length} ${t('Einträge', 'entries')}</span><div>${button('‹', 'storage-previous', '', 'secondary', !offset)}${button('›', 'storage-next', '', 'secondary', offset + 50 >= storage.entries.length)}</div></div><p id="storage-error" role="alert" class="form-error" hidden></p><div class="dialog-actions">${button(t('Neu laden', 'Refresh'), 'storage-refresh', 'refresh', 'secondary')}${button(t('Bereinigung prüfen', 'Review cleanup'), 'storage-preview', '', 'primary', !chosen.length || getState().busy)}</div>`;
+    const dialog = document.getElementById('download-storage-dialog');
+    cleanupToken = null;
+    const visible = storage.entries.slice(offset, offset + 50),
+      all = visible.length > 0 && visible.every(entry => selected.has(entry.id));
+    const total = storage.entries.reduce((sum, entry) => sum + entry.bytes, 0),
+      chosen = storage.entries.filter(entry => selected.has(entry.id));
+    dialog.innerHTML = `<div class="dialog-heading"><h2 id="download-storage-title">${t('Downloads & Speicher', 'Downloads & storage')}</h2><button class="icon-button" data-action="storage-close" aria-label="${t('Schließen', 'Close')}">×</button></div><div class="download-storage-summary"><div><strong>${bytes(total)}</strong><span>${t('Downloadreste', 'Download parts')}</span></div><div><strong>${storage.entries.length}</strong><span>${t('Downloads', 'Downloads')}</span></div><div><strong>${bytes(chosen.reduce((sum, entry) => sum + entry.bytes, 0))}</strong><span>${t('Ausgewählt', 'Selected')}</span></div></div><p class="field-help">${t('Die Bereinigung entfernt nur eigene temporäre Dateiteile. Diese müssen beim nächsten Versuch neu geladen werden. Fertige Sicherungen und installierte Programme bleiben erhalten.', 'Cleanup removes owned temporary parts, which must be downloaded again on the next attempt. Completed backups and installed programs are retained.')}</p>${storage.warnings.map(warning => `<p class="inline-warning">${esc(warning)}</p>`).join('')}<div class="table-wrap"><table class="table"><thead><tr><th><input type="checkbox" id="storage-select-page"${all ? ' checked' : ''}${visible.length ? '' : ' disabled'} aria-label="${t('Downloads dieser Seite auswählen', 'Select downloads on this page')}"></th><th>${t('DOWNLOAD / LAUFWERK', 'DOWNLOAD / DRIVE')}</th><th>${t('SPEICHER', 'STORAGE')}</th><th>STATUS</th></tr></thead><tbody>${
+      storage.entries
+        .slice(offset, offset + 50)
+        .map(
+          entry =>
+            `<tr><td><input type="checkbox" data-storage-select="${entry.id}" aria-label="${esc(entry.label || entry.name || t('Download', 'Download'))} ${t('auswählen', 'select')}"${selected.has(entry.id) ? ' checked' : ''}></td><td><strong>${esc(entry.label || t('Frühere Quelle', 'Previous source'))}</strong>${entry.name ? `<div class="repo-detail">${esc(entry.name)}</div>` : ''}<div class="repo-detail">${esc(entry.root)}</div><div class="repo-detail">${esc(new Intl.DateTimeFormat(t('de-DE', 'en-GB'), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(entry.updatedAt)))}</div></td><td class="nowrap">${bytes(entry.bytes)}<div class="repo-detail">${entry.chunks} ${t('Teile', 'parts')}</div></td><td><span class="label neutral">${entry.encrypted ? t('Verschlüsselt', 'Encrypted') : t('Unverschlüsselt', 'Unencrypted')}</span><div class="repo-detail">${entry.complete ? t('Vollständig zwischengespeichert', 'Fully cached') : t('Unterbrochen', 'Interrupted')}</div></td></tr>`
+        )
+        .join('') ||
+      `<tr><td colspan="4">${t('Keine bereinigbaren Downloadreste gefunden.', 'No removable download parts found.')}</td></tr>`
+    }</tbody></table></div><div class="pagination"><span>${storage.entries.length} ${t('Einträge', 'entries')}</span><div>${button('‹', 'storage-previous', '', 'secondary', !offset)}${button('›', 'storage-next', '', 'secondary', offset + 50 >= storage.entries.length)}</div></div><p id="storage-error" role="alert" class="form-error" hidden></p><div class="dialog-actions">${button(t('Neu laden', 'Refresh'), 'storage-refresh', 'refresh', 'secondary')}${button(t('Bereinigung prüfen', 'Review cleanup'), 'storage-preview', '', 'primary', !chosen.length || getState().busy)}</div>`;
   }
-  async function loadStorage() { storage = await api.downloadInventory(); selected = new Set(); offset = 0; renderStorage(); }
+  async function loadStorage() {
+    storage = await api.downloadInventory();
+    selected = new Set();
+    offset = 0;
+    renderStorage();
+  }
   async function openStorage() {
-    const dialog = document.getElementById('download-storage-dialog'); dialog.innerHTML = `<h2 id="download-storage-title">${t('Downloads & Speicher', 'Downloads & storage')}</h2><p role="status">${t('Downloadreste werden gelesen …', 'Reading download parts …')}</p>`; dialog.showModal(); await loadStorage();
+    const dialog = document.getElementById('download-storage-dialog');
+    dialog.innerHTML = `<h2 id="download-storage-title">${t('Downloads & Speicher', 'Downloads & storage')}</h2><p role="status">${t('Downloadreste werden gelesen …', 'Reading download parts …')}</p>`;
+    dialog.showModal();
+    await loadStorage();
   }
   async function previewCleanup() {
-    const preview = await api.previewDownloadCleanup({ ids: [...selected] }); cleanupToken = preview.token;
-    document.getElementById('download-storage-dialog').innerHTML = `<h2 id="download-storage-title">${t('Bereinigung prüfen', 'Review cleanup')}</h2><div class="info-box">${icon('info')}<p>${preview.count} ${t('Downloads', 'downloads')} · <strong>${bytes(preview.bytes)}</strong><br>${t('Die ausgewählten temporären Teile werden entfernt und bei Bedarf erneut heruntergeladen.', 'The selected temporary parts will be removed and downloaded again when needed.')}</p></div><p id="storage-error" class="form-error" role="alert" hidden></p><div class="dialog-actions">${button(t('Zurück', 'Back'), 'storage-back', '', 'secondary')}${button(t('Ausgewählte Teile bereinigen', 'Clean selected parts'), 'storage-clean', '', 'primary', getState().busy)}</div>`;
+    const preview = await api.previewDownloadCleanup({ ids: [...selected] });
+    cleanupToken = preview.token;
+    document.getElementById('download-storage-dialog').innerHTML =
+      `<h2 id="download-storage-title">${t('Bereinigung prüfen', 'Review cleanup')}</h2><div class="info-box">${icon('info')}<p>${preview.count} ${t('Downloads', 'downloads')} · <strong>${bytes(preview.bytes)}</strong><br>${t('Die ausgewählten temporären Teile werden entfernt und bei Bedarf erneut heruntergeladen.', 'The selected temporary parts will be removed and downloaded again when needed.')}</p></div><p id="storage-error" class="form-error" role="alert" hidden></p><div class="dialog-actions">${button(t('Zurück', 'Back'), 'storage-back', '', 'secondary')}${button(t('Ausgewählte Teile bereinigen', 'Clean selected parts'), 'storage-clean', '', 'primary', getState().busy)}</div>`;
   }
   function bind() {
     document.addEventListener('change', event => {
-      const node = event.target, source = getSourceDraft();
-      if (node.dataset.releaseType) { const backup = node.dataset.releaseFilter === 'source' ? source.backup : getDraft().backup; const checked = [...document.querySelectorAll(`[data-release-type][data-release-filter="${node.dataset.releaseFilter}"]:checked`)]; backup.releaseFileTypes = checked.map(input => input.dataset.releaseType).sort(); }
-      if (node.id === 'source-install-enabled') {
-        source.installation = { ...source.installation, enabled: node.checked, destination: document.getElementById('source-install-destination').value.trim(), pattern: document.getElementById('source-install-pattern').value.trim() }; document.getElementById('source-install-fields').hidden = !node.checked;
-        if (node.checked) { source.backup ||= structuredClone(getState().config.backup); if(!source.backup.metadata.releases){source.backup.releaseScope='system';document.getElementById('source-release-scope').value='system';} source.backup.metadata.releases = true; document.getElementById('source-own-backup').checked = true; document.getElementById('source-backup-fields').hidden = false; document.querySelector('[data-source-metadata="releases"]').checked = true; }
+      const node = event.target,
+        source = getSourceDraft();
+      if (node.dataset.releaseType) {
+        const backup = node.dataset.releaseFilter === 'source' ? source.backup : getDraft().backup;
+        const checked = [
+          ...document.querySelectorAll(
+            `[data-release-type][data-release-filter="${node.dataset.releaseFilter}"]:checked`
+          )
+        ];
+        backup.releaseFileTypes = checked.map(input => input.dataset.releaseType).sort();
       }
-      if (node.id === 'source-install-keep-all') source.installation = { ...source.installation, keepAllReleaseFiles: node.checked };
-      if (node.dataset.storageSelect) { if (node.checked) selected.add(node.dataset.storageSelect); else selected.delete(node.dataset.storageSelect); renderStorage(); }
-      if (node.id === 'storage-select-page') { for (const entry of storage.entries.slice(offset, offset + 50)) { if (node.checked) selected.add(entry.id); else selected.delete(entry.id); } renderStorage(); }
-      if (node.dataset.metadata || node.dataset.sourceMetadata || node.id === 'source-own-backup' || node.id === 'source-install-enabled') syncFilters();
+      if (node.id === 'source-install-enabled') {
+        source.installation = {
+          ...source.installation,
+          enabled: node.checked,
+          destination: document.getElementById('source-install-destination').value.trim(),
+          pattern: document.getElementById('source-install-pattern').value.trim()
+        };
+        document.getElementById('source-install-fields').hidden = !node.checked;
+        if (node.checked) {
+          source.backup ||= structuredClone(getState().config.backup);
+          if (!source.backup.metadata.releases) {
+            source.backup.releaseScope = 'system';
+            document.getElementById('source-release-scope').value = 'system';
+          }
+          source.backup.metadata.releases = true;
+          document.getElementById('source-own-backup').checked = true;
+          document.getElementById('source-backup-fields').hidden = false;
+          document.querySelector('[data-source-metadata="releases"]').checked = true;
+        }
+      }
+      if (node.id === 'source-install-keep-all')
+        source.installation = { ...source.installation, keepAllReleaseFiles: node.checked };
+      if (node.dataset.storageSelect) {
+        if (node.checked) selected.add(node.dataset.storageSelect);
+        else selected.delete(node.dataset.storageSelect);
+        renderStorage();
+      }
+      if (node.id === 'storage-select-page') {
+        for (const entry of storage.entries.slice(offset, offset + 50)) {
+          if (node.checked) selected.add(entry.id);
+          else selected.delete(entry.id);
+        }
+        renderStorage();
+      }
+      if (
+        node.dataset.metadata ||
+        node.dataset.sourceMetadata ||
+        node.id === 'source-own-backup' ||
+        node.id === 'source-install-enabled'
+      )
+        syncFilters();
     });
-    document.addEventListener('input', event => { if (['source-install-destination', 'source-install-pattern'].includes(event.target.id)) { const source = getSourceDraft(); source.installation ||= { enabled: false, destination: '', pattern: '' }; source.installation[event.target.id.endsWith('destination') ? 'destination' : 'pattern'] = event.target.value.trim(); } });
+    document.addEventListener('input', event => {
+      if (['source-install-destination', 'source-install-pattern'].includes(event.target.id)) {
+        const source = getSourceDraft();
+        source.installation ||= { enabled: false, destination: '', pattern: '' };
+        source.installation[event.target.id.endsWith('destination') ? 'destination' : 'pattern'] =
+          event.target.value.trim();
+      }
+    });
     document.addEventListener('click', event => {
-      const node = event.target.closest('button'); if (!node || node.disabled) return;
-      const actions = { 'program-directory': async () => { const destination = await api.chooseDirectory(); if (destination) { document.getElementById('source-install-destination').value = destination; getSourceDraft().installation.destination = destination; } }, 'download-storage': openStorage, 'storage-close': () => document.getElementById('download-storage-dialog').close(), 'storage-refresh': loadStorage, 'storage-previous': () => { offset -= 50; renderStorage(); }, 'storage-next': () => { offset += 50; renderStorage(); }, 'storage-preview': previewCleanup, 'storage-back': renderStorage, 'storage-clean': async () => { node.disabled = true; try { const result = await api.cleanDownloads({ token: cleanupToken }); toast(`${result.removed} ${t('Downloads bereinigt', 'downloads cleaned')} · ${bytes(result.bytes)}`); await loadStorage(); } finally { node.disabled = false; } } };
-      if (actions[node.dataset.action]) void actions[node.dataset.action]().catch(error => { const target = document.getElementById('storage-error'); if (target) { target.textContent = error.message; target.hidden = false; } else void attempt(() => { throw error; }); });
+      const node = event.target.closest('button');
+      if (!node || node.disabled) return;
+      const actions = {
+        'program-directory': async () => {
+          const destination = await api.chooseDirectory();
+          if (destination) {
+            document.getElementById('source-install-destination').value = destination;
+            getSourceDraft().installation.destination = destination;
+          }
+        },
+        'download-storage': openStorage,
+        'storage-close': () => document.getElementById('download-storage-dialog').close(),
+        'storage-refresh': loadStorage,
+        'storage-previous': () => {
+          offset -= 50;
+          renderStorage();
+        },
+        'storage-next': () => {
+          offset += 50;
+          renderStorage();
+        },
+        'storage-preview': previewCleanup,
+        'storage-back': renderStorage,
+        'storage-clean': async () => {
+          node.disabled = true;
+          try {
+            const result = await api.cleanDownloads({ token: cleanupToken });
+            toast(`${result.removed} ${t('Downloads bereinigt', 'downloads cleaned')} · ${bytes(result.bytes)}`);
+            await loadStorage();
+          } finally {
+            node.disabled = false;
+          }
+        }
+      };
+      if (actions[node.dataset.action])
+        void actions[node.dataset.action]().catch(error => {
+          const target = document.getElementById('storage-error');
+          if (target) {
+            target.textContent = window.gitClonerMessages.display(error.message, t);
+            target.hidden = false;
+          } else
+            void attempt(() => {
+              throw error;
+            });
+        });
     });
   }
-  function update(){for(const node of document.querySelectorAll('[data-action="storage-clean"],[data-action="storage-preview"]'))node.disabled=getState().busy||(node.dataset.action==='storage-preview'&&!selected.size);}
+  function update() {
+    for (const node of document.querySelectorAll('[data-action="storage-clean"],[data-action="storage-preview"]'))
+      node.disabled = getState().busy || (node.dataset.action === 'storage-preview' && !selected.size);
+  }
   return { filterFields, installationFields, storagePanel, bind, update };
 };

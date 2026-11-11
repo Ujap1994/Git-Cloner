@@ -125,10 +125,18 @@ jobs:
           retention-days: 7
 
   flatpak:
-    name: Build · Flatpak x64
+    name: Build · Flatpak ${{ matrix.arch }}
     needs: prepare
     if: needs.prepare.outputs.publish == 'true'
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            os: ubuntu-24.04
+          - arch: arm64
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -149,27 +157,73 @@ jobs:
           DEBUG: '@malept/flatpak-bundler'
         run: |
           set -o pipefail
-          npx electron-builder --linux flatpak --x64 --publish never 2>&1 | tee flatpak-build.log
+          npx electron-builder --linux flatpak --${{ matrix.arch }} --publish never 2>&1 | tee flatpak-build.log
       - name: Verify bundled Git and Git LFS
         shell: bash
         run: bash scripts/check-flatpak.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: flatpak-build-evidence
+          name: flatpak-build-evidence-${{ matrix.arch }}
           path: flatpak-build.log
           retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
-          name: packages-Flatpak
+          name: packages-Flatpak-${{ matrix.arch }}
           path: dist/*.flatpak
+          if-no-files-found: error
+          retention-days: 7
+
+  snap:
+    name: Build · Snap ${{ matrix.arch }}
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            os: ubuntu-24.04
+          - arch: arm64
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: sudo snap install snapcraft --classic --channel=8.x/stable
+      - run: sudo apt-get update && sudo apt-get install -y squashfs-tools
+      - run: npm ci
+      - name: Build Snap on the disposable native runner
+        run: sudo env "PATH=$PATH" ./node_modules/.bin/electron-builder --linux snap --${{ matrix.arch }} --publish never
+      - name: Verify Snap metadata and retained Chromium sandbox
+        run: |
+          for package in dist/*.snap; do
+            unsquashfs -cat "$package" meta/snap.yaml > snap-metadata.yml
+            node -e 'const s=require("js-yaml").load(require("fs").readFileSync("snap-metadata.yml","utf8"));if(s.version!==require("./package.json").version||s.confinement!=="strict")process.exit(1)'
+            unsquashfs -ll "$package" | grep 'chrome-sandbox'
+          done
+      - name: Verify bundled Git and HTTPS inside the installed Snap
+        run: |
+          sudo snap install --dangerous dist/*.snap
+          sudo snap connect git-cloner:browser-support
+          bash scripts/check-snap.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-Snap-${{ matrix.arch }}
+          path: dist/*.snap
           if-no-files-found: error
           retention-days: 7
 
   publish:
     name: Publish GitHub release
     timeout-minutes: 30
-    needs: [prepare, packages, flatpak]
+    needs: [prepare, packages, flatpak, snap]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -197,7 +251,7 @@ jobs:
           npm run catalogs -- --assets release-assets --output catalogs --version "$RELEASE_VERSION" --commit "$RELEASE_COMMIT"
           RELEASE_EPOCH="$(git show -s --format=%ct "$RELEASE_COMMIT")"
           find catalogs -exec touch -h -d "@$RELEASE_EPOCH" {} +
-          find catalogs -type f | LC_ALL=C sort | zip -X -q release-assets/Git-Cloner-Katalogvorlagen.zip -@
+          find catalogs -type f | LC_ALL=C sort | zip -X -q release-assets/Git-Cloner-Catalog-Templates.zip -@
       - name: Checksums and release
         shell: bash
         env:

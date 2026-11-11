@@ -1,7 +1,7 @@
 {
   "name": "git-cloner",
-  "version": "3.6.1",
-  "description": "Geplante Git-Sicherungen auf deinem eigenen Laufwerk.",
+  "version": "3.7.0",
+  "description": "Scheduled Git backups and managed release installations on your own drive.",
   "author": "Ujap1994",
   "license": "MIT",
   "private": true,
@@ -16,7 +16,7 @@
   },
   "scripts": {
     "start": "electron .",
-    "lint": "eslint .",
+    "lint": "eslint . && prettier --check .",
     "test": "node --test tests/unit/*.test.cjs tests/integration/*.test.cjs",
     "test:coverage": "node --experimental-test-coverage --test tests/unit/*.test.cjs tests/integration/*.test.cjs",
     "test:e2e": "playwright test",
@@ -26,10 +26,12 @@
     "build:linux": "electron-builder --linux AppImage deb rpm tar.gz --x64 --publish never",
     "build:mac": "electron-builder --mac dmg zip --universal --arm64 --x64 --publish never",
     "build:win": "electron-builder --win nsis portable --x64 --arm64 --publish never",
-    "screenshots": "playwright test tests/e2e/screenshots.spec.cjs tests/e2e/workflows.spec.cjs tests/e2e/enhancements.spec.cjs tests/e2e/studio.spec.cjs tests/e2e/workspace.spec.cjs tests/e2e/release-programs.spec.cjs tests/e2e/program-library.spec.cjs",
+    "screenshots": "node scripts/screenshots.cjs",
     "catalogs": "node scripts/catalogs.cjs",
     "test:forgejo": "node scripts/forgejo-smoke.cjs",
-    "test:wordcraft": "node scripts/wordcraft-install-smoke.cjs"
+    "test:release-dmg": "node scripts/release-dmg-smoke.cjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "diff": "^9.0.0",
@@ -45,6 +47,7 @@
     "electron-builder": "^26.18.0",
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
-    "js-yaml": "^5.5.0"
+    "js-yaml": "^5.5.0",
+    "prettier": "3.9.10"
   }
 }

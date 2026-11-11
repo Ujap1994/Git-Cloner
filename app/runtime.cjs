@@ -22,55 +22,144 @@ const { networkName, restriction } = require('./core/network-rules.cjs');
 const { dashboard } = require('./core/metrics.cjs');
 const { RestoreBrowser } = require('./core/selective-restore.cjs');
 const { ChangesPreview } = require('./core/changes.cjs');
-const { rememberHints, findRelocations, persistRelocations, recoverRelocations, targets: relocationTargets, markerAt, mountedRoots: systemRoots } = require('./core/relocation.cjs');
-const {HostedClient}=require('./core/hosted-client.cjs');
-const {providerSpec,providerKey,parseHostedSource}=require('./core/provider-spec.cjs');
-const {queryHistory,exportHistory,historyDetails}=require('./core/history.cjs');
-const {spaceReady}=require('./core/space-wait.cjs');
-const {rateReady}=require('./core/rate-limit.cjs');
+const {
+  rememberHints,
+  findRelocations,
+  persistRelocations,
+  recoverRelocations,
+  targets: relocationTargets,
+  markerAt,
+  mountedRoots: systemRoots
+} = require('./core/relocation.cjs');
+const { HostedClient } = require('./core/hosted-client.cjs');
+const { providerSpec, providerKey, parseHostedSource } = require('./core/provider-spec.cjs');
+const { queryHistory, exportHistory, historyDetails } = require('./core/history.cjs');
+const { spaceReady } = require('./core/space-wait.cjs');
+const { rateReady, budgetView } = require('./core/rate-limit.cjs');
 const { setTimeout: sleepFor } = require('node:timers/promises');
-const {rotationInventory,rotatePasswords,recoverRotations}=require('./core/key-rotation.cjs');
-const {inspectRecommendations}=require('./core/recommendations.cjs');
+const { rotationInventory, rotatePasswords, recoverRotations } = require('./core/key-rotation.cjs');
+const { inspectRecommendations } = require('./core/recommendations.cjs');
 const { organizeConfig, prepareBulk, configSignature, RepositoryBrowser } = require('./core/source-workspace.cjs');
 
 const downloadStorage = require('./core/download-storage.cjs');
-const { ProgramInstaller } = require('./core/program-installation.cjs');
+const { ProgramInstaller, owned } = require('./core/program-installation.cjs');
 const { ProgramShortcuts } = require('./core/program-shortcuts.cjs');
 const { DownloadHistory } = require('./core/download-history.cjs');
 const { FILE_TYPES, ARCHITECTURES } = require('./core/release-assets.cjs');
 
+// Program messages replace their previous version; other backup warnings stay.
+function programWarning(existing, next) {
+  const kept = String(existing ?? '')
+    .split(/ (?=Programm(?:installation|verknüpfungen): )/)
+    .filter(part => part && !/^Programm(?:installation|verknüpfungen): /.test(part))
+    .join(' ');
+  return [kept, next].filter(Boolean).join(' ') || undefined;
+}
 class Runtime extends EventEmitter {
   downloadRoots() {
-    return [...new Map(this.config.sources.flatMap(source => [source, ...source.additionalDestinations]).filter(target => target.volumeId).map(target => [target.destination, { destination: target.destination, volumeId: target.volumeId }])).values()];
+    return [
+      ...new Map(
+        this.config.sources
+          .flatMap(source => [source, ...source.additionalDestinations])
+          .filter(target => target.volumeId)
+          .map(target => [target.destination, { destination: target.destination, volumeId: target.volumeId }])
+      ).values()
+    ];
   }
   async downloadInventory() {
     const result = await downloadStorage.inventory(this.downloadRoots());
-    const names = [...this.config.sources.filter(source=>source.kind==='repository').map(source=>({source,fullName:source.value})), ...Object.values(this.backup.state.repositories).map(record=>({source:this.config.sources.find(source=>source.id===record.sourceId),fullName:record.fullName})).filter(item=>item.source)];
-    for(const entry of result.entries){const match=names.find(item=>createHash('sha256').update(`${providerKey(item.source)}:${item.source.accountId??'default'}:${item.fullName.toLowerCase()}`).digest('hex')===entry.scope);entry.label=match?.fullName??null;}
+    const names = [
+      ...this.config.sources
+        .filter(source => source.kind === 'repository')
+        .map(source => ({ source, fullName: source.value })),
+      ...Object.values(this.backup.state.repositories)
+        .map(record => ({
+          source: this.config.sources.find(source => source.id === record.sourceId),
+          fullName: record.fullName
+        }))
+        .filter(item => item.source)
+    ];
+    for (const entry of result.entries) {
+      const match = names.find(
+        item =>
+          createHash('sha256')
+            .update(`${providerKey(item.source)}:${item.source.accountId ?? 'default'}:${item.fullName.toLowerCase()}`)
+            .digest('hex') === entry.scope
+      );
+      entry.label = match?.fullName ?? null;
+    }
     this.downloadEntries = result.entries;
-    return { entries: result.entries.map(({ directory: _directory, scopeDirectory: _scopeDirectory, signature: _signature, ...entry }) => entry), warnings: result.warnings };
+    return {
+      entries: result.entries.map(
+        ({ directory: _directory, scopeDirectory: _scopeDirectory, signature: _signature, ...entry }) => entry
+      ),
+      warnings: result.warnings
+    };
   }
   previewDownloadCleanup({ ids } = {}) {
-    if (!Array.isArray(ids) || !ids.length || new Set(ids).size !== ids.length) throw new Error('Bitte Downloadreste auswählen.');
+    if (!Array.isArray(ids) || !ids.length || new Set(ids).size !== ids.length)
+      throw new Error('Bitte Downloadreste auswählen.');
     const entries = ids.map(id => this.downloadEntries?.find(entry => entry.id === id));
     if (entries.some(entry => !entry)) throw new Error('Die Downloadübersicht bitte neu laden.');
-    const token = require('node:crypto').randomUUID(); this.downloadCleanup = { token, entries, expires: Date.now() + 300000 };
+    const token = require('node:crypto').randomUUID();
+    this.downloadCleanup = { token, entries, expires: Date.now() + 300000 };
     return { token, count: entries.length, bytes: entries.reduce((sum, entry) => sum + entry.bytes, 0) };
   }
   cleanDownloads({ token } = {}) {
-    return this.withOperation('cleaning-downloads', async () => { const preview = this.downloadCleanup; if (!preview || preview.token !== token || preview.expires < Date.now()) throw new Error('Die Bereinigungsvorschau ist abgelaufen.'); const roots = this.downloadRoots(); if (preview.entries.some(entry => !roots.some(root => root.destination === entry.root && root.volumeId === entry.volumeId))) throw new Error('Die Sicherungsziele wurden inzwischen geändert.'); const started = Date.now(), result = await downloadStorage.clean(preview.entries); try { await this.downloadHistory.append([{ status: 'cleaned', freedBytes: result.bytes, durationMs: Date.now() - started }]); await this.downloadHistory.flush(); } catch (error) { this.notice = 'Download-Verlauf: ' + error.message; } this.downloadCleanup = null; return result; });
+    return this.withOperation('cleaning-downloads', async () => {
+      const preview = this.downloadCleanup;
+      if (!preview || preview.token !== token || preview.expires < Date.now())
+        throw new Error('Die Bereinigungsvorschau ist abgelaufen.');
+      const roots = this.downloadRoots();
+      if (
+        preview.entries.some(
+          entry => !roots.some(root => root.destination === entry.root && root.volumeId === entry.volumeId)
+        )
+      )
+        throw new Error('Die Sicherungsziele wurden inzwischen geändert.');
+      const started = Date.now(),
+        result = await downloadStorage.clean(preview.entries);
+      try {
+        await this.downloadHistory.append([
+          { status: 'cleaned', freedBytes: result.bytes, durationMs: Date.now() - started }
+        ]);
+        await this.downloadHistory.flush();
+      } catch (error) {
+        this.notice = 'Download-Verlauf: ' + error.message;
+      }
+      this.downloadCleanup = null;
+      return result;
+    });
   }
 
-  downloadHistoryQuery(options) { return this.downloadHistory.query(options); }
+  downloadHistoryQuery(options) {
+    return this.downloadHistory.query(options);
+  }
   programCandidates({ sourceId, pattern = '' } = {}) {
     return this.withOperation('inspecting-programs', async () => {
       const configured = this.config.sources.find(source => source.id === sourceId);
-      if (!configured || configured.kind !== 'repository') throw new Error('Bitte ein einzelnes gespeichertes Repository auswählen.');
-      const source = validateConfig({ ...this.config, sources: [{ ...configured, installation: { ...configured.installation, enabled: false, pattern } }] }).sources[0];
-      const candidates = Object.values(this.backup.state.repositories).filter(record => record.sourceId === sourceId && record.releaseInfo?.fileCount && record.fullName.toLowerCase() === source.value.toLowerCase());
-      const record = candidates.find(record => record.destination.startsWith(source.destination + path.sep)) || candidates[0];
-      if (!record) throw new Error('Bitte zuerst die Quelle speichern und ihre Release-Dateien mit Jetzt prüfen sichern.');
-      return new ProgramInstaller().inspect({ source, record: this.record(record.id), git: this.sourceGit(source), passphrase: this.vault.passwordFor(record) });
+      if (!configured || configured.kind !== 'repository')
+        throw new Error('Bitte ein einzelnes gespeichertes Repository auswählen.');
+      const source = validateConfig({
+        ...this.config,
+        sources: [{ ...configured, installation: { ...configured.installation, enabled: false, pattern } }]
+      }).sources[0];
+      const candidates = Object.values(this.backup.state.repositories).filter(
+        record =>
+          record.sourceId === sourceId &&
+          record.releaseInfo?.fileCount &&
+          record.fullName.toLowerCase() === source.value.toLowerCase()
+      );
+      const record =
+        candidates.find(record => record.destination.startsWith(source.destination + path.sep)) || candidates[0];
+      if (!record)
+        throw new Error('Bitte zuerst die Quelle speichern und ihre Release-Dateien mit Jetzt prüfen sichern.');
+      return new ProgramInstaller().inspect({
+        source,
+        record: this.record(record.id),
+        git: this.sourceGit(source),
+        passphrase: this.vault.passwordFor(record)
+      });
     });
   }
 
@@ -78,282 +167,970 @@ class Runtime extends EventEmitter {
     const record = this.backup.state.repositories[id];
     if (!record) throw new Error('Sicherung nicht gefunden.');
     const marker = await managed(record.destination, record.fullName);
-    if (marker.encrypted) throw new Error('Release-Dateien liegen im verschlüsselten Archiv. Bitte über die Wiederherstellung entsperren.');
-    if (!releaseDirectoryName(marker.releaseInfo?.assetDirectory)) throw new Error('Bitte die Quelle erneut prüfen, um Release-Dateien im sichtbaren Ordner abzulegen.');
+    if (marker.encrypted)
+      throw new Error('Release-Dateien liegen im verschlüsselten Archiv. Bitte über die Wiederherstellung entsperren.');
+    if (!releaseDirectoryName(marker.releaseInfo?.assetDirectory))
+      throw new Error('Bitte die Quelle erneut prüfen, um Release-Dateien im sichtbaren Ordner abzulegen.');
     return safeDirectory(record.destination, [marker.releaseInfo.assetDirectory]);
   }
-  constructor({ directory, safeStorage, version, writeWindowsShortcut, fetchImpl = fetch, updateFetch, applyOS = async () => {}, notifyUpdate = () => {}, notifyBackup = () => {}, notificationsAvailable = () => true, now = () => new Date(), mountedRoots, environmentState = async () => ({ onBattery: null }), gitFactory = options => new Git(options) }) {
-    super(); Object.assign(this, { directory, safeStorage, version, writeWindowsShortcut, fetchImpl, updateFetch, applyOS, notifyUpdate, notifyBackup, notificationsAvailable, now, mountedRoots, environmentState, gitFactory });
-    this.programJobs = new Map(); this.downloadHistory = new DownloadHistory(path.join(directory, 'download-history.json'));
-    this.clients = new Map(); this.gitClients = new Map(); this.notice = null; this.operation = null; this.device = null;
-    this.dataRevision = 0; this.configRevision = 0; this.saving = false; this.disks = []; this.environment = { onBattery: null, network: null }; this.lastEnvironmentAt = 0;
+  constructor({
+    directory,
+    safeStorage,
+    version,
+    writeWindowsShortcut,
+    fetchImpl = fetch,
+    updateFetch,
+    applyOS = async () => {},
+    notifyUpdate = () => {},
+    notifyBackup = () => {},
+    notifyProgram = () => {},
+    notifyReminder = () => {},
+    notificationsAvailable = () => true,
+    now = () => new Date(),
+    mountedRoots,
+    environmentState = async () => ({ onBattery: null }),
+    gitFactory = options => new Git(options)
+  }) {
+    super();
+    Object.assign(this, {
+      directory,
+      safeStorage,
+      version,
+      writeWindowsShortcut,
+      fetchImpl,
+      updateFetch,
+      applyOS,
+      notifyUpdate,
+      notifyBackup,
+      notifyProgram,
+      notifyReminder,
+      notificationsAvailable,
+      now,
+      mountedRoots,
+      environmentState,
+      gitFactory
+    });
+    this.programJobs = new Map();
+    this.downloadHistory = new DownloadHistory(path.join(directory, 'download-history.json'));
+    this.clients = new Map();
+    this.gitClients = new Map();
+    this.notice = null;
+    this.operation = null;
+    this.device = null;
+    this.dataRevision = 0;
+    this.configRevision = 0;
+    this.saving = false;
+    this.disks = [];
+    this.environment = { onBattery: null, network: null };
+    this.lastEnvironmentAt = 0;
   }
-  changed() { this.emit('change'); }
-  busy() { return this.backup.busy || Boolean(this.operation); }
+  changed() {
+    this.emit('change');
+  }
+  busy() {
+    return this.backup.busy || Boolean(this.operation);
+  }
   client(id = 'default') {
-    if (!this.clients.has(id)) this.clients.set(id, new GitHubClient({ token: this.vault.tokens[id] || '', fetchImpl: this.fetchImpl }));
+    if (!this.clients.has(id))
+      this.clients.set(id, new GitHubClient({ token: this.vault.tokens[id] || '', fetchImpl: this.fetchImpl }));
     return this.clients.get(id);
   }
   gitFor(id = 'default') {
     if (!this.gitClients.has(id)) this.gitClients.set(id, this.gitFactory({ token: this.vault.tokens[id] || '' }));
     return this.gitClients.get(id);
   }
-  sourceClient(source={}){
-    const spec=providerSpec(source),id=source.accountId??'default';
-    if(spec.provider==='github'&&(id==='default'||this.config.accounts.some(a=>a.id===id&&providerKey(a)==='github:https://github.com')))return this.client(id);
-    const account=this.config.accounts.find(a=>a.id===id),token=account&&providerKey(account)===providerKey(spec)?this.vault.tokens[id]||'':'';
-    const key=`${providerKey(spec)}:${id}`;if(!this.clients.has(key))this.clients.set(key,spec.provider==='github'?new GitHubClient({token,fetchImpl:this.fetchImpl}):new HostedClient({...spec,token,username:account?.username||'',fetchImpl:this.fetchImpl}));return this.clients.get(key);
+  sourceClient(source = {}) {
+    const spec = providerSpec(source),
+      id = source.accountId ?? 'default';
+    if (
+      spec.provider === 'github' &&
+      (id === 'default' ||
+        this.config.accounts.some(a => a.id === id && providerKey(a) === 'github:https://github.com'))
+    )
+      return this.client(id);
+    const account = this.config.accounts.find(a => a.id === id),
+      token = account && providerKey(account) === providerKey(spec) ? this.vault.tokens[id] || '' : '';
+    const key = `${providerKey(spec)}:${id}`;
+    if (!this.clients.has(key))
+      this.clients.set(
+        key,
+        spec.provider === 'github'
+          ? new GitHubClient({ token, fetchImpl: this.fetchImpl })
+          : new HostedClient({ ...spec, token, username: account?.username || '', fetchImpl: this.fetchImpl })
+      );
+    return this.clients.get(key);
   }
-  sourceGit(source={}){
-    const spec=providerSpec(source),id=source.accountId??'default';if(spec.provider==='github'&&(id==='default'||this.config.accounts.some(a=>a.id===id&&providerKey(a)==='github:https://github.com')))return this.gitFor(id);
-    const account=this.config.accounts.find(a=>a.id===id),token=account&&providerKey(account)===providerKey(spec)?this.vault.tokens[id]||'':'';
-    const key=`${providerKey(spec)}:${id}`;if(!this.gitClients.has(key))this.gitClients.set(key,this.gitFactory({token,server:spec.server,username:spec.provider==='gitlab'?'oauth2':account?.username||'token'}));return this.gitClients.get(key);
+  sourceGit(source = {}) {
+    const spec = providerSpec(source),
+      id = source.accountId ?? 'default';
+    if (
+      spec.provider === 'github' &&
+      (id === 'default' ||
+        this.config.accounts.some(a => a.id === id && providerKey(a) === 'github:https://github.com'))
+    )
+      return this.gitFor(id);
+    const account = this.config.accounts.find(a => a.id === id),
+      token = account && providerKey(account) === providerKey(spec) ? this.vault.tokens[id] || '' : '';
+    const key = `${providerKey(spec)}:${id}`;
+    if (!this.gitClients.has(key))
+      this.gitClients.set(
+        key,
+        this.gitFactory({
+          token,
+          server: spec.server,
+          username: spec.provider === 'gitlab' ? 'oauth2' : account?.username || 'token'
+        })
+      );
+    return this.gitClients.get(key);
   }
   async init() {
     await fs.mkdir(this.directory, { recursive: true });
     this.config = validateConfig(await readJson(path.join(this.directory, 'settings.json'), defaults()));
     this.vault = new SecretVault(this.directory, this.safeStorage);
-    try { await this.vault.load(); } catch (error) { this.notice = error.message; }
+    try {
+      await this.vault.load();
+    } catch (error) {
+      this.notice = error.message;
+    }
     this.git = this.gitFor();
-    try { this.gitVersion = await this.git.version(); } catch (error) { this.gitVersion = null; this.notice = error.message; }
+    try {
+      this.gitVersion = await this.git.version();
+    } catch (error) {
+      this.gitVersion = null;
+      this.notice = error.message;
+    }
     let state = await readJson(path.join(this.directory, 'state.json'), {});
-    const recovered = await recoverRelocations(this.directory,this.config,state); this.config = validateConfig(recovered.config); state = recovered.state;
-    for(const [old,id]of Object.entries(recovered.idChanges??{}))if(this.vault.archiveBindings[old]){this.vault.archiveBindings[id]=this.vault.archiveBindings[old];await this.vault.persistKeyState();}
-    if (await rememberHints(this.config)) await writeJson(path.join(this.directory,'settings.json'),this.config);
+    const recovered = await recoverRelocations(this.directory, this.config, state);
+    this.config = validateConfig(recovered.config);
+    state = recovered.state;
+    for (const [old, id] of Object.entries(recovered.idChanges ?? {}))
+      if (this.vault.archiveBindings[old]) {
+        this.vault.archiveBindings[id] = this.vault.archiveBindings[old];
+        await this.vault.persistKeyState();
+      }
+    if (await rememberHints(this.config)) await writeJson(path.join(this.directory, 'settings.json'), this.config);
     const externalHistory = await readJson(path.join(this.directory, 'history.json'), null);
     if (externalHistory) state.history = externalHistory;
     if (state.queue) {
       state.queue.config = validateConfig(state.queue.config);
-      if (!Array.isArray(state.queue.jobs) || state.queue.jobs.length > 100000 || !Array.isArray(state.queue.completed) || !Array.isArray(state.queue.results)) throw new Error('Die gespeicherte Warteschlange ist beschädigt.');
+      if (
+        !Array.isArray(state.queue.jobs) ||
+        state.queue.jobs.length > 100000 ||
+        !Array.isArray(state.queue.completed) ||
+        !Array.isArray(state.queue.results)
+      )
+        throw new Error('Die gespeicherte Warteschlange ist beschädigt.');
       state.queue.pauseReason ||= 'restart';
-      for (const job of state.queue.jobs) { job.source = validateConfig({ ...state.queue.config, sources: [job.source] }).sources[0]; parseHostedSource(job.repository.full_name,'repository',job.source); }
+      for (const job of state.queue.jobs) {
+        job.source = validateConfig({ ...state.queue.config, sources: [job.source] }).sources[0];
+        parseHostedSource(job.repository.full_name, 'repository', job.source);
+      }
     }
     const records = {};
     for (const record of Object.values(state.repositories ?? {})) {
-      const id = record.id || createHash('sha256').update(`${record.fullName.toLowerCase()}\0${path.resolve(record.destination)}`).digest('hex').slice(0, 24);
+      const id =
+        record.id ||
+        createHash('sha256')
+          .update(`${record.fullName.toLowerCase()}\0${path.resolve(record.destination)}`)
+          .digest('hex')
+          .slice(0, 24);
       records[id] = { ...record, id };
     }
-    state.repositories=records;
-    if(Object.values(records).some(r=>r.rekeyPending)){const release=await acquireLease(this.directory);try{await recoverRotations(state,this.vault,value=>this.persistState(value));}finally{await release();}}
+    state.repositories = records;
+    if (Object.values(records).some(r => r.rekeyPending)) {
+      const release = await acquireLease(this.directory);
+      try {
+        await recoverRotations(state, this.vault, value => this.persistState(value));
+      } finally {
+        await release();
+      }
+    }
     this.backup = new BackupService({
-      state: { ...state, repositories: records }, git: this.git,
+      state: { ...state, repositories: records },
+      git: this.git,
       sync: async input => {
         const events = [];
         try {
-          const record = await syncRepository({ ...input, onDownload: event => { if (events.length === 2000) events.shift(); events.push({ ...event, fullName: input.repository.full_name, encrypted: input.options.encryption }); } });
-          if (input.source.installation?.enabled && ['cloned','updated','repaired','unchanged'].includes(record.status)) {
-            const key = path.resolve(input.source.installation.destination), previousTask = this.programJobs.get(key) || Promise.resolve();
-            const task = previousTask.catch(() => {}).then(async () => {
-              const previousInstallation = this.backup.state.repositories[jobId(input)]?.installation;
-              try {
-                record.installation = await new ProgramInstaller().install({ source: input.source, record, git: input.git, passphrase: input.passphrase, onProgress: input.onProgress });
-                try { record.installation.shortcuts = await new ProgramShortcuts({ writeWindowsShortcut: this.writeWindowsShortcut }).sync({ source: input.source, installation: record.installation, previous: previousInstallation }); }
-                catch (error) { record.installation.shortcuts = { ...previousInstallation?.shortcuts, ...error.shortcutState, status: 'error', message: error.message }; record.warning = [record.warning, 'Programmverknüpfungen: ' + error.message].filter(Boolean).join(' '); }
-              } catch (error) { record.installation = { ...previousInstallation, latestTag: record.releaseInfo?.tag, status: ['PROGRAM_RUNNING','EBUSY'].includes(error.code)?'waiting':'error', message: error.message }; record.warning = [record.warning, 'Programminstallation: ' + error.message].filter(Boolean).join(' '); }
-            });
-            this.programJobs.set(key, task); try { await task; } finally { if (this.programJobs.get(key) === task) this.programJobs.delete(key); }
+          const record = await syncRepository({
+            ...input,
+            onDownload: event => {
+              if (events.length === 2000) events.shift();
+              events.push({ ...event, fullName: input.repository.full_name, encrypted: input.options.encryption });
+            }
+          });
+          if (
+            input.source.installation?.enabled &&
+            ['cloned', 'updated', 'repaired', 'unchanged'].includes(record.status)
+          ) {
+            const key = path.resolve(input.source.installation.destination),
+              previousTask = this.programJobs.get(key) || Promise.resolve();
+            const task = previousTask
+              .catch(() => {})
+              .then(async () => {
+                const previousInstallation = this.backup.state.repositories[jobId(input)]?.installation;
+                const { installation, warning } = await this.applyInstallation({
+                  source: input.source,
+                  record,
+                  git: input.git,
+                  passphrase: input.passphrase,
+                  onProgress: input.onProgress,
+                  previousInstallation
+                });
+                record.installation = installation;
+                record.warning = programWarning(record.warning, warning);
+              });
+            this.programJobs.set(key, task);
+            try {
+              await task;
+            } finally {
+              if (this.programJobs.get(key) === task) this.programJobs.delete(key);
+            }
           }
           return record;
-        } finally { if (events.length) try { await this.downloadHistory.append(events); } catch (error) { this.notice = 'Download-Verlauf: ' + error.message; this.changed(); } }
+        } finally {
+          if (events.length)
+            try {
+              await this.downloadHistory.append(events);
+            } catch (error) {
+              this.notice = 'Download-Verlauf: ' + error.message;
+              this.changed();
+            }
+        }
       },
-      github: source => this.sourceClient(source), getGit: source => this.sourceGit(source),
-      getPassphrase: async () => this.vault.archivePassword, acquireLock: () => acquireLease(this.directory),
-      saveState: value => this.persistState(value), gate: execution => this.checkRules(execution)
+      github: source => this.sourceClient(source),
+      getGit: source => this.sourceGit(source),
+      getPassphrase: async () => this.vault.archivePassword,
+      acquireLock: () => acquireLease(this.directory),
+      saveState: value => this.persistState(value),
+      gate: execution => this.checkRules(execution)
     });
     this.backup.on('change', () => this.changed());
-    this.backup.on('data', () => { this.dataRevision++; this.changed(); });
-    this.backup.on('complete', result => { try { if (this.notificationsAvailable() && notificationAllowed(this.config,'backup',result,this.now())) this.notifyBackup(result); } catch (error) { this.notice = error.message; this.changed(); } });
+    this.backup.on('data', () => {
+      this.dataRevision++;
+      this.changed();
+    });
+    this.backup.on('complete', result => {
+      try {
+        if (!this.notificationsAvailable()) return;
+        if (notificationAllowed(this.config, 'backup', result, this.now())) this.notifyBackup(result);
+        else if (
+          (result.results ?? []).some(item => ['installed', 'available'].includes(item.installation?.status)) &&
+          notificationAllowed(this.config, 'program', result, this.now())
+        )
+          this.notifyProgram({ results: result.results });
+      } catch (error) {
+        this.notice = error.message;
+        this.changed();
+      }
+    });
     this.updates = new UpdateMonitor({
       currentVersion: this.version,
       github: this.updateFetch ? new GitHubClient({ fetchImpl: this.updateFetch }) : this.client(),
+      // Simulated releases in tests answer only API requests.
+      web: this.updateFetch ? null : this.fetchImpl,
       state: await readJson(path.join(this.directory, 'updates.json'), {}),
-      save: value => writeJson(path.join(this.directory, 'updates.json'), value), notify: result => this.notifyUpdate(result), canNotify: () => this.notificationsAvailable() && notificationAllowed(this.config,'update',{},this.now())
+      save: value => writeJson(path.join(this.directory, 'updates.json'), value),
+      notify: result => this.notifyUpdate(result),
+      canNotify: () => this.notificationsAvailable() && notificationAllowed(this.config, 'update', {}, this.now())
     });
-    this.scheduler = new Scheduler({ getConfig: () => this.config, getLastRun: () => this.backup.state, run: (due,scheduledSources) => this.continueInterrupted(due) ?? this.run({ scheduledAt: due, scheduledSources }), onError: error => { this.notice = error.message; this.changed(); } });
-    this.drives = new DriveMonitor({ getConfig: () => this.config, run: onlyTargets => this.run({ trigger: 'drive', onlyTargets }), onError: error => { this.notice = error.message; this.changed(); } });
+    this.scheduler = new Scheduler({
+      getConfig: () => this.config,
+      getLastRun: () => this.backup.state,
+      run: (due, scheduledSources) => this.continueInterrupted(due) ?? this.run({ scheduledAt: due, scheduledSources }),
+      onError: error => {
+        this.notice = error.message;
+        this.changed();
+      }
+    });
+    this.drives = new DriveMonitor({
+      getConfig: () => this.config,
+      run: onlyTargets => this.run({ trigger: 'drive', onlyTargets }),
+      onError: error => {
+        this.notice = error.message;
+        this.changed();
+      }
+    });
     this.deviceFlow = new DeviceFlow({ fetchImpl: this.fetchImpl });
     this.browser = new RestoreBrowser({ git: this.git });
-    this.changes = new ChangesPreview({browser:this.browser});
-    this.repositoryBrowser = new RepositoryBrowser({ clientFor: source => this.sourceClient(source), getConfig: () => this.config });
+    this.changes = new ChangesPreview({ browser: this.browser });
+    this.repositoryBrowser = new RepositoryBrowser({
+      clientFor: source => this.sourceClient(source),
+      getConfig: () => this.config
+    });
     await this.refreshDisks();
     return this;
   }
   async persistState(value) {
-    try { await this.downloadHistory.flush(); } catch (error) { this.notice = 'Download-Verlauf: ' + error.message; }
+    try {
+      await this.downloadHistory.flush();
+    } catch (error) {
+      this.notice = 'Download-Verlauf: ' + error.message;
+    }
     const { history = [], ...current } = value;
     await writeJson(path.join(this.directory, 'state.json'), { ...current, history: [] });
     const signature = `${history.length}:${history[0]?.finishedAt}`;
-    if (signature !== this.savedHistory) { await writeJson(path.join(this.directory, 'history.json'), history); this.savedHistory = signature; }
+    if (signature !== this.savedHistory) {
+      await writeJson(path.join(this.directory, 'history.json'), history);
+      this.savedHistory = signature;
+    }
   }
   snapshot() {
-    if (this.repositoryRevision !== this.dataRevision) { this.repositoryRevision = this.dataRevision; this.repositorySnapshot = Object.values(this.backup.state.repositories); }
-    const metricsKey = `${this.dataRevision}:${this.backup.state.history[0]?.finishedAt}:${this.diskRevision}:${Math.floor(Date.now()/60000)}`;
-    if (metricsKey !== this.metricsKey) { this.metricsKey = metricsKey; this.metricsSnapshot = dashboard(this.backup.state.repositories,this.backup.state.history,this.disks); }
+    if (this.repositoryRevision !== this.dataRevision) {
+      this.repositoryRevision = this.dataRevision;
+      this.repositorySnapshot = Object.values(this.backup.state.repositories);
+    }
+    const metricsKey = `${this.dataRevision}:${this.backup.state.history[0]?.finishedAt}:${this.diskRevision}:${Math.floor(Date.now() / 60000)}`;
+    if (metricsKey !== this.metricsKey) {
+      this.metricsKey = metricsKey;
+      this.metricsSnapshot = dashboard(this.backup.state.repositories, this.backup.state.history, this.disks);
+    }
     return {
-      config: this.config, busy: this.busy(), progress: this.backup.progress, operation: this.operation,
-      repositories: this.repositorySnapshot, history: this.backup.state.history,
-      nextRun: nextConfigRun(this.config), sourceRuns: Object.fromEntries(this.config.sources.map(s => [s.id,s.enabled ? nextRun(effectiveSchedule(this.config,s)) : null])),
-      update: this.updates.result, gitVersion: this.gitVersion, notice: this.notice,
-      tokenConfigured: Boolean(this.vault.tokens.default), secureStorage: this.vault.available(),
-      accounts: [{ id: 'default', label: 'Standard', configured: Boolean(this.vault.tokens.default) }, ...this.config.accounts.map(account => ({ ...account, configured: Boolean(this.vault.tokens[account.id]) }))],
-      encryptionReady: Boolean(this.vault.archivePassword), encryptionRemembered: this.vault.rememberPassword, device: this.device,
-      queue: this.backup.state.queue ? { id: this.backup.state.queue.id, total: this.backup.state.queue.jobs.length, unresolved: Boolean(this.backup.state.queue.unresolved), completed: this.backup.state.queue.completed.length, pauseReason: this.backup.state.queue.pauseReason, rateLimitUntil: this.backup.state.queue.rateLimitUntil ?? null, message: this.backup.state.queue.message, elapsedMs: this.backup.state.queue.elapsedMs, receivedBytes: this.backup.state.queue.receivedBytes } : null,
-      metrics: this.metricsSnapshot, environment: this.environment, driveRecovery: this.driveRecovery ?? null,
-      rotation:this.rotation??null, releaseFormats: FILE_TYPES, releaseArchitectures: ARCHITECTURES,
-      dataRevision: this.dataRevision, configRevision: this.configRevision
+      config: this.config,
+      apiBudget: this.apiBudget(),
+      busy: this.busy(),
+      progress: this.backup.progress,
+      operation: this.operation,
+      repositories: this.repositorySnapshot,
+      history: this.backup.state.history,
+      nextRun: nextConfigRun(this.config),
+      sourceRuns: Object.fromEntries(
+        this.config.sources.map(s => [s.id, s.enabled ? nextRun(effectiveSchedule(this.config, s)) : null])
+      ),
+      update: this.updates.result,
+      gitVersion: this.gitVersion,
+      notice: this.notice,
+      tokenConfigured: Boolean(this.vault.tokens.default),
+      secureStorage: this.vault.available(),
+      accounts: [
+        { id: 'default', label: 'Standard', configured: Boolean(this.vault.tokens.default) },
+        ...this.config.accounts.map(account => ({ ...account, configured: Boolean(this.vault.tokens[account.id]) }))
+      ],
+      encryptionReady: Boolean(this.vault.archivePassword),
+      encryptionRemembered: this.vault.rememberPassword,
+      device: this.device,
+      queue: this.backup.state.queue
+        ? {
+            id: this.backup.state.queue.id,
+            total: this.backup.state.queue.jobs.length,
+            unresolved: Boolean(this.backup.state.queue.unresolved),
+            completed: this.backup.state.queue.completed.length,
+            pauseReason: this.backup.state.queue.pauseReason,
+            rateLimitUntil: this.backup.state.queue.rateLimitUntil ?? null,
+            message: this.backup.state.queue.message,
+            elapsedMs: this.backup.state.queue.elapsedMs,
+            receivedBytes: this.backup.state.queue.receivedBytes
+          }
+        : null,
+      metrics: this.metricsSnapshot,
+      environment: this.environment,
+      driveRecovery: this.driveRecovery ?? null,
+      rotation: this.rotation ?? null,
+      releaseFormats: FILE_TYPES,
+      releaseArchitectures: ARCHITECTURES,
+      dataRevision: this.dataRevision,
+      configRevision: this.configRevision
     };
   }
   async run(options = {}) {
     if (this.operation || this.saving) return { busy: true };
-    if(!this.backup.busy&&Object.values(this.backup.state.repositories).some(record=>record.rekeyPending))await this.withOperation('recovering-archives',async()=>{});
-    if(options.resume&&this.backup.state.queue?.pauseReason==='space'&&!await spaceReady(this.backup.state.queue))return{paused:true,reason:'space'};
-    if(options.resume&&!options.manual&&this.backup.state.queue?.pauseReason==='rate'&&!rateReady(this.backup.state.queue,this.now()))return{paused:true,reason:'rate',until:this.backup.state.queue.rateLimitUntil};
+    if (!this.backup.busy && Object.values(this.backup.state.repositories).some(record => record.rekeyPending))
+      await this.withOperation('recovering-archives', async () => {});
+    if (
+      options.resume &&
+      this.backup.state.queue?.pauseReason === 'space' &&
+      !(await spaceReady(this.backup.state.queue))
+    )
+      return { paused: true, reason: 'space' };
+    if (
+      options.resume &&
+      !options.manual &&
+      this.backup.state.queue?.pauseReason === 'rate' &&
+      !rateReady(this.backup.state.queue, this.now())
+    )
+      return { paused: true, reason: 'rate', until: this.backup.state.queue.rateLimitUntil };
     // A due schedule asks every 15 seconds while a queue is paused; it neither scans drives nor locks the data folder for that.
-    if(!options.resume&&this.backup.state.queue&&!this.backup.busy)return{paused:true,reason:this.backup.state.queue.pauseReason};
-    if (!this.backup.busy && this.config.autoRelocate) await this.locateDrives({automatic:true});
+    if (!options.resume && this.backup.state.queue && !this.backup.busy)
+      return { paused: true, reason: this.backup.state.queue.pauseReason };
+    if (!this.backup.busy && this.config.autoRelocate) await this.locateDrives({ automatic: true });
     const config = structuredClone(this.config);
     config.backup.encryptionKeyId = this.vault.encryptionKeyId;
-    const runOptions = { ...options }; delete runOptions.manual;
+    const runOptions = { ...options };
+    delete runOptions.manual;
     return this.backup.run(config, runOptions);
   }
   // A run interrupted by a crash or shutdown, or stopped by an unexpected error, continues once at every later scheduled
   // time instead of blocking all future backups. Only a pause chosen by the user waits for a manual resume.
   continueInterrupted(scheduledAt) {
     const q = this.backup.state.queue;
-    if (!q || !['restart','error'].includes(q.pauseReason)) return null;
-    if (!scheduledAt || q.autoResumedFor === scheduledAt || this.busy() || this.saving) return Promise.resolve({ paused: true, reason: q.pauseReason });
-    q.autoResumedFor = scheduledAt; return this.resume();
+    if (!q || !['restart', 'error'].includes(q.pauseReason)) return null;
+    if (!scheduledAt || q.autoResumedFor === scheduledAt || this.busy() || this.saving)
+      return Promise.resolve({ paused: true, reason: q.pauseReason });
+    q.autoResumedFor = scheduledAt;
+    return this.resume();
   }
   async scheduledRun() {
-    const plan = dueSources(this.config,this.backup.state);
-    if (this.backup.state.queue) return this.continueInterrupted(plan.scheduledAt) ?? (this.backup.state.queue.pauseReason === 'user' ? { paused: true } : this.resume());
+    const plan = dueSources(this.config, this.backup.state);
+    if (this.backup.state.queue)
+      return (
+        this.continueInterrupted(plan.scheduledAt) ??
+        (this.backup.state.queue.pauseReason === 'user' ? { paused: true } : this.resume())
+      );
     if (plan.scheduledAt) return this.run({ scheduledAt: plan.scheduledAt, scheduledSources: plan.sources });
     return { skipped: true };
   }
   // The OS worker has no policy timer, so it waits for a short API-limit reset itself instead of stopping until the next scheduled time.
-  async scheduledRunUntilSettled({ sleep = sleepFor, maxWaitMs = 65 * 60000, maxRounds = 48, signal, onWait = () => {} } = {}) {
+  async scheduledRunUntilSettled({
+    sleep = sleepFor,
+    maxWaitMs = 65 * 60000,
+    maxRounds = 48,
+    signal,
+    onWait = () => {}
+  } = {}) {
     let result = await this.scheduledRun();
     for (let round = 0; round < maxRounds && result?.paused && result.reason === 'rate' && !signal?.aborted; round++) {
-      const until = Date.parse(this.backup.state.queue?.rateLimitUntil ?? ''), delayMs = Math.max(1000, (Number.isFinite(until) ? until - Number(this.now()) : 60000) + 2000);
+      const until = Date.parse(this.backup.state.queue?.rateLimitUntil ?? ''),
+        delayMs = Math.max(1000, (Number.isFinite(until) ? until - Number(this.now()) : 60000) + 2000);
       if (delayMs > maxWaitMs) break;
       onWait(new Date(Date.now() + delayMs).toISOString());
-      try { await sleep(delayMs, undefined, { signal }); }
-      catch (error) { if (error.name === 'AbortError') break; throw error; }
-      finally { onWait(null); }
+      try {
+        await sleep(delayMs, undefined, { signal });
+      } catch (error) {
+        if (error.name === 'AbortError') break;
+        throw error;
+      } finally {
+        onWait(null);
+      }
       result = await this.resume();
     }
     return result;
   }
-  start() { this.scheduler.start(); this.drives.start(); this.configureUpdates(); if (this.config.checkUpdates) void this.checkUpdates(); this.policyTimer = setInterval(() => void this.policyTick(),30000); this.policyTimer.unref?.(); }
-  async stop() { this.scheduler.stop(); this.drives.stop(); clearInterval(this.updateTimer); clearInterval(this.policyTimer); this.deviceFlow.cancel(); this.repositoryBrowser.close(); await this.closeChanges(); await this.browser.closeAll(); }
-  async refreshDisks() { this.disks = await Promise.all([...new Set(this.config.sources.flatMap(s => [s.destination,...s.additionalDestinations.map(d => d.destination)]))].map(spaceAt)); this.diskRevision = (this.diskRevision || 0) + 1; this.lastDisksAt = Date.now(); }
+  start() {
+    this.scheduler.start();
+    this.drives.start();
+    this.configureUpdates();
+    if (this.config.checkUpdates) void this.checkUpdates();
+    this.policyTimer = setInterval(() => void this.policyTick(), 30000);
+    this.policyTimer.unref?.();
+  }
+  async stop() {
+    this.scheduler.stop();
+    this.drives.stop();
+    clearInterval(this.updateTimer);
+    clearInterval(this.policyTimer);
+    this.deviceFlow.cancel();
+    this.repositoryBrowser.close();
+    await this.closeChanges();
+    await this.browser.closeAll();
+  }
+  async refreshDisks() {
+    this.disks = await Promise.all(
+      [
+        ...new Set(
+          this.config.sources.flatMap(s => [s.destination, ...s.additionalDestinations.map(d => d.destination)])
+        )
+      ].map(spaceAt)
+    );
+    this.diskRevision = (this.diskRevision || 0) + 1;
+    this.lastDisksAt = Date.now();
+  }
   async checkRules(execution = this.config.execution) {
     if (!execution.onlyOnAC && !execution.allowedNetworks.length) return null;
     if (Date.now() - this.lastEnvironmentAt > 10000) {
-      this.environment = { ...(await this.environmentState()), network: execution.allowedNetworks.length ? await networkName() : null };
-      this.lastEnvironmentAt = Date.now(); this.changed();
+      this.environment = {
+        ...(await this.environmentState()),
+        network: execution.allowedNetworks.length ? await networkName() : null
+      };
+      this.lastEnvironmentAt = Date.now();
+      this.changed();
     }
-    return restriction(execution,this.environment);
+    return restriction(execution, this.environment);
+  }
+  // One installation path for backup runs, installations after a program quits, "Install now" and roll-backs. With
+  // manual updates a newer release only becomes "available" until the user asks for it.
+  async applyInstallation({ source, record, git, passphrase, onProgress, previousInstallation, requested = false }) {
+    const mode = this.config.programUpdates.mode,
+      latest = record.releaseInfo?.tag;
+    if (
+      !requested &&
+      mode === 'manual' &&
+      latest &&
+      previousInstallation?.status !== 'waiting' &&
+      ![previousInstallation?.tag, previousInstallation?.heldTag].includes(latest)
+    )
+      return {
+        installation: { ...previousInstallation, status: 'available', latestTag: latest, message: undefined },
+        warning: null
+      };
+    let installation,
+      warning = null;
+    try {
+      installation = await new ProgramInstaller().install({ source, record, git, passphrase, onProgress });
+      try {
+        installation.shortcuts = await new ProgramShortcuts({ writeWindowsShortcut: this.writeWindowsShortcut }).sync({
+          source,
+          installation,
+          previous: previousInstallation
+        });
+      } catch (error) {
+        installation.shortcuts = {
+          ...previousInstallation?.shortcuts,
+          ...error.shortcutState,
+          status: 'error',
+          message: error.message
+        };
+        warning = 'Programmverknüpfungen: ' + error.message;
+      }
+    } catch (error) {
+      const waiting = ['PROGRAM_RUNNING', 'EBUSY'].includes(error.code);
+      const message =
+        waiting && mode === 'next-check'
+          ? 'Das Programm läuft noch. Die Installation wird bei der nächsten Prüfung erneut versucht.'
+          : error.message;
+      installation = { ...previousInstallation, latestTag: latest, status: waiting ? 'waiting' : 'error', message };
+      warning = 'Programminstallation: ' + message;
+    }
+    return { installation, warning };
+  }
+  programSource(record) {
+    const source = this.config.sources.find(item => item.id === record.sourceId);
+    if (!source?.installation?.enabled) throw new Error('Die Programminstallation ist für diese Quelle ausgeschaltet.');
+    return source;
+  }
+  async saveInstallation(id, installation, warning) {
+    const current = this.backup.state.repositories[id];
+    this.backup.state.repositories[id] = {
+      ...current,
+      installation,
+      warning: programWarning(current.warning, warning)
+    };
+    await this.persistState(this.backup.state);
+    this.dataRevision++;
+    this.changed();
+  }
+  async installStored(id) {
+    const record = this.record(id),
+      source = this.programSource(record);
+    const { installation, warning } = await this.applyInstallation({
+      source,
+      record,
+      git: this.sourceGit(source),
+      passphrase: this.vault.passwordFor(record),
+      previousInstallation: record.installation,
+      requested: true
+    });
+    await this.saveInstallation(id, installation, warning);
+    if (
+      installation.status === 'installed' &&
+      this.notificationsAvailable() &&
+      notificationAllowed(this.config, 'program', {}, this.now())
+    )
+      this.notifyProgram({ results: [{ ...record, installation }] });
+    return installation;
+  }
+  installProgram(id) {
+    return this.withOperation('installing-program', () => this.installStored(id));
+  }
+  rollbackProgram(id) {
+    return this.withOperation('rolling-back-program', async () => {
+      const record = this.record(id),
+        source = this.programSource(record);
+      let installation;
+      try {
+        installation = await new ProgramInstaller().rollback({ source, record });
+      } catch (error) {
+        if (error.code === 'PROGRAM_RUNNING') throw new Error('Bitte das Programm zuerst beenden.');
+        throw error;
+      }
+      let warning = null;
+      try {
+        installation.shortcuts = await new ProgramShortcuts({ writeWindowsShortcut: this.writeWindowsShortcut }).sync({
+          source,
+          installation,
+          previous: record.installation
+        });
+      } catch (error) {
+        installation.shortcuts = { ...record.installation?.shortcuts, status: 'error', message: error.message };
+        warning = 'Programmverknüpfungen: ' + error.message;
+      }
+      await this.saveInstallation(id, { ...installation, latestTag: record.releaseInfo?.tag }, warning);
+      return installation;
+    });
+  }
+  // Updates that waited for a running program are installed once it has quit. Only waiting programs are checked, so an
+  // idle app starts no process for this.
+  async installAfterExit() {
+    if (this.config.programUpdates.mode === 'next-check' || this.busy() || this.saving) return;
+    for (const record of Object.values(this.backup.state.repositories)) {
+      if (record.installation?.status !== 'waiting' || record.rekeyPending) continue;
+      const source = this.config.sources.find(item => item.id === record.sourceId);
+      if (!source?.installation?.enabled) continue;
+      try {
+        const installer = new ProgramInstaller(),
+          place = await installer.locate(source, record, { create: false });
+        const current = await owned(place.target, place.identity).catch(() => null);
+        if (current && (await installer.isRunning(place.target, current))) continue;
+        await this.withOperation('installing-program', () => this.installStored(record.id));
+      } catch (error) {
+        await this.saveInstallation(
+          record.id,
+          { ...record.installation, status: 'error', message: error.message },
+          'Programminstallation: ' + error.message
+        );
+      }
+      return;
+    }
+  }
+  // A queue the user paused is either left alone, announced once after the configured time, or resumed.
+  async followUpPause() {
+    const q = this.backup.state.queue,
+      rule = this.config.execution.pauseReminder;
+    if (!q || q.pauseReason !== 'user' || rule.action === 'none' || this.busy() || this.saving) return;
+    const since = Date.parse(q.pausedAt ?? '');
+    if (!Number.isFinite(since) || Number(this.now()) - since < rule.hours * 3600000) return;
+    if (rule.action === 'resume') {
+      await this.resume();
+      return;
+    }
+    if (q.remindedAt || !this.notificationsAvailable() || !notificationAllowed(this.config, 'reminder', {}, this.now()))
+      return;
+    this.notifyReminder({ pausedAt: q.pausedAt, completed: q.completed.length, total: q.jobs.length });
+    q.remindedAt = new Date().toISOString();
+    await this.persistState(this.backup.state);
+  }
+  apiBudget() {
+    const labels = new Map([
+      ['default', 'GitHub'],
+      ...this.config.accounts.map(account => [account.id, account.label])
+    ]);
+    return [...this.clients.entries()]
+      .map(([key, client]) => {
+        const view = budgetView(client.rateState);
+        if (!view) return null;
+        const id = key.includes(':') ? key.split(':').pop() : key;
+        return { id: key, label: labels.get(id) ?? id, ...view };
+      })
+      .filter(Boolean);
   }
   async policyTick() {
     try {
-      const disks = this.diskSignature(); if (Date.now() - this.lastDisksAt >= 60000) await this.refreshDisks(); if (this.changes.current?.expiresAt <= Date.now()) await this.closeChanges();
-      if (this.config.autoRelocate && !this.busy() && !this.saving && Date.now() - (this.lastLocationCheck ?? 0) >= 60000) { this.lastLocationCheck = Date.now(); if (await this.relocationPending()) await this.locateDrives({automatic:true}).catch(error => { this.relocationKey = null; throw error; }); }
+      const disks = this.diskSignature();
+      if (Date.now() - this.lastDisksAt >= 60000) await this.refreshDisks();
+      if (this.changes.current?.expiresAt <= Date.now()) await this.closeChanges();
+      if (
+        this.config.autoRelocate &&
+        !this.busy() &&
+        !this.saving &&
+        Date.now() - (this.lastLocationCheck ?? 0) >= 60000
+      ) {
+        this.lastLocationCheck = Date.now();
+        if (await this.relocationPending())
+          await this.locateDrives({ automatic: true }).catch(error => {
+            this.relocationKey = null;
+            throw error;
+          });
+      }
       if (this.config.checkUpdates && this.updates.retryDue(this.now())) void this.checkUpdates();
-      await this.updates.notifyAvailable(); const q = this.backup.state.queue; if (q && !this.busy() && !['user','restart','error'].includes(q.pauseReason) && (q.pauseReason!=='rate'||rateReady(q,this.now())) && !await this.checkRules(this.config.execution)&&(q.pauseReason!=='space'||await spaceReady(q))) await this.resume();
+      await this.installAfterExit();
+      await this.followUpPause();
+      await this.updates.notifyAvailable();
+      const q = this.backup.state.queue;
+      if (
+        q &&
+        !this.busy() &&
+        !['user', 'restart', 'error'].includes(q.pauseReason) &&
+        (q.pauseReason !== 'rate' || rateReady(q, this.now())) &&
+        !(await this.checkRules(this.config.execution)) &&
+        (q.pauseReason !== 'space' || (await spaceReady(q)))
+      )
+        await this.resume();
       // Idle ticks only notify the window when visible values changed or a periodic dashboard refresh is due.
-      if (disks !== this.diskSignature() || Date.now() - (this.lastIdleChange ?? 0) >= 300000) { this.lastIdleChange = Date.now(); this.changed(); }
+      if (disks !== this.diskSignature() || Date.now() - (this.lastIdleChange ?? 0) >= 300000) {
+        this.lastIdleChange = Date.now();
+        this.changed();
+      }
+    } catch (error) {
+      this.notice = error.message;
+      this.changed();
     }
-    catch (error) { this.notice = error.message; this.changed(); }
   }
-  diskSignature() { return JSON.stringify(this.disks.map(d => [d.destination,d.reachable,d.freeBytes == null ? null : Math.round(d.freeBytes / 67108864)])); }
+  diskSignature() {
+    return JSON.stringify(
+      this.disks.map(d => [d.destination, d.reachable, d.freeBytes == null ? null : Math.round(d.freeBytes / 67108864)])
+    );
+  }
   async relocationPending() {
     const missing = [];
-    for (const target of relocationTargets(this.config)) if (target.volumeId && target.volumeHint && this.config.sources.find(s => s.id === target.sourceId)?.enabled && await markerAt(target.destination) !== target.volumeId) missing.push(target.targetId);
-    if (!missing.length) { this.relocationKey = null; return false; }
-    const key = JSON.stringify([missing,[...await (this.mountedRoots ?? systemRoots)()].sort()]);
+    for (const target of relocationTargets(this.config))
+      if (
+        target.volumeId &&
+        target.volumeHint &&
+        this.config.sources.find(s => s.id === target.sourceId)?.enabled &&
+        (await markerAt(target.destination)) !== target.volumeId
+      )
+        missing.push(target.targetId);
+    if (!missing.length) {
+      this.relocationKey = null;
+      return false;
+    }
+    const key = JSON.stringify([missing, [...(await (this.mountedRoots ?? systemRoots)())].sort()]);
     if (key === this.relocationKey) return false;
-    this.relocationKey = key; return true;
+    this.relocationKey = key;
+    return true;
   }
-  pause() { return this.backup.pause(); }
-  resume(options = {}) { return this.run({ ...options, resume: true }); }
-  discard() { return this.backup.discard(); }
-  preview(input) { return this.withOperation('previewing',() => previewConfig(input,source => this.sourceClient(source).withTransfer(null,input.execution?.retries ?? 2))); }
-  historyQuery(options){return queryHistory(this.backup.state.history,options);}
-  historyDetails(options){return historyDetails(this.backup.state.history,options);}
-  historyExport(options){return exportHistory(this.backup.state.history,options);}
-  rotationInventory(options){return this.withOperation('checking-archives',()=>rotationInventory(this.backup.state.repositories,this.vault,options));}
-  rotatePasswords(options){if(this.config.systemSchedule&&!options.remember)throw new Error('Für die unabhängige Zeitplanung muss das Archivpasswort im sicheren Schlüsselspeicher hinterlegt sein.');if(this.backup.state.queue)throw new Error('Bitte zuerst den pausierten Durchlauf fortsetzen oder verwerfen.');this.rotationStop=false;return this.withOperation('rotating-password',async()=>{this.rotation={completed:0,total:options.ids?.length??0,status:'rotating'};try{const result=await rotatePasswords({...options,state:this.backup.state,vault:this.vault,git:this.git,save:value=>this.persistState(value),fingerprintFor:(record,marker,oldKey,newKey)=>{const source=this.config.sources.find(s=>s.id===record.sourceId);if(!source)return null;const options=effectiveBackup(this.config,source);return marker.fingerprint===backupFingerprint({...options,encryptionKeyId:oldKey})?backupFingerprint({...options,encryptionKeyId:newKey}):null;},onProgress:progress=>{this.rotation=progress;this.changed();},shouldStop:()=>this.rotationStop});this.dataRevision++;this.rotation={...result,status:'complete'};return result;}catch(error){this.rotation={status:'error',message:error.message};throw error;}finally{this.changed();}});}
-  stopRotation(){this.rotationStop=true;return{requested:true};}
-  recommendations({sourceId,repository}){if(this.busy()||this.saving)throw new Error('Bitte den laufenden Vorgang abwarten.');const controller=new AbortController();this.recommendationController=controller;return this.withOperation('inspecting-options',async()=>{try{const source=this.config.sources.find(s=>s.id===sourceId);if(!source)throw new Error('Quelle nicht gefunden.');return await inspectRecommendations({source,repository:repository||source.value,client:this.sourceClient(source),git:this.sourceGit(source),signal:controller.signal});}finally{if(this.recommendationController===controller)this.recommendationController=null;}});}
-  cancelRecommendations(){this.recommendationController?.abort();return true;}
+  pause() {
+    return this.backup.pause();
+  }
+  resume(options = {}) {
+    return this.run({ ...options, resume: true });
+  }
+  discard() {
+    return this.backup.discard();
+  }
+  preview(input) {
+    return this.withOperation('previewing', () =>
+      previewConfig(input, source => this.sourceClient(source).withTransfer(null, input.execution?.retries ?? 2))
+    );
+  }
+  historyQuery(options) {
+    return queryHistory(this.backup.state.history, options);
+  }
+  historyDetails(options) {
+    return historyDetails(this.backup.state.history, options);
+  }
+  historyExport(options) {
+    return exportHistory(this.backup.state.history, options);
+  }
+  rotationInventory(options) {
+    return this.withOperation('checking-archives', () =>
+      rotationInventory(this.backup.state.repositories, this.vault, options)
+    );
+  }
+  rotatePasswords(options) {
+    if (this.config.systemSchedule && !options.remember)
+      throw new Error(
+        'Für die unabhängige Zeitplanung muss das Archivpasswort im sicheren Schlüsselspeicher hinterlegt sein.'
+      );
+    if (this.backup.state.queue) throw new Error('Bitte zuerst den pausierten Durchlauf fortsetzen oder verwerfen.');
+    this.rotationStop = false;
+    return this.withOperation('rotating-password', async () => {
+      this.rotation = { completed: 0, total: options.ids?.length ?? 0, status: 'rotating' };
+      try {
+        const result = await rotatePasswords({
+          ...options,
+          state: this.backup.state,
+          vault: this.vault,
+          git: this.git,
+          save: value => this.persistState(value),
+          fingerprintFor: (record, marker, oldKey, newKey) => {
+            const source = this.config.sources.find(s => s.id === record.sourceId);
+            if (!source) return null;
+            const options = effectiveBackup(this.config, source);
+            return marker.fingerprint === backupFingerprint({ ...options, encryptionKeyId: oldKey })
+              ? backupFingerprint({ ...options, encryptionKeyId: newKey })
+              : null;
+          },
+          onProgress: progress => {
+            this.rotation = progress;
+            this.changed();
+          },
+          shouldStop: () => this.rotationStop
+        });
+        this.dataRevision++;
+        this.rotation = { ...result, status: 'complete' };
+        return result;
+      } catch (error) {
+        this.rotation = { status: 'error', message: error.message };
+        throw error;
+      } finally {
+        this.changed();
+      }
+    });
+  }
+  stopRotation() {
+    this.rotationStop = true;
+    return { requested: true };
+  }
+  recommendations({ sourceId, repository }) {
+    if (this.busy() || this.saving) throw new Error('Bitte den laufenden Vorgang abwarten.');
+    const controller = new AbortController();
+    this.recommendationController = controller;
+    return this.withOperation('inspecting-options', async () => {
+      try {
+        const source = this.config.sources.find(s => s.id === sourceId);
+        if (!source) throw new Error('Quelle nicht gefunden.');
+        return await inspectRecommendations({
+          source,
+          repository: repository || source.value,
+          client: this.sourceClient(source),
+          git: this.sourceGit(source),
+          signal: controller.signal
+        });
+      } finally {
+        if (this.recommendationController === controller) this.recommendationController = null;
+      }
+    });
+  }
+  cancelRecommendations() {
+    this.recommendationController?.abort();
+    return true;
+  }
   async organizeSources(input) {
     if (this.operation || this.saving) throw new Error('Bitte den laufenden Vorgang abwarten.');
     this.saving = true;
     try {
       const next = organizeConfig(this.config, input);
       await writeJson(path.join(this.directory, 'settings.json'), next);
-      this.config = next; this.configRevision++; this.changed(); return this.snapshot();
-    } finally { this.saving = false; }
+      this.config = next;
+      this.configRevision++;
+      this.changed();
+      return this.snapshot();
+    } finally {
+      this.saving = false;
+    }
   }
   previewSources(input) {
-    const result = prepareBulk(this.config, input), token = require('node:crypto').randomUUID();
-    this.bulkPreview = { token, input: structuredClone(input), signature: configSignature(this.config), expiresAt: Date.now() + 300000 };
+    const result = prepareBulk(this.config, input),
+      token = require('node:crypto').randomUUID();
+    this.bulkPreview = {
+      token,
+      input: structuredClone(input),
+      signature: configSignature(this.config),
+      expiresAt: Date.now() + 300000
+    };
     return { token, changes: result.changes, selected: result.selected, changed: result.changed };
   }
   async applySources({ token } = {}) {
     const preview = this.bulkPreview;
-    if (!preview || preview.token !== token || preview.expiresAt < Date.now() || preview.signature !== configSignature(this.config)) throw new Error('Die Quellen wurden inzwischen geändert. Bitte die Vorschau erneut prüfen.');
+    if (
+      !preview ||
+      preview.token !== token ||
+      preview.expiresAt < Date.now() ||
+      preview.signature !== configSignature(this.config)
+    )
+      throw new Error('Die Quellen wurden inzwischen geändert. Bitte die Vorschau erneut prüfen.');
     const result = prepareBulk(this.config, preview.input);
-    await this.saveConfig(result.config); this.bulkPreview = null;
+    await this.saveConfig(result.config);
+    this.bulkPreview = null;
     return { changed: result.changed };
   }
   async addBrowserSources(input) {
-    const result = input.asOwner ? this.repositoryBrowser.ownerSelection(input) : this.repositoryBrowser.selection(input);
+    const result = input.asOwner
+      ? this.repositoryBrowser.ownerSelection(input)
+      : this.repositoryBrowser.selection(input);
     if (result.added) await this.saveConfig(result.config);
-    this.repositoryBrowser.close(); return { added: result.added, skipped: result.skipped };
+    this.repositoryBrowser.close();
+    return { added: result.added, skipped: result.skipped };
   }
-  async locateDrives({automatic = false} = {}) {
-    if (this.busy() || this.saving) return {busy:true};
-    return this.withOperation('locating-drives',async () => {
+  async locateDrives({ automatic = false } = {}) {
+    if (this.busy() || this.saving) return { busy: true };
+    return this.withOperation('locating-drives', async () => {
       this.lastLocationCheck = Date.now();
-      const result = await findRelocations(this.config,{...(this.mountedRoots ? {roots:this.mountedRoots} : {}),includeDisabled:!automatic});
+      const result = await findRelocations(this.config, {
+        ...(this.mountedRoots ? { roots: this.mountedRoots } : {}),
+        includeDisabled: !automatic
+      });
       if (result.moves.length) {
-        const updated = await persistRelocations(this.directory,this.config,this.backup.state,result.moves);
-        for(const [old,id]of Object.entries(updated.idChanges??{}))if(this.vault.archiveBindings[old])this.vault.archiveBindings[id]=this.vault.archiveBindings[old];await this.vault.persistKeyState();
-        this.config = validateConfig(updated.config); this.backup.state = updated.state; this.configRevision++; this.dataRevision++; await this.refreshDisks();
+        const updated = await persistRelocations(this.directory, this.config, this.backup.state, result.moves);
+        for (const [old, id] of Object.entries(updated.idChanges ?? {}))
+          if (this.vault.archiveBindings[old]) this.vault.archiveBindings[id] = this.vault.archiveBindings[old];
+        await this.vault.persistKeyState();
+        this.config = validateConfig(updated.config);
+        this.backup.state = updated.state;
+        this.configRevision++;
+        this.dataRevision++;
+        await this.refreshDisks();
       }
-      if (result.moves.length || result.issues.length || !automatic) this.driveRecovery = {moved:result.moves.length,ambiguous:result.issues.length,checkedAt:new Date().toISOString()};
-      this.changed(); return result;
+      if (result.moves.length || result.issues.length || !automatic)
+        this.driveRecovery = {
+          moved: result.moves.length,
+          ambiguous: result.issues.length,
+          checkedAt: new Date().toISOString()
+        };
+      this.changed();
+      return result;
     });
   }
-  async openChanges({id,passphrase}) {
+  async openChanges({ id, passphrase }) {
     if (this.busy() || this.saving) throw new Error('Bitte den laufenden Vorgang abwarten.');
-    this.operation = 'previewing-changes'; this.changed();
+    this.operation = 'previewing-changes';
+    this.changed();
     let release;
     try {
       release = await acquireLease(this.directory);
       this.changesLease = release;
-      const record = this.record(id), source = this.config.sources.find(s => s.id === record.sourceId);
-      const origin=source??record;
-      const result = await this.changes.open({record,git:this.sourceGit(origin),github:this.sourceClient(origin),passphrase:passphrase || this.vault.passwordFor(record)});
-      this.changesTimer = setInterval(() => { if (this.changes.current?.expiresAt <= Date.now()) void this.closeChanges().catch(error => {this.notice=error.message;this.changed();}); },15000); this.changesTimer.unref?.();
+      const record = this.record(id),
+        source = this.config.sources.find(s => s.id === record.sourceId);
+      const origin = source ?? record;
+      const result = await this.changes.open({
+        record,
+        git: this.sourceGit(origin),
+        github: this.sourceClient(origin),
+        passphrase: passphrase || this.vault.passwordFor(record)
+      });
+      this.changesTimer = setInterval(() => {
+        if (this.changes.current?.expiresAt <= Date.now())
+          void this.closeChanges().catch(error => {
+            this.notice = error.message;
+            this.changed();
+          });
+      }, 15000);
+      this.changesTimer.unref?.();
       return result;
-    } catch (error) { const owned = this.changesLease; this.changesLease = null; if (owned) await owned(); else if (release && this.operation === 'previewing-changes') await release(); this.operation = null; this.changed(); throw error; }
+    } catch (error) {
+      const owned = this.changesLease;
+      this.changesLease = null;
+      if (owned) await owned();
+      else if (release && this.operation === 'previewing-changes') await release();
+      this.operation = null;
+      this.changed();
+      throw error;
+    }
   }
   async closeChanges() {
     if (this.closingChanges) return this.closingChanges;
     if (!this.changes?.current && !this.changesLease) return;
-    this.closingChanges = (async () => { clearInterval(this.changesTimer); try { await this.changes.close(); } finally { const release = this.changesLease; this.changesLease = null; if (release) await release(); this.operation = null; this.changed(); } })();
-    try { return await this.closingChanges; } finally { this.closingChanges = null; }
+    this.closingChanges = (async () => {
+      clearInterval(this.changesTimer);
+      try {
+        await this.changes.close();
+      } finally {
+        const release = this.changesLease;
+        this.changesLease = null;
+        if (release) await release();
+        this.operation = null;
+        this.changed();
+      }
+    })();
+    try {
+      return await this.closingChanges;
+    } finally {
+      this.closingChanges = null;
+    }
   }
   configureUpdates() {
     clearInterval(this.updateTimer);
-    if (this.config.checkUpdates) { this.updateTimer = setInterval(() => void this.checkUpdates(), 6 * 3600000); this.updateTimer.unref?.(); }
+    if (this.config.checkUpdates) {
+      this.updateTimer = setInterval(() => void this.checkUpdates(), 6 * 3600000);
+      this.updateTimer.unref?.();
+    }
   }
-  async checkUpdates() { const promise = this.updates.check(); this.changed(); const result = await promise; this.changed(); return result; }
-  async ignoreUpdate() { const result = await this.updates.ignore(); this.changed(); return result; }
-  async resetUpdate() { const result = await this.updates.reset(); this.changed(); return result; }
+  async checkUpdates() {
+    const promise = this.updates.check();
+    this.changed();
+    const result = await promise;
+    this.changed();
+    return result;
+  }
+  async ignoreUpdate() {
+    const result = await this.updates.ignore();
+    this.changed();
+    return result;
+  }
+  async resetUpdate() {
+    const result = await this.updates.reset();
+    this.changed();
+    return result;
+  }
   async saveConfig(input) {
     if (this.busy() || this.saving) throw new Error('Bitte den laufenden Vorgang abwarten.');
     this.saving = true;
@@ -361,77 +1138,170 @@ class Runtime extends EventEmitter {
       const candidate = structuredClone(input);
       for (const source of candidate.sources ?? []) {
         const old = this.config.sources.find(s => s.id === source.id);
-        if (!old || old.destination !== source.destination) { delete source.volumeId; delete source.volumeHint; }
-        else if (old.volumeHint) source.volumeHint = old.volumeHint;
-        for (const target of source.additionalDestinations ?? []) { const previous = old?.additionalDestinations.find(t => t.id === target.id); if (!previous || previous.destination !== target.destination) { delete target.volumeId; delete target.volumeHint; } else if (previous.volumeHint) target.volumeHint = previous.volumeHint; }
+        if (!old || old.destination !== source.destination) {
+          delete source.volumeId;
+          delete source.volumeHint;
+        } else if (old.volumeHint) source.volumeHint = old.volumeHint;
+        for (const target of source.additionalDestinations ?? []) {
+          const previous = old?.additionalDestinations.find(t => t.id === target.id);
+          if (!previous || previous.destination !== target.destination) {
+            delete target.volumeId;
+            delete target.volumeHint;
+          } else if (previous.volumeHint) target.volumeHint = previous.volumeHint;
+        }
       }
       const next = validateConfig(candidate);
-      for(const account of next.accounts){const old=this.config.accounts.find(a=>a.id===account.id);if(old&&this.vault.tokens[account.id]&&providerKey(old)!==providerKey(account))throw new Error('Vor einem Serverwechsel die gespeicherten Zugangsdaten entfernen.');}
+      for (const account of next.accounts) {
+        const old = this.config.accounts.find(a => a.id === account.id);
+        if (old && this.vault.tokens[account.id] && providerKey(old) !== providerKey(account))
+          throw new Error('Vor einem Serverwechsel die gespeicherten Zugangsdaten entfernen.');
+      }
       if (this.backup.state.queue) {
         const content = config => JSON.stringify({ sources: config.sources, backup: config.backup });
-        if (content(next) !== content(this.config)) throw new Error('Bitte zuerst den pausierten Durchlauf fortsetzen oder verwerfen, bevor Quellen oder Sicherungsumfang geändert werden.');
+        if (content(next) !== content(this.config))
+          throw new Error(
+            'Bitte zuerst den pausierten Durchlauf fortsetzen oder verwerfen, bevor Quellen oder Sicherungsumfang geändert werden.'
+          );
       }
-      const encrypted = next.backup.encryption || next.sources.some(source => effectiveBackup(next,source).encryption);
-      if (encrypted && !this.vault.archivePassword) throw new Error('Bitte zuerst das Archivpasswort setzen oder entsperren.');
-      if (encrypted && next.systemSchedule && !this.vault.rememberPassword) throw new Error('Für die unabhängige Zeitplanung muss das Archivpasswort im sicheren Schlüsselspeicher hinterlegt sein.');
+      const encrypted = next.backup.encryption || next.sources.some(source => effectiveBackup(next, source).encryption);
+      if (encrypted && !this.vault.archivePassword)
+        throw new Error('Bitte zuerst das Archivpasswort setzen oder entsperren.');
+      if (encrypted && next.systemSchedule && !this.vault.rememberPassword)
+        throw new Error(
+          'Für die unabhängige Zeitplanung muss das Archivpasswort im sicheren Schlüsselspeicher hinterlegt sein.'
+        );
       for (const source of next.sources) {
         const old = this.config.sources.find(s => s.id === source.id);
         if (old?.destination === source.destination && old.volumeId) source.volumeId = old.volumeId;
-        else { delete source.volumeId; Object.assign(source, await prepareDestination(source)); }
+        else {
+          delete source.volumeId;
+          Object.assign(source, await prepareDestination(source));
+        }
         for (const target of source.additionalDestinations) {
           const previous = old?.additionalDestinations.find(t => t.id === target.id);
           if (previous?.destination === target.destination && previous.volumeId) target.volumeId = previous.volumeId;
-          else { delete target.volumeId; Object.assign(target, await prepareDestination(target)); }
+          else {
+            delete target.volumeId;
+            Object.assign(target, await prepareDestination(target));
+          }
         }
       }
       await this.applyOS(this.config, next);
-      try { await writeJson(path.join(this.directory, 'settings.json'), next); }
-      catch (error) { await this.applyOS(next, this.config); throw error; }
+      try {
+        await writeJson(path.join(this.directory, 'settings.json'), next);
+      } catch (error) {
+        await this.applyOS(next, this.config);
+        throw error;
+      }
       const updateWasEnabled = this.config.checkUpdates;
-      this.config = next; this.configRevision++; this.lastEnvironmentAt = 0; await this.refreshDisks();
-      this.configureUpdates(); this.changed();
+      this.config = next;
+      this.configRevision++;
+      this.lastEnvironmentAt = 0;
+      await this.refreshDisks();
+      this.configureUpdates();
+      this.changed();
       if (!updateWasEnabled && next.checkUpdates) void this.checkUpdates();
       return this.snapshot();
-    } finally { this.saving = false; }
+    } finally {
+      this.saving = false;
+    }
   }
   async setToken(id, token) {
     if (this.busy()) throw new Error('Bitte den laufenden Vorgang abwarten.');
     if (!['default', ...this.config.accounts.map(a => a.id)].includes(id)) throw new Error('Konto nicht gefunden.');
-    await this.vault.setToken(id, token); this.clients.clear(); this.gitClients.clear(); this.repositoryBrowser?.close();
+    await this.vault.setToken(id, token);
+    this.clients.clear();
+    this.gitClients.clear();
+    this.repositoryBrowser?.close();
     if (id === 'default') this.updates.github = this.client();
     this.changed();
     return { configured: Boolean(this.vault.tokens[id]) };
   }
   async setPassword(password, remember) {
-    return this.withOperation('unlocking-archives',async()=>{
-      if(this.config.systemSchedule&&!remember)throw new Error('Für die unabhängige Zeitplanung muss das Archivpasswort im sicheren Schlüsselspeicher hinterlegt sein.');
-      for(const record of Object.values(this.backup.state.repositories)){
-        if(!record.encrypted||(record.encryptionKeyId||this.vault.archiveBindings[record.id]||this.vault.legacyKeyId||this.vault.encryptionKeyId)!==this.vault.encryptionKeyId)continue;
-        const file=path.join(record.destination,'backup.gcb');let info;try{info=await fs.lstat(file);}catch(error){if(error.code==='ENOENT')continue;throw error;}
-        if(!info.isFile()||info.isSymbolicLink())throw new Error('Unsicherer Archivpfad.');
-        await require('./core/archives.cjs').authenticateArchive(file,password);break;
+    return this.withOperation('unlocking-archives', async () => {
+      if (this.config.systemSchedule && !remember)
+        throw new Error(
+          'Für die unabhängige Zeitplanung muss das Archivpasswort im sicheren Schlüsselspeicher hinterlegt sein.'
+        );
+      for (const record of Object.values(this.backup.state.repositories)) {
+        if (
+          !record.encrypted ||
+          (record.encryptionKeyId ||
+            this.vault.archiveBindings[record.id] ||
+            this.vault.legacyKeyId ||
+            this.vault.encryptionKeyId) !== this.vault.encryptionKeyId
+        )
+          continue;
+        const file = path.join(record.destination, 'backup.gcb');
+        let info;
+        try {
+          info = await fs.lstat(file);
+        } catch (error) {
+          if (error.code === 'ENOENT') continue;
+          throw error;
+        }
+        if (!info.isFile() || info.isSymbolicLink()) throw new Error('Unsicherer Archivpfad.');
+        await require('./core/archives.cjs').authenticateArchive(file, password);
+        break;
       }
-      await this.vault.setPassword(password,remember);this.changed();return{ready:true};
+      await this.vault.setPassword(password, remember);
+      this.changed();
+      return { ready: true };
     });
   }
   async beginLogin(accountId) {
     if (!this.vault.available()) throw new Error('Die Anmeldung benötigt einen sicheren Schlüsselspeicher.');
-    if (!['default', ...this.config.accounts.map(a => a.id)].includes(accountId)) throw new Error('Konto nicht gefunden.');
-    if(providerSpec(this.config.accounts.find(a=>a.id===accountId)??{}).provider!=='github')throw new Error('Für GitLab und Forgejo ein passendes Lesetoken speichern.');
-    if (!this.config.oauthClientId) throw new Error('Bitte zuerst die Client-ID einer GitHub-OAuth-App mit aktiviertem Device Flow eintragen. Alternativ ein Personal Access Token verwenden.');
+    if (!['default', ...this.config.accounts.map(a => a.id)].includes(accountId))
+      throw new Error('Konto nicht gefunden.');
+    if (providerSpec(this.config.accounts.find(a => a.id === accountId) ?? {}).provider !== 'github')
+      throw new Error('Für GitLab und Forgejo ein passendes Lesetoken speichern.');
+    if (!this.config.oauthClientId)
+      throw new Error(
+        'Bitte zuerst die Client-ID einer GitHub-OAuth-App mit aktiviertem Device Flow eintragen. Alternativ ein Personal Access Token verwenden.'
+      );
     if (this.device?.status === 'pending') throw new Error('Eine Anmeldung läuft bereits.');
-    this.device = { status: 'pending', accountId }; this.changed();
-    void this.deviceFlow.login(this.config.oauthClientId, code => { this.device = { status: 'pending', accountId, ...code }; this.changed(); })
-      .then(async token => { await this.setToken(accountId, token); this.device = { status: 'success', accountId }; this.changed(); })
-      .catch(error => { this.device = { status: 'error', message: error.message, accountId }; this.changed(); });
+    this.device = { status: 'pending', accountId };
+    this.changed();
+    void this.deviceFlow
+      .login(this.config.oauthClientId, code => {
+        this.device = { status: 'pending', accountId, ...code };
+        this.changed();
+      })
+      .then(async token => {
+        await this.setToken(accountId, token);
+        this.device = { status: 'success', accountId };
+        this.changed();
+      })
+      .catch(error => {
+        this.device = { status: 'error', message: error.message, accountId };
+        this.changed();
+      });
     return { started: true };
   }
-  record(id) { const record = this.backup.state.repositories[id]; if (!record) throw new Error('Sicherung nicht gefunden.');if(record.rekeyPending)throw new Error('Der Passwortwechsel ist noch nicht abgeschlossen. Das Sicherungslaufwerk verbinden und den Assistenten erneut öffnen.');return record; }
+  record(id) {
+    const record = this.backup.state.repositories[id];
+    if (!record) throw new Error('Sicherung nicht gefunden.');
+    if (record.rekeyPending)
+      throw new Error(
+        'Der Passwortwechsel ist noch nicht abgeschlossen. Das Sicherungslaufwerk verbinden und den Assistenten erneut öffnen.'
+      );
+    return record;
+  }
   async withOperation(name, fn) {
     if (this.busy() || this.saving) throw new Error('Bitte den laufenden Vorgang abwarten.');
-    this.operation = name; this.changed(); let release;
-    try { release = await acquireLease(this.directory);if(this.backup&&Object.values(this.backup.state.repositories).some(r=>r.rekeyPending))await recoverRotations(this.backup.state,this.vault,value=>this.persistState(value));return await fn(); }
-    finally { if (release) await release(); this.operation = null; this.changed(); }
+    this.operation = name;
+    this.changed();
+    let release;
+    try {
+      release = await acquireLease(this.directory);
+      if (this.backup && Object.values(this.backup.state.repositories).some(r => r.rekeyPending))
+        await recoverRotations(this.backup.state, this.vault, value => this.persistState(value));
+      return await fn();
+    } finally {
+      if (release) await release();
+      this.operation = null;
+      this.changed();
+    }
   }
   verify(id, passphrase) {
     return this.withOperation('verifying', async () => {
@@ -439,16 +1309,44 @@ class Runtime extends EventEmitter {
       try {
         const result = await verifyBackup(record, this.git, passphrase || this.vault.passwordFor(record));
         Object.assign(record, result, { verificationStatus: 'ok' });
-        await this.persistState(this.backup.state); this.dataRevision++;
+        await this.persistState(this.backup.state);
+        this.dataRevision++;
         return result;
-      } catch (error) { record.verificationStatus = 'error'; this.dataRevision++; await this.persistState(this.backup.state); throw error; }
+      } catch (error) {
+        record.verificationStatus = 'error';
+        this.dataRevision++;
+        await this.persistState(this.backup.state);
+        throw error;
+      }
     });
   }
   restore({ recordId, archive, parent, name, passphrase }) {
-    return this.withOperation('restoring', () => restoreBackup({ record: recordId ? this.record(recordId) : null, archive, parent, name, passphrase: passphrase || this.vault.passwordFor(recordId?this.record(recordId):null), git: this.git }));
+    return this.withOperation('restoring', () =>
+      restoreBackup({
+        record: recordId ? this.record(recordId) : null,
+        archive,
+        parent,
+        name,
+        passphrase: passphrase || this.vault.passwordFor(recordId ? this.record(recordId) : null),
+        git: this.git
+      })
+    );
   }
-  browseOpen({ recordId, archive, passphrase, content = 'repository' }) { return this.withOperation('browsing',() => this.browser.open({ record: recordId ? this.record(recordId) : null, archive, content, passphrase: passphrase || this.vault.passwordFor(recordId?this.record(recordId):null) })); }
-  browseList(options) { return this.browser.list(options); }
-  restoreSelection(options) { return this.withOperation('restoring',() => this.browser.restore(options)); }
+  browseOpen({ recordId, archive, passphrase, content = 'repository' }) {
+    return this.withOperation('browsing', () =>
+      this.browser.open({
+        record: recordId ? this.record(recordId) : null,
+        archive,
+        content,
+        passphrase: passphrase || this.vault.passwordFor(recordId ? this.record(recordId) : null)
+      })
+    );
+  }
+  browseList(options) {
+    return this.browser.list(options);
+  }
+  restoreSelection(options) {
+    return this.withOperation('restoring', () => this.browser.restore(options));
+  }
 }
 module.exports = { Runtime };

@@ -91,9 +91,9 @@ jobs:
       - name: Electron GUI tests (Windows/macOS)
         if: runner.os != 'Linux'
         run: npm run test:e2e
-      - name: Real Wordcraft DMG installation and repeated update check
+      - name: Real published DMG installation and repeated update check
         if: matrix.os == 'macos-latest'
-        run: npm run test:wordcraft
+        run: npm run test:release-dmg
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - name: Verify application packaging

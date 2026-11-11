@@ -1,35 +1,11 @@
-# Homebrew, winget, AUR und Flathub
+# Package catalog templates
 
-Der Release-Workflow erzeugt zu den gebauten Paketen ein zusätzliches Archiv `Git-Cloner-Katalogvorlagen.zip`. Es enthält vollständige Homebrew-Cask-, winget-, AUR- und Flathub-Vorlagen mit den tatsächlich berechneten SHA256-Prüfsummen des Releases und dem zugehörigen Quellcode-Commit. Falsche Platzhalter-Prüfsummen werden nicht verwendet: Fehlt ein erforderliches Release-Artefakt, schlägt die Erzeugung fehl.
+The release workflow generates Homebrew, winget, AUR and Flathub templates from the actual release artifacts and their SHA-256 values. They are packaged as `Git-Cloner-Catalog-Templates.zip` alongside the application downloads.
 
-Die App selbst benötigt weder Paketverzeichnis-Konten noch Signierzertifikate. Sie zeigt ausschließlich neue offizielle GitHub-Releases an; übersprungene Versionen werden dauerhaft unterdrückt, bis eine höhere Version erscheint.
+Templates identify the release version and source commit. They do not automatically submit the application to a public catalog. Store admission, naming, signatures, permissions and review requirements remain external to this repository.
 
-## Vorlagen lokal erzeugen
+Run `npm run catalogs -- --assets PATH --output OUTPUT --version VERSION --commit COMMIT` against a complete set of built release files. The generator refuses missing required inputs rather than inventing download hashes. Keep the resulting manifests associated with that exact release.
 
-Alle benötigten Release-Dateien in einen Ordner legen: macOS ARM64/x64 als DMG, Windows ARM64/x64 als Setup und Linux ARM64/x64 als TAR.GZ. Danach im Projekt:
+Flatpak includes Git and Git LFS. Architecture-specific source selectors ensure the bundled Git LFS executable matches x86_64 or aarch64. Snap packages also stage Git and Git LFS, use strict confinement and retain Chromium's sandbox helper. Local Snap installation requires `--dangerous` for an unsigned standalone `.snap`; store publication is not performed here.
 
-```sh
-npm run catalogs -- --assets ./release-assets --output ./catalogs --commit VOLLSTAENDIGER_COMMIT_SHA
-```
-
-Für `VOLLSTAENDIGER_COMMIT_SHA` die tatsächliche 40-stellige Commit-ID des gebauten Releases verwenden. Versionsnummer und Dateinamen werden aus dem Projekt abgeleitet. Die Vorlagen beziehen sich ausschließlich auf Releases dieses Repositorys.
-
-## Homebrew
-
-`homebrew/git-cloner.rb` ist ein Cask mit getrennten Intel-/Apple-Silicon-Downloads. Nach Prüfung kann es in einem eigenen Tap verwendet oder als Pull Request an `Homebrew/homebrew-cask` eingereicht werden. Einreichung und Annahme sind getrennte Schritte. Die Vorlage aktiviert keine automatische Update-Installation.
-
-## winget
-
-`winget/manifests/u/Ujap1994/GitCloner/VERSION` enthält Version-, Locale- und Installer-Manifeste für x64 und ARM64. Vor einer Einreichung auf einem Windows-Rechner mit `winget validate` prüfen und die Installation beider Architekturpakete testen. Anschließend an `microsoft/winget-pkgs` übermitteln.
-
-## AUR
-
-`aur/PKGBUILD` und `.SRCINFO` beschreiben `git-cloner-bin` für x86_64 und aarch64. Mit `makepkg --printsrcinfo` und einem sauberen Build prüfen. Zur Veröffentlichung sind ein AUR-Konto und dessen SSH-Zugang nötig. Eine bloß erzeugte PKGBUILD ist noch keine AUR-Veröffentlichung. CachyOS kann das normale x86_64-Paket verwenden.
-
-## Flathub
-
-`flathub/io.github.Ujap1994.GitCloner.yml` bindet das konkrete Release mit Prüfsumme ein, enthält Git und Git LFS und installiert Desktop-Datei, Icon und AppStream-Daten aus dem festgelegten Commit. Der Build verwendet Zypak für Electron. Zunächst lokal mit `flatpak-builder` testen, danach eine neue App bei `flathub/flathub` einreichen. Die Aufnahme unterliegt den Regeln und der Prüfung von Flathub.
-
-## Was noch externe Freigaben benötigt
-
-Die Vorlagen und ihre automatische Erzeugung sind implementiert. Öffentliche Einträge in Homebrew, winget, AUR und Flathub erfordern jedoch jeweils Veröffentlichung beziehungsweise Annahme. Sie können ohne entsprechende Konten und Schreibrechte nicht automatisch entstehen. Ebenso lassen sich echte Hardwaretests auf Mac und Windows nur auf verfügbaren Rechnern oder den konfigurierten GitHub-Runnern ausführen. Die Projekt-CI enthält dafür Intel-/ARM64-Matrixjobs und zusätzliche Linux-Distributionsprüfungen; deren tatsächliche Ergebnisse sind im Actions-Verlauf zu prüfen.
+Strict Snap packages retain the app schedule while running; host sign-in registration and independent system scheduling are unavailable. Release validation installs the package and checks Git/LFS, local cloning, HTTPS and library resolution inside confinement.

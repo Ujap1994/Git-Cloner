@@ -1,4 +1,6 @@
 const { defineConfig } = require('@playwright/test');
+// Electron 45 downloads its binary lazily. Resolve it before the per-test timeout starts.
+require('electron');
 module.exports = defineConfig({
   testDir: './tests/e2e',
   timeout: 45000,
