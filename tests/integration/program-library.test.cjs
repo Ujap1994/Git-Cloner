@@ -282,85 +282,106 @@ test('download history persists measured values, masks encrypted asset names and
   assert.equal((await history.query({ offset: 1990 })).entries.length, 10);
   await assert.rejects(history.query({ status: 'invented' }));
 });
-test('actual HTTP interruption, resume and completed cache reuse record exact transferred and avoided payload bytes', async t => {
-  const f = await repository(t),
-    payload = Buffer.alloc(512, 7),
-    asset = {
-      id: 1,
-      name: 'program.zip',
-      size: payload.length,
-      digest: 'sha256:' + createHash('sha256').update(payload).digest('hex')
-    };
-  let interrupt = true;
-  const server = http.createServer((req, res) => {
-    const offset = Number(req.headers.range?.match(/bytes=(\d+)-/)?.[1] || 0);
-    res.writeHead(offset ? 206 : 200, {
-      etag: '"stable"',
-      'content-length': payload.length - offset,
-      ...(offset ? { 'content-range': `bytes ${offset}-${payload.length - 1}/${payload.length}` } : {})
+test(
+  'actual HTTP interruption, resume and completed cache reuse record exact transferred and avoided payload bytes',
+  { timeout: 30000 },
+  async t => {
+    const f = await repository(t),
+      payload = Buffer.alloc(512, 7),
+      asset = {
+        id: 1,
+        name: 'program.zip',
+        size: payload.length,
+        digest: 'sha256:' + createHash('sha256').update(payload).digest('hex')
+      };
+    let interrupt = true,
+      interruptedResponse,
+      receivedBeforeInterruption = 0;
+    const server = http.createServer((req, res) => {
+      const offset = Number(req.headers.range?.match(/bytes=(\d+)-/)?.[1] || 0);
+      res.writeHead(offset ? 206 : 200, {
+        etag: '"stable"',
+        'content-length': payload.length - offset,
+        ...(offset ? { 'content-range': `bytes ${offset}-${payload.length - 1}/${payload.length}` } : {})
+      });
+      if (interrupt) {
+        interrupt = false;
+        interruptedResponse = res;
+        res.write(payload.subarray(0, 128));
+      } else res.end(payload.subarray(offset));
     });
-    if (interrupt) {
-      interrupt = false;
-      res.write(payload.subarray(0, 128));
-      setTimeout(() => res.destroy(), 80);
-    } else res.end(payload.subarray(offset));
-  });
-  server.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  t.after(
-    () =>
-      new Promise(resolve => {
-        server.close(resolve);
-        server.closeAllConnections();
-      })
-  );
-  const client = new GitHubClient({
-      retryOptions: { retries: 0 },
-      fetchImpl: (_url, options) => fetch(`http://127.0.0.1:${server.address().port}`, options)
-    }),
-    events = [],
-    downloads = await ReleaseDownloads.open({
-      root: f.backup,
-      volumeId: f.source.volumeId,
-      scope: 'history-test',
-      chunkBytes: 64
-    });
-  t.after(() => downloads.close());
-  const transfer = target =>
-    transferAsset({
-      asset,
-      tag: 'v1',
-      target,
-      downloads,
-      onDownload: value => events.push(value),
-      download: measured =>
-        client.downloadAsset('demo/project', 1, target, {
-          expectedName: asset.name,
-          expectedSize: asset.size,
-          expectedDigest: asset.digest,
-          ...measured
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    t.after(
+      () =>
+        new Promise(resolve => {
+          server.close(resolve);
+          server.closeAllConnections();
         })
-    });
-  await assert.rejects(transfer(path.join(f.root, 'failed')));
-  assert.equal(events[0].networkBytes, 128);
-  assert.equal(events[0].status, 'error');
-  assert.equal(events[0].resumedBytes, 0);
-  await transfer(path.join(f.root, 'resumed'));
-  assert.equal(events[1].networkBytes, 384);
-  assert.equal(events[1].resumedBytes, 128);
-  assert.equal(events[1].status, 'resumed');
-  await transfer(path.join(f.root, 'cached'));
-  assert.equal(events[2].networkBytes, 0);
-  assert.equal(events[2].resumedBytes, 512);
-  assert.equal(events[2].status, 'cached');
-  assert.deepEqual(await fs.readFile(path.join(f.root, 'cached')), payload);
-  const measured = (
-    await require('../../app/core/download-storage.cjs').inventory([
-      { destination: f.backup, volumeId: f.source.volumeId }
-    ])
-  ).entries[0].bytes;
-  assert.equal(await downloads.clear(), measured);
-});
+    );
+    const client = new GitHubClient({
+        retryOptions: { retries: 0 },
+        fetchImpl: (_url, options) => fetch(`http://127.0.0.1:${server.address().port}`, options)
+      }),
+      events = [],
+      downloads = await ReleaseDownloads.open({
+        root: f.backup,
+        volumeId: f.source.volumeId,
+        scope: 'history-test',
+        chunkBytes: 64
+      });
+    t.after(() => downloads.close());
+    const transfer = target =>
+      transferAsset({
+        asset,
+        tag: 'v1',
+        target,
+        downloads,
+        onDownload: value => events.push(value),
+        download: measured => {
+          // Interrupt only after the client receives the prefix. A fixed timer can close the
+          // socket before Windows has delivered any bytes, testing a different failure case.
+          const onMeasure = update => {
+            measured.onMeasure(update);
+            if (interruptedResponse && update.networkBytes) {
+              receivedBeforeInterruption += update.networkBytes;
+              if (receivedBeforeInterruption === 128) {
+                interruptedResponse.destroy();
+                interruptedResponse = null;
+              }
+            }
+          };
+          return client.downloadAsset('demo/project', 1, target, {
+            expectedName: asset.name,
+            expectedSize: asset.size,
+            expectedDigest: asset.digest,
+            ...measured,
+            onMeasure,
+            resume: { ...measured.resume, onMeasure }
+          });
+        }
+      });
+    await assert.rejects(transfer(path.join(f.root, 'failed')));
+    assert.equal(events[0].networkBytes, 128);
+    assert.equal(events[0].status, 'error');
+    assert.equal(events[0].resumedBytes, 0);
+    await transfer(path.join(f.root, 'resumed'));
+    assert.equal(events[1].networkBytes, 384);
+    assert.equal(events[1].resumedBytes, 128);
+    assert.equal(events[1].status, 'resumed');
+    await transfer(path.join(f.root, 'cached'));
+    assert.equal(events[2].networkBytes, 0);
+    assert.equal(events[2].resumedBytes, 512);
+    assert.equal(events[2].status, 'cached');
+    assert.deepEqual(await fs.readFile(path.join(f.root, 'cached')), payload);
+    const measured = (
+      await require('../../app/core/download-storage.cjs').inventory([
+        { destination: f.backup, volumeId: f.source.volumeId }
+      ])
+    ).entries[0].bytes;
+    assert.equal(await downloads.clear(), measured);
+  }
+);
 test('local asset reuse and cache cleanup are recorded by real backup and runtime operations', async t => {
   const f = await repository(t),
     asset = f.asset(1, 'app.zip', 'verified bytes');
@@ -408,13 +429,20 @@ test('retries within one transfer never count newly received chunks as avoided d
     fetchImpl: async (_url, options) => {
       if (!interrupted) {
         interrupted = true;
+        let prefixSent = false;
         return new Response(
-          new ReadableStream({
-            start(controller) {
-              controller.enqueue(payload.subarray(0, 128));
-              setTimeout(() => controller.error(Object.assign(new Error('interrupt once'), { retryable: true })), 30);
-            }
-          }),
+          new ReadableStream(
+            {
+              pull(controller) {
+                if (prefixSent) controller.error(Object.assign(new Error('interrupt once'), { retryable: true }));
+                else {
+                  prefixSent = true;
+                  controller.enqueue(payload.subarray(0, 128));
+                }
+              }
+            },
+            { highWaterMark: 0 }
+          ),
           { headers: { etag: '"same"' } }
         );
       }
