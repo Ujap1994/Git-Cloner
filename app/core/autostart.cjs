@@ -12,11 +12,13 @@ async function setAutostart(
   {
     platform = process.platform,
     appImage = process.env.APPIMAGE,
+    snap = process.env.SNAP,
     flatpakId = process.env.FLATPAK_ID,
     hostConfig = process.env.HOST_XDG_CONFIG_HOME
   } = {}
 ) {
   if (enabled && !app.isPackaged) throw new Error('Autostart ist erst in der installierten App verfügbar.');
+  if (enabled && snap) throw new Error('Autostart ist in diesem Snap-Paket nicht verfügbar.');
   if (platform === 'linux') {
     const directory = path.join(
       flatpakId ? hostConfig || path.join(os.homedir(), '.config') : app.getPath('appData'),

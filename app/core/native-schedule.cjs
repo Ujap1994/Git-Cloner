@@ -77,8 +77,12 @@ function scheduleFiles({ platform, executable, times, profile, configDirectory, 
     disable: [['systemctl', ['--user', 'disable', '--now', 'git-cloner-backup.timer']]]
   };
 }
-async function setNativeSchedule(app, config, { platform = process.platform, exec = execute } = {}) {
-  if (config.systemSchedule && (!app.isPackaged || process.env.FLATPAK_ID))
+async function setNativeSchedule(
+  app,
+  config,
+  { platform = process.platform, exec = execute, snap = process.env.SNAP } = {}
+) {
+  if (config.systemSchedule && (!app.isPackaged || process.env.FLATPAK_ID || snap))
     throw new Error('Die unabhängige Zeitplanung benötigt eine installierte native App.');
   const times = registrationTimes(config),
     enabled = config.systemSchedule && times.length > 0,

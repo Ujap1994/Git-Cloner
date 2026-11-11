@@ -7,3 +7,5 @@ Templates identify the release version and source commit. They do not automatica
 Run `npm run catalogs -- --assets PATH --output OUTPUT --version VERSION --commit COMMIT` against a complete set of built release files. The generator refuses missing required inputs rather than inventing download hashes. Keep the resulting manifests associated with that exact release.
 
 Flatpak includes Git and Git LFS. Architecture-specific source selectors ensure the bundled Git LFS executable matches x86_64 or aarch64. Snap packages also stage Git and Git LFS, use strict confinement and retain Chromium's sandbox helper. Local Snap installation requires `--dangerous` for an unsigned standalone `.snap`; store publication is not performed here.
+
+Strict Snap packages retain the app schedule while running; host sign-in registration and independent system scheduling are unavailable. Release validation installs the package and checks Git/LFS, local cloning, HTTPS and library resolution inside confinement.

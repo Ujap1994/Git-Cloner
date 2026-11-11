@@ -7,6 +7,7 @@ const { Git } = require('../../app/core/git.cjs');
 const { TokenStore } = require('../../app/core/secrets.cjs');
 const { writeJson, readJson } = require('../../app/core/store.cjs');
 const { setAutostart } = require('../../app/core/autostart.cjs');
+const { setNativeSchedule } = require('../../app/core/native-schedule.cjs');
 const { resolveJobs, BackupService } = require('../../app/core/backup.cjs');
 
 test('git credentials do not enter command arguments or saved remote URL', async () => {
@@ -128,4 +129,15 @@ test('Linux autostart quotes executable paths and can be removed', async t => {
   assert.match(await fs.readFile(file, 'utf8'), /Exec="\/opt\/My App\/git-cloner" --hidden/);
   await setAutostart(app, false, options);
   await assert.rejects(fs.stat(file));
+});
+test('strict Snap refuses unavailable host startup integration before accessing host paths', async () => {
+  const app = {
+    isPackaged: true,
+    getPath: () => assert.fail('Host paths must not be accessed')
+  };
+  await assert.rejects(setAutostart(app, true, { platform: 'linux', snap: '/snap/git-cloner/1' }), /Snap-Paket/);
+  await assert.rejects(
+    setNativeSchedule(app, { systemSchedule: true }, { platform: 'linux', snap: '/snap/git-cloner/1' }),
+    /native App/
+  );
 });

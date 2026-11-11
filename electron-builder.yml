@@ -63,6 +63,9 @@ snapcraft:
   core24:
     confinement: strict
     grade: stable
+    environment:
+      GIT_EXEC_PATH: $SNAP/usr/lib/git-core
+      GIT_TEMPLATE_DIR: $SNAP/usr/share/git-core/templates
     plugs:
       - browser-support:
           interface: browser-support

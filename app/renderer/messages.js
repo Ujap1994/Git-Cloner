@@ -2,6 +2,7 @@
 // English; error-help texts and the interface itself are bilingual at their source.
 (function () {
   const exact = {
+    'Autostart ist in diesem Snap-Paket nicht verfügbar.': 'Start at sign-in is unavailable in this Snap package.',
     'Ungültige DMG-Variante.': 'Invalid DMG variant.',
     'Die Archivdatei fehlt oder ist unvollständig.': 'The archive file is missing or incomplete.',
     'Das Dateiverzeichnis der Sicherung ist beschädigt.': 'The backup file manifest is damaged.',

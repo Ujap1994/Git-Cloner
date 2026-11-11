@@ -208,6 +208,11 @@ jobs:
             node -e 'const s=require("js-yaml").load(require("fs").readFileSync("snap-metadata.yml","utf8"));if(s.version!==require("./package.json").version||s.confinement!=="strict")process.exit(1)'
             unsquashfs -ll "$package" | grep 'chrome-sandbox'
           done
+      - name: Verify bundled Git and HTTPS inside the installed Snap
+        run: |
+          sudo snap install --dangerous dist/*.snap
+          sudo snap connect git-cloner:browser-support
+          bash scripts/check-snap.sh
       - uses: actions/upload-artifact@v4
         with:
           name: packages-Snap-${{ matrix.arch }}

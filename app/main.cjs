@@ -100,7 +100,8 @@ function state() {
     arch: process.arch,
     desktopDirectory: app.getPath('desktop'),
     packaged: app.isPackaged,
-    nativeScheduleSupported: app.isPackaged && !process.env.FLATPAK_ID
+    autostartSupported: app.isPackaged && !process.env.SNAP,
+    nativeScheduleSupported: app.isPackaged && !process.env.FLATPAK_ID && !process.env.SNAP
   };
 }
 function broadcast() {

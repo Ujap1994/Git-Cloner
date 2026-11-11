@@ -37,4 +37,6 @@ macOS builds are ad-hoc signed and not notarized. Public package-store submissio
 
 ## Local release-candidate results
 
-On November 11, 2026, the combined 3.7.0 candidate passed 301 unit/integration tests with 5 platform-specific skips and no failures on macOS ARM64. All 67 Electron E2E tests passed, including the DMG/ZIP ASAR regressions and the new settings/rollback screens. ESLint and Prettier checks passed. The complete E2E run also regenerated the English documentation screenshots through `npm run screenshots`. These counts describe that run; cross-platform results are recorded by GitHub Actions for the released commit.
+On November 11, 2026, the combined 3.7.0 candidate passed 302 unit/integration tests with 5 platform-specific skips and no failures on macOS ARM64. All 67 Electron E2E tests passed, including the DMG/ZIP ASAR regressions and the new settings/rollback screens. ESLint and Prettier checks passed. The complete E2E run also regenerated the English documentation screenshots through `npm run screenshots`. These counts describe that run; cross-platform results are recorded by GitHub Actions for the released commit.
+
+The 15 affected startup, settings and update E2E cases also passed after the final Snap integration. The HTTP-interruption regression waits for the received prefix before closing its real test connection, avoiding a platform-dependent timer race without weakening byte-count assertions.
