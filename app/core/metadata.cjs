@@ -9,8 +9,8 @@ const { selectReleaseAssets } = require('./release-assets.cjs');
 const { createReleaseDirectory } = require('./release-layout.cjs');
 const { narrowToProgram } = require('./program-select.cjs');
 
-async function metadataPlan(repository, options, github, git, { releaseScope = 'all', platform = process.platform, releaseArchitecture = 'all', releaseFileTypes = [], arch = process.arch, releaseProgram = null } = {}) {
-  if(github?.provider&&github.provider!=='github')return require('./hosted-metadata.cjs').hostedMetadataPlan(repository,options,github,git,{releaseScope,platform,releaseArchitecture,releaseFileTypes,arch,releaseProgram});
+async function metadataPlan(repository, options, github, git, { releaseScope = 'all', platform = process.platform, releaseArchitecture = 'all', releaseFileTypes = [], releaseDmgVariant = 'compatible', arch = process.arch, releaseProgram = null } = {}) {
+  if(github?.provider&&github.provider!=='github')return require('./hosted-metadata.cjs').hostedMetadataPlan(repository,options,github,git,{releaseScope,platform,releaseArchitecture,releaseFileTypes,releaseDmgVariant,arch,releaseProgram});
   const base = `/repos/${repository.full_name}`;
   const data = {};
   if (options.issues) data.issues = (await github.collection(`${base}/issues?state=all&sort=updated&direction=desc`)).filter(issue => !issue.pull_request);
@@ -21,7 +21,7 @@ async function metadataPlan(repository, options, github, git, { releaseScope = '
   // separately. This saves one API request per repository, which matters with 60 requests per hour without a token.
   const embedded = Array.isArray(release?.assets) && release.assets.length < 100;
   const assets = Number.isSafeInteger(release?.id) && !embedded ? await github.collection(`${base}/releases/${release.id}/assets`) : release?.assets ?? [];
-  const releaseSelection = narrowToProgram(selectReleaseAssets(assets,releaseScope,platform,{releaseArchitecture,releaseFileTypes,arch}), options.releases ? releaseProgram : null, platform, arch);
+  const releaseSelection = narrowToProgram(selectReleaseAssets(assets,releaseScope,platform,{releaseArchitecture,releaseFileTypes,releaseDmgVariant,arch}), options.releases ? releaseProgram : null, platform, arch);
   const estimatedBytes = releaseSelection.selected.reduce((sum,a) => sum + (Number.isSafeInteger(a.size) && a.size >= 0 ? a.size : 0),0);
   const releaseInfo = release ? {architecture:releaseSelection.architecture,fileTypes:releaseFileTypes,tag:release.tag_name,scope:releaseScope,platform,fileCount:releaseSelection.selected.length,bytes:estimatedBytes,excludedCount:releaseSelection.excluded.length} : null;
   let wikiRevision = null;
@@ -30,7 +30,7 @@ async function metadataPlan(repository, options, github, git, { releaseScope = '
     try { wikiRevision = await git.revision(`https://github.com/${repository.full_name}.wiki.git`, true); }
     catch (_error) { wikiWarning = 'Wiki nicht vorhanden oder nicht zugänglich.'; }
   }
-  const digest = createHash('sha256').update(JSON.stringify({ data: stableReleaseData(data), wikiRevision, wikiWarning, ...(options.releases ? { releaseLayout: 3, identities: releaseSelection.selected.map(assetIdentity), releaseArchitecture, releaseFileTypes, arch: releaseArchitecture === 'system' ? arch : null, release: { tag: release?.tag_name, ids: releaseSelection.selected.map(a => a.id), scope: releaseScope, platform: releaseScope === 'system' ? platform : null }, ...(releaseProgram ? { program: releaseProgram.pattern } : {}) } : {}) })).digest('hex');
+  const digest = createHash('sha256').update(JSON.stringify({ data: stableReleaseData(data), wikiRevision, wikiWarning, ...(options.releases ? { releaseLayout: 3, identities: releaseSelection.selected.map(assetIdentity), releaseArchitecture, releaseFileTypes, ...(releaseDmgVariant !== 'compatible' ? {releaseDmgVariant} : {}), arch: releaseArchitecture === 'system' ? arch : null, release: { tag: release?.tag_name, ids: releaseSelection.selected.map(a => a.id), scope: releaseScope, platform: releaseScope === 'system' ? platform : null }, ...(releaseProgram ? { program: releaseProgram.pattern } : {}) } : {}) })).digest('hex');
   return {
     digest, warning: wikiWarning, wikiRevision, estimatedBytes, releaseInfo, downloadCount: releaseSelection.selected.length,
     releaseWarning: options.releases && assets.length && !releaseSelection.selected.length ? 'Keine Release-Dateien passen zu den gewählten Filtern. Betriebssystem, Architektur und Dateitypen prüfen.' : null,

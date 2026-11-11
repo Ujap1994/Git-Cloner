@@ -37,6 +37,8 @@ Select **Check now** for the first run. The previous successful backup is replac
 
 ## Backup options
 
+For choosing Universal, ARM64 or x64 DMGs and repairing missing release downloads, see [Release repair and DMG selection](RELEASE-REPAIR.md).
+
 Under **Settings → Backup**, choose a shallow snapshot of the current default branch or a full bare mirror containing all branches, tags and Git history. Mirrors use incremental fetch. Enable actual LFS downloads if needed. Recursive submodules are supported for snapshots using HTTPS; they cannot be combined with mirror mode.
 
 From version 3.3, downloaded release files are visible under **`destination / owner / repository / Git-Cloner-Releases`** with their original filenames. The overview shows this location and provides **Open release folder**. A numbered alternative protects an existing repository-owned folder. Encrypted backups keep this folder inside `backup.gcb`; use **Restore release assets** and unlock the archive. Legacy hidden `.git/git-cloner-metadata/release-assets` backups remain restorable and migrate on their next successful check.

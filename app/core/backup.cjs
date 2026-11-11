@@ -16,6 +16,7 @@ const { hashFile, writeManifest, verifyDirectory, verificationDue, controlDirect
 const { encryptArchive, decryptArchive } = require('./archives.cjs');
 const { metadataPlan } = require('./metadata.cjs');
 const { programRelease } = require('./program-select.cjs');
+const { verifyReleasePresence } = require('./release-presence.cjs');
 const { ReleaseReuse } = require('./release-reuse.cjs');
 const { ReleaseDownloads } = require('./release-downloads.cjs');
 const { releaseDirectoryName } = require('./release-layout.cjs');
@@ -77,7 +78,7 @@ async function verifyBackup(record, git, passphrase) {
     return await verifyDirectory(payload, git, marker.mode);
   } finally { await fs.rm(temporary, { recursive: true, force: true }); }
 }
-function backupFingerprint(opts){return createHash('sha256').update(JSON.stringify({mode:opts.mode,lfs:opts.lfs,submodules:opts.submodules,encrypted:opts.encryption,metadata:opts.metadata,...(opts.metadata.releases?{releaseScope:opts.releaseScope,...((opts.releaseArchitecture&&opts.releaseArchitecture!=='all')||opts.releaseFileTypes?.length?{releaseArchitecture:opts.releaseArchitecture??'all',releaseFileTypes:opts.releaseFileTypes??[],releaseArch:opts.releaseArchitecture==='system'?process.arch:null}:{}),releasePlatform:opts.releaseScope==='system'?process.platform:null}:{}),keyId:opts.encryption?opts.encryptionKeyId:null})).digest('hex');}
+function backupFingerprint(opts){return createHash('sha256').update(JSON.stringify({mode:opts.mode,lfs:opts.lfs,submodules:opts.submodules,encrypted:opts.encryption,metadata:opts.metadata,...(opts.metadata.releases?{releaseScope:opts.releaseScope,...((opts.releaseArchitecture&&opts.releaseArchitecture!=='all')||opts.releaseFileTypes?.length?{releaseArchitecture:opts.releaseArchitecture??'all',releaseFileTypes:opts.releaseFileTypes??[],releaseArch:opts.releaseArchitecture==='system'?process.arch:null}:{}),...(opts.releaseDmgVariant && opts.releaseDmgVariant !== 'compatible' ? {releaseDmgVariant:opts.releaseDmgVariant} : {}),releasePlatform:opts.releaseScope==='system'?process.platform:null}:{}),keyId:opts.encryption?opts.encryptionKeyId:null})).digest('hex');}
 async function syncRepository({ source, repository, git, github, options = defaults().backup, plan, passphrase, onProgress = () => {}, onDownload = () => {} }) {
   const fullName = parseHostedSource(repository.full_name, 'repository',source), parts=repositoryParts(source,fullName), name=parts.at(-1),parents=parts.slice(0,-1),spec=providerSpec(source);
   const opts = { ...defaults().backup, ...options, metadata: { ...defaults().backup.metadata, ...options.metadata } };
@@ -90,12 +91,13 @@ async function syncRepository({ source, repository, git, github, options = defau
   onProgress({ fullName, status: 'checking' });
   const revision = await git.revision(url, opts.mode === 'mirror');
   if (!revision) return { fullName, destination: target, status: 'empty', message: 'Leeres Repository ohne Commit.', checkedAt: new Date().toISOString() };
-  plan ??= await metadataPlan(repository, opts.metadata, github, git, { releaseScope: opts.releaseScope, releaseArchitecture: opts.releaseArchitecture, releaseFileTypes: opts.releaseFileTypes, releaseProgram: programRelease(source) });
+  plan ??= await metadataPlan(repository, opts.metadata, github, git, { releaseScope: opts.releaseScope, releaseArchitecture: opts.releaseArchitecture, releaseFileTypes: opts.releaseFileTypes, releaseDmgVariant: opts.releaseDmgVariant, releaseProgram: programRelease(source) });
   if (current?.wikiRevision && plan.warning) throw new Error('Das Wiki konnte nicht aktualisiert werden. Die vorhandene Sicherung bleibt erhalten.');
   const fingerprint = backupFingerprint(opts);
   let repair = false;
   if (current && current.fingerprint === fingerprint && current.revision === revision && current.metadataDigest === plan.digest) {
     try {
+      await verifyReleasePresence(target, current);
       if (verificationDue(opts.integrity, current.verifiedAt)) {
         onProgress({ fullName, status: 'verifying' });
         if (current.encrypted) { if (await hashFile(path.join(target, 'backup.gcb')) !== current.archiveHash) throw new Error('Archiv beschädigt.'); }
@@ -272,8 +274,8 @@ class BackupService extends EventEmitter {
         try {
           if(prior?.rekeyPending)throw new Error('Der Passwortwechsel ist noch nicht abgeschlossen. Das Sicherungslaufwerk verbinden und den Assistenten erneut öffnen.');
           result = await retry(async () => {
-            const releaseProgram = programRelease(job.source), key = `${providerKey(job.source)}:${job.source.accountId}:${job.repository.full_name}:${JSON.stringify(options.metadata)}:${options.releaseScope}:${options.releaseArchitecture}:${JSON.stringify(options.releaseFileTypes)}:${JSON.stringify(releaseProgram)}`;
-            if (!plans.has(key)) plans.set(key, metadataPlan(job.repository, options.metadata, github, git, { releaseScope: options.releaseScope, releaseArchitecture: options.releaseArchitecture, releaseFileTypes: options.releaseFileTypes, releaseProgram }).catch(error => { plans.delete(key); throw error; }));
+            const releaseProgram = programRelease(job.source), key = `${providerKey(job.source)}:${job.source.accountId}:${job.repository.full_name}:${JSON.stringify(options.metadata)}:${options.releaseScope}:${options.releaseArchitecture}:${JSON.stringify(options.releaseFileTypes)}:${options.releaseDmgVariant}:${JSON.stringify(releaseProgram)}`;
+            if (!plans.has(key)) plans.set(key, metadataPlan(job.repository, options.metadata, github, git, { releaseScope: options.releaseScope, releaseArchitecture: options.releaseArchitecture, releaseFileTypes: options.releaseFileTypes, releaseDmgVariant: options.releaseDmgVariant, releaseProgram }).catch(error => { plans.delete(key); throw error; }));
             return this.sync({ ...job, github, git, options, plan: await plans.get(key), passphrase: options.encryption ? await this.getPassphrase() : '', onProgress: update });
           }, { ...this.retryOptions, retries: q.config.execution.retries, onRetry: event => update({ status: 'retrying', attempt: event.attempt, retryAt: new Date(Date.now() + event.delay).toISOString() }) });
         } catch (error) {

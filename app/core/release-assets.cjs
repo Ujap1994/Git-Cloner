@@ -29,6 +29,12 @@ function selectReleaseAssets(assets, scope = 'all', platform = process.platform)
 }
 module.exports = { assetPlatform, selectReleaseAssets, PLATFORM_NAMES };
 
+const DMG_VARIANTS = ['compatible', 'universal', 'arm64', 'x64'];
+function dmgVariant(name) {
+  if (/(?:^|[-_.+ ()])universal2?(?=$|[-_.+ ()])/i.test(name)) return 'universal';
+  const architectures = assetArchitecture(name);
+  return architectures.length === 1 && ['arm64', 'x64'].includes(architectures[0]) ? architectures[0] : null;
+}
 const ARCHITECTURES = ['all', 'system', 'arm64', 'x64', 'ia32', 'armv7l'];
 const FILE_TYPES = ['dmg', 'pkg', 'zip', 'exe', 'msi', 'appimage', 'deb', 'rpm', 'flatpak', 'tar.gz', 'tar.xz', 'tar.zst', 'pacman', 'other'];
 function assetArchitecture(name) {
@@ -47,9 +53,11 @@ function assetType(name) {
   return 'other';
 }
 function validateReleaseFilter(input = {}) {
+  const releaseDmgVariant = input.releaseDmgVariant ?? 'compatible';
+  if (!DMG_VARIANTS.includes(releaseDmgVariant)) throw new Error('Ungültige DMG-Variante.');
   const releaseArchitecture = input.releaseArchitecture ?? 'all', releaseFileTypes = input.releaseFileTypes ?? [];
   if (!ARCHITECTURES.includes(releaseArchitecture) || !Array.isArray(releaseFileTypes) || releaseFileTypes.length > FILE_TYPES.length || releaseFileTypes.some(type => !FILE_TYPES.includes(type)) || new Set(releaseFileTypes).size !== releaseFileTypes.length) throw new Error('Ungültiger Architektur- oder Dateitypfilter.');
-  return { releaseArchitecture, releaseFileTypes: [...releaseFileTypes].sort() };
+  return { releaseDmgVariant, releaseArchitecture, releaseFileTypes: [...releaseFileTypes].sort() };
 }
 const selectLegacy = selectReleaseAssets;
 function selectFilteredAssets(assets, scope = 'all', platform = process.platform, filters = {}) {
@@ -58,10 +66,12 @@ function selectFilteredAssets(assets, scope = 'all', platform = process.platform
   for (const asset of result.selected) {
     const classification = assetPlatform(asset.name), architectures = assetArchitecture(asset.name), type = assetType(asset.name);
     let reason;
-    if (!classification.shared && architecture !== 'all' && !architectures.includes(architecture)) reason = architectures.length ? 'other-architecture' : 'unknown-architecture';
+    const explicitDmg = type === 'dmg' && filter.releaseDmgVariant !== 'compatible';
+    if (explicitDmg && dmgVariant(asset.name) !== filter.releaseDmgVariant) reason = 'other-dmg-variant';
+    if (!explicitDmg && !classification.shared && architecture !== 'all' && !architectures.includes(architecture)) reason = architectures.length ? 'other-architecture' : 'unknown-architecture';
     if (!reason && !classification.shared && filter.releaseFileTypes.length && !filter.releaseFileTypes.includes(type)) reason = 'other-file-type';
     if (reason) excluded.push({ id: asset.id, name: asset.name, reason, architectures, type }); else selected.push(asset);
   }
   return { ...result, selected, excluded, ...filter, architecture };
 }
-Object.assign(module.exports, { selectReleaseAssets: selectFilteredAssets, assetArchitecture, assetType, ARCHITECTURES, FILE_TYPES, validateReleaseFilter });
+Object.assign(module.exports, { selectReleaseAssets: selectFilteredAssets, assetArchitecture, assetType, dmgVariant, DMG_VARIANTS, ARCHITECTURES, FILE_TYPES, validateReleaseFilter });
